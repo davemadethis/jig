@@ -28,7 +28,7 @@ Correct the cause, not the listing: a proposal is never made empty. `open_propos
 
 ## 5. Spec
 
-### Change
+## Change
 1. `open_proposal`: make the branch at an opening commit on top of the metarepo's trunk (`git commit-tree <trunk>^{tree} -p <trunk> -m <subject>`, then `git branch <branch> <commit>`). Callers and messages unchanged.
 2. A helper `proposal_empty(loc, branch, trunk)`: the branch exists and its tip is the opening commit (subject starts `propose: ` and ends `nothing written yet`) or sits on trunk's first-parent line (branches made before this fix). `proposal_in` returns False for an empty branch, replacing its inline `on_trunk` test.
 3. `sync_meta`: for a cited, unreleased proposal that `proposal_empty` says is empty, print `proposal <branch> (<spec>): empty: nothing written on it in <meta> since <date>; write the change there (git -C <loc> worktree add <dir> <branch>), or <withdraw_line>`, in place of `not released`. `<date>` is the date of the pararepo commit that added the spec (`git log --diff-filter=A -1 --format=%cs -- <spec>`), or `uncommitted`. The "carries no Open row" clause still applies.
@@ -36,7 +36,7 @@ Correct the cause, not the listing: a proposal is never made empty. `open_propos
 5. RULES.md, The sync buffer: one sentence: `jig propose` opens its branch with a commit of its own, so the metarepo's list of unmerged branches shows it from the start; sync names a proposal with nothing written past that as empty, with the date it was proposed.
 6. `tests/smoke.sh`, pararepo section: the Done when lines below.
 
-### Done when
+## Done when
 In smoke's pararepo section (throwaway `mr`/`pr`, `JIG_CONFIG` set):
 - [ ] (fix fires) After `jig propose --buffer` with nothing written on the branch, `git -C mr branch --no-merged main --list 'propose/pr-*'` lists it, and its tip's subject says nothing is written yet. `mr`'s main and its checked-out branch are unchanged.
 - [ ] (fix fires) `pr`'s `jig sync` prints `proposal propose/pr-… (.jig/specs/….md): empty: nothing written on it in docs since <date>`, naming the worktree command and the withdraw line, and not `not released`.
@@ -46,33 +46,33 @@ In smoke's pararepo section (throwaway `mr`/`pr`, `JIG_CONFIG` set):
 - [ ] (symptom gone) A fixture with the report's shape: `mr` has `propose/pr-buffer-b3` at main's tip, `pr` cites it with row B3 Open. `pr`'s `jig sync` names it as empty with the spec's date; a new `jig propose --buffer` there makes a branch `--no-merged` lists. In Maige-Lite itself, the owner's next `jig sync` on its trunk names `propose/Maige-Lite-buffer-b3` as empty (not run here: that repo is read-only to this role).
 - [ ] `check` and the pararepo smoke section pass.
 
-### Touches
+## Touches
 - `plugin/templates/jig/jig.py` (`open_proposal`, `proposal_in`, new `proposal_empty`, `sync_meta`)
 - `plugin/skills/hubnode/SKILL.md` (step 5)
 - `plugin/templates/jig/RULES.md` (Metarepo and pararepos, The sync buffer)
 - `tests/smoke.sh` (pararepo)
 
-### Out of scope
+## Out of scope
 - maige-ecosystem's `docs/features/identity/unlock.md` contradiction (B3's content): maige-ecosystem's to fix once B3 is written.
 - Deleting the two existing empty branches in maige-ecosystem: the metarepo's owner's, as RULES.md says for any proposal branch.
 - A metarepo-side report that ages every `propose/` branch: Issue 1's report (another group).
 
-### Alternatives considered
+## Alternatives considered
 - `jig propose` refuses to make a branch with no commit of its own (the report's) — rejected because propose can't write the change: it is free text written after, so every new branch starts empty; the opening commit is the version of this that can be done — [seen] (`open_proposal`, `cmd_propose` print "Write the change there" after making it).
 - The next `jig propose` refuses while an earlier one is empty (the report's, Proposed) — rejected because `jig release` proposes on its own, so a pararepo release would stop on unwritten metarepo work, and it would not have fired for B3, which no later propose followed — [seen] (jig.py:7022–7025; Maige-Lite's last buffer spec is buffer-b3).
 - The metarepo's listing reads the pararepos' buffer specs instead of `--no-merged` (the report's) — taken only as the step 5 clause for old branches; as the main fix rejected because new proposals then show without it, and telling empty from merged-unreleased from the specs needs first-parent reasoning in skill text — [seen] (prototype: `--no-merged` lists a branch with an opening commit).
 - List `propose/` branches with `--merged` too — rejected because every merged proposal would show: 12 of maige-ecosystem's 14 are real and merged — [seen].
 - Only change sync's line, no opening commit — rejected because the metarepo stays blind to new empty proposals, which is the report's symptom — [seen] (repro: `--no-merged` empty).
 
-### Roles
+## Roles
 spec: tier 2, effort 2
 bug: tier 2, effort 1
 work: tier 2, effort 3
 review: tier 2, effort 2
 check: tier 3, effort 4
 
-### General?
+## General?
 Yes. Any pararepo whose `jig release` proposes Open rows and whose session moves on, or that runs `jig propose` and stops before writing, leaves an invisible branch. The release path makes it the default, not an edge: 2 of maige-ecosystem's 14 proposal branches, both buffer proposals, one from a release.
 
-### Decisions
+## Decisions
 - Correction at the source (an opening commit), plus sync naming empties; no refusal in `jig propose`. Proposed (bug role, 2026-11-20).
