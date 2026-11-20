@@ -1,7 +1,7 @@
 # cross-repo-roadmap: one roadmap across a metarepo and its pararepos, with dependencies rig reads
 
-Source: maige-ecosystem hubnode session, 2026-11-19 (staged as feedback-maige-ecosystem-2026-11-19-cross-repo-roadmap.md): "A deadlock nobody could see", with copies of scopes drifting between repos, because waits on another repo are prose in one repo's roadmap (Issue 1).
-Source: maige-ecosystem hubnode session, 2026-11-19 (staged as feedback-maige-ecosystem-2026-11-19-cross-repo-roadmap.md): "`jig rig` offers a scope that waits on another repo as the next step" (Issue 3).
+Source: maige-ecosystem hubnode session, bug role (claude-opus-5-5) / 2026-11-19 / Dave, on his word: "have eco combine those, sort out the final solutions, and file the jig feedback" (staged as feedback-maige-ecosystem-2026-11-19-cross-repo-roadmap.md): "A deadlock nobody could see", with copies of scopes drifting between repos, because waits on another repo are prose in one repo's roadmap (Issue 1).
+Source: maige-ecosystem hubnode session, bug role (claude-opus-5-5) / 2026-11-19 / Dave, on his word: "have eco combine those, sort out the final solutions, and file the jig feedback" (staged as feedback-maige-ecosystem-2026-11-19-cross-repo-roadmap.md): "`jig rig` offers a scope that waits on another repo as the next step" (Issue 3).
 
 Kept separate from bug-empty-proposal: the owner, 2026-11-20: "Hold on the cross-repo roadmap until we discuss it."
 Kept separate from bug-metarepo-roadmap-cites: the owner, 2026-11-20: "Hold on the cross-repo roadmap until we discuss it."
