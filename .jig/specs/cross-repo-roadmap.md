@@ -3,6 +3,9 @@
 Source: maige-ecosystem hubnode session, 2026-11-19 (staged as feedback-maige-ecosystem-2026-11-19-cross-repo-roadmap.md): "A deadlock nobody could see", with copies of scopes drifting between repos, because waits on another repo are prose in one repo's roadmap (Issue 1).
 Source: maige-ecosystem hubnode session, 2026-11-19 (staged as feedback-maige-ecosystem-2026-11-19-cross-repo-roadmap.md): "`jig rig` offers a scope that waits on another repo as the next step" (Issue 3).
 
+Kept separate from bug-empty-proposal: the owner, 2026-11-20: "Hold on the cross-repo roadmap until we discuss it."
+Kept separate from bug-metarepo-roadmap-cites: the owner, 2026-11-20: "Hold on the cross-repo roadmap until we discuss it."
+
 ## Intent
 A scope or phase names what it waits on in a form jig reads, so `jig rig` never offers blocked
 work and a ring is refused when it is written. A metarepo and its pararepos then plan from one
