@@ -101,7 +101,7 @@ Two mergeable parts, in order. Part 1 stands alone; Part 2 builds on it.
     1. The metarepo gains `## <Product> <phase>` sections holding the pararepo's phases.
     2. The pararepo's next commit removes its phases and re-points every `Scope:` line. The existing drop guard enforces this.
     3. The move carries the pararepo's `## Up next` and `## No phase` items into its product's list in the metarepo, and the move's commit removes the pararepo's `.jig/roadmap.md` and `ROADMAP.md`. After the move, the pararepo's hook refuses a `.jig/roadmap.md` while the metarepo's roadmap holds a product it owns.
-11. **Edits.** No hubnode edits another repo's content (the owner, 2026-11-21). A pararepo's changes to its products' sections are buffered and reach the metarepo by the regular sync process, when the owner decides; the mechanism is still being settled. A pararepo's merge writes nothing to the metarepo's roadmap. The metarepo's hook checks shape, refs, rings and touched pages. Labels, names and new products are the metarepo's hubnode's. RULES.md says this.
+11. **Edits.** No hubnode edits another repo's content (the owner, 2026-11-21). A pararepo's changes to its products' sections are buffered and reach the metarepo by the regular sync process, when the owner decides: a BUFFER row and `jig propose`, so the change is written on a `propose/<repo>-<slug>` branch in the metarepo, never on its trunk, and merged there at the next sync the owner calls. A pararepo's merge writes nothing to the metarepo's roadmap. The metarepo's hook checks shape, refs, rings and touched pages. Labels, names and new products are the metarepo's hubnode's. RULES.md says this.
 12. **RULES.md, Roadmap.** "The product is the repo" is said precisely, per R6: a repo is for one software product, and the hardware that runs it may be defined there, with its pages segmented within `docs/` as the hardware skill's board pages are. A metarepo's roadmap gains the product level of item 5. The pin rule gains the live-read exception for the roadmap only.
 
 
@@ -113,6 +113,7 @@ Two mergeable parts, in order. Part 1 stands alone; Part 2 builds on it.
     - The list's syntax, and what replaces merge's Up next removal, are jig's to choose.
     - A stand-alone repo's Up next and No phase become one list the same way, per R2: "one place for them not two".
 
+14. **Unconfirmed dependencies are flagged, never blocking.** A cross-product `after` that the waited-on product's section doesn't confirm (with `(needed by <ref>)`) is listed by `jig roadmap` in the metarepo and under rig's Waiting on you, for the owner to rule on. It blocks no commit and no step.
 ## Done when
 
 Part 1, in a throwaway stand-alone repo, every jig command run with
@@ -134,6 +135,8 @@ Part 2, in a throwaway metarepo `meta` with pararepos `pa` and `pb`. Both are re
 - [ ] (unreachable) With `pb` removed from the repos file, `jig roadmap` in `meta` shows `Familiar App alpha/host` as `unknown`, naming `pb`.
 - [ ] (drop guard) A `meta` commit dropping `Walyt alpha/pairing` while a spec in `pa` takes it is refused, naming that spec.
 - [ ] (moving in) A `pa` that had `## alpha` with `x` and a spec with `Scope: alpha/x`. After `meta` gains `x` under `## Walyt alpha`, `pa`'s commit removing its phase and re-pointing the spec to `Walyt alpha/x` passes. Re-pointing to a scope `meta` lacks is refused. After that, `pa` has no `.jig/roadmap.md`. What `pa` had under Up next and No phase sits in `Walyt`'s one list in `meta`. A spec in `pa` taking one of them commits, and `pa`'s reading-list shows them, read from `meta`. A new `.jig/roadmap.md` in `pa` is refused.
+- [ ] (flagged, not blocking) `Walyt alpha/pairing (after Familiar App alpha/host)` with no `(needed by Walyt alpha/pairing)` under `## Familiar App alpha` commits, and `jig roadmap` in `meta` and `jig rig` there list it as unconfirmed under Waiting on you; once `pb`'s section confirms it (through `pb`'s proposal, merged), it isn't listed.
+- [ ] (buffered edit) From `pa`, a change to `## Walyt alpha` goes through a BUFFER row and `jig propose`: it is on a `propose/pa-…` branch in `meta`, `meta`'s trunk is unchanged until that branch merges, and nothing in `pa` writes `meta`'s trunk.
 - [ ] (unphased scope, live) `pb` merges a job whose spec takes a scope from `Familiar App`'s list. `jig roadmap` in `meta` shows that scope done, and `pb`'s merge wrote nothing to `meta`.
 - [ ] (stand-alone one list) In a stand-alone repo, the Up next and No phase items are one list, a spec may take one, and `jig rig` offers from it.
 - [ ] (stand-alone unchanged) The Part 1 cases pass in a repo with no metarepo. `python3 .jig/jig.py queue -- bash tests/smoke.sh roadmap rig pararepo` passes. `claude plugin validate ./plugin` passes.
@@ -174,8 +177,8 @@ Later versions, each its own spec once this lands, in the order they build on ea
 ## Open questions for the owner
 1. **The first version is Parts 1 and 2 only.** Labels, `needed by`, one list per product, the ideas log, the report and the conversion command follow as later specs. Recommendation: yes. Part 1 alone already fixes Issue 3 in every repo, and Part 2 ends the drift.
 2. Answered: the first version reaches the end state (Owner's rulings).
-3. **How a pararepo buffers a roadmap change** (the owner's 1.3 ruling: no hubnode edits another repo's content; changes are buffered and synced when the owner decides). Recommendation: the existing path up, a BUFFER row and `jig propose`, so the change is written on a `propose/<repo>-<slug>` branch in the metarepo, never its trunk, and merged there at the next sync the owner calls. No new mechanism.
-4. **Where an unconfirmed dependency is flagged** (the owner's 1.4 ruling: agreement isn't required and never blocks; a disagreement is flagged for the owner to rule on). Recommendation: in v1, `jig roadmap` in the metarepo and rig's Waiting on you list each cross-product `after` the waited-on section doesn't confirm.
+3. Answered: a BUFFER row and `jig propose` (Owner's rulings).
+4. Answered: `jig roadmap` in the metarepo and rig's Waiting on you (Owner's rulings).
 
 ## Roles
 - spec: tier 2, effort 2
@@ -186,10 +189,12 @@ Later versions, each its own spec once this lands, in the order they build on ea
 
 ## Owner's rulings, 2026-11-20 and 2026-11-21
 
-Still being settled; the spec's body is revised to these once they are.
+Settled 2026-11-21; the body above is revised to these.
 - First version (open question 1): "1.1 yes": Parts 1 and 2 first, the rest as later specs.
 - Up next and No phase (open question 2): the owner, 2026-11-20: "roadmap items relating to the items being moved should move too." A pararepo's Up next and No phase move up with its phases, and a scope whose `(touches …)` names a page moved down follows it.
 - Section edits (open question 3), the owner, 2026-11-21: "I dont like the idea of hubnodes editing each other's content, I think they should buffer the changes and use the regular sync process periodically (as the user decides)." No hubnode edits the metarepo's roadmap from a pararepo: a pararepo's changes to its product sections are buffered and reach the metarepo by the regular sync process, when the owner decides.
 - Dependency confirmation (open question 4), the owner, 2026-11-21: "Remove the requirement that they agree and flag when they dont so the user can rule on it." A cross-product `after` the waited-on section doesn't confirm never blocks: it is flagged for the owner to rule on.
 - Order, the owner, 2026-11-21: bug-pararepo-sync-fixes and bug-nested-touches first, then move-to-pararepo, then this spec.
 - The end state, Source: Dave (owner), 2026-11-21, in maige-ecosystem's hubnode session, on reading that a moved-in pararepo keeps `## Up next` and `## No phase` until a later spec: "I want to reach the end state I specced". One list per product joins Part 2 (item 13), and a moved-in pararepo keeps no `.jig/roadmap.md`.
+- Buffered edits (open question 3), the owner, 2026-11-21: "Q3 agree, settled": a BUFFER row and `jig propose`, merged at the next sync the owner calls.
+- Unconfirmed dependencies (open question 4), the owner, 2026-11-21: "Q4 agree, settled": flagged in `jig roadmap` in the metarepo and rig's Waiting on you, never blocking.
