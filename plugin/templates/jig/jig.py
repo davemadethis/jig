@@ -6013,7 +6013,7 @@ def removed_lines(text: str) -> set[str]:
 
 STRIKE_WHY = "project scope, not a product decision."
 # A metarepo's forwarding address for a claim it handed down to the pararepo that owns it:
-# `- E-085: moved to <repo>/.jig/decisions.md § D-016.`, a page or `<page> § <heading>` in
+# `- D-040: moved to <repo>/.jig/decisions.md § D-016.`, a page or `<page> § <heading>` in
 # place of the id. The target is a pointer, as the pararepo cites with, so one form covers all three.
 MOVE_LINE = re.compile(r"^- `?(?P<what>[^`\s][^`]*?)`?: moved to `?(?P<to>[\w.-]+/[^`]+?)`?\.?$")
 
@@ -6035,17 +6035,23 @@ class Moves(dict):
     def get(self, k, default=None): return super().get(move_key(k), default)
 
 
-def log_move_lines(text: str) -> list[tuple[str, str, re.Match]]:
-    """(section, line, match) for each move line under a ### Removed group in log TEXT."""
+def log_move_lines(text: str, removed_only: bool = True) -> list[tuple[str, str, str, re.Match]]:
+    """(section, group, line, match) for each move-shaped line in log TEXT: under a ### Removed
+    group, or with REMOVED_ONLY false under any."""
     out, section, group = [], "", ""
     for line in text.splitlines():
         if line.startswith("## "):
             section, group = line[3:].strip(), ""
         elif line.startswith("### "):
             group = line[4:].strip()
-        elif group == "Removed" and (m := MOVE_LINE.match(line.rstrip())):
-            out.append((section, line.rstrip(), m))
+        elif (group == "Removed" or not removed_only) and (m := MOVE_LINE.match(line.rstrip())):
+            out.append((section, group, line.rstrip(), m))
     return out
+
+
+def move_held(section: str) -> bool:
+    """Whether a move line under ## SECTION is one: ## Unreleased, or a release it went out in."""
+    return section == "Unreleased" or bool(RELEASE_HEADING.match(f"## {section}"))
 
 
 def moves_in(text: str) -> Moves:
@@ -6053,8 +6059,8 @@ def moves_in(text: str) -> Moves:
     § heading: pointer}: where the hook checks one. A released section's change lines are
     frozen, so the map needs no history."""
     out = Moves()
-    for section, _, m in log_move_lines(text):
-        if section == "Unreleased" or RELEASE_HEADING.match(f"## {section}"):
+    for section, _, _, m in log_move_lines(text):
+        if move_held(section):
             out[move_key(m.group("what"))] = m.group("to").strip()
     return out
 
@@ -6107,13 +6113,30 @@ def move_rules(trunk: str, staged: bool, meta: dict | None) -> list[str]:
     paras = set((meta or {}).get("pararepos") or [])
     prefix = log_prefix(trunk)
     out = []
-    # A move line anywhere else is read by nothing and checked by nothing: only one place holds them.
-    was = {(sec, line) for sec, line, _ in log_move_lines(old)}
-    out += [f"{LOG}: `{line}` is under ## {sec}: a move line goes under ## Unreleased ### Removed"
-            for sec, line, _ in log_move_lines(new) if (sec, line) not in was
-            and sec != "Unreleased" and not RELEASE_HEADING.match(f"## {sec}")]
+    # A move line anywhere else is read by nothing and checked by nothing: only one place holds
+    # them. Outside ### Removed, only a line naming a pararepo is taken for a misplaced move: a
+    # change line saying a page moved inside this repo has the same shape.
+    was = {(sec, grp, line) for sec, grp, line, _ in log_move_lines(old, False)}
+    out += [f"{LOG}: `{line}` is under ## {sec}{f' ### {grp}' if grp else ''}: a move line goes "
+            f"under ## Unreleased ### Removed"
+            for sec, grp, line, m in log_move_lines(new, False) if (sec, grp, line) not in was
+            and (grp == "Removed" and not move_held(sec)
+                 or grp != "Removed" and name_in(pointer_parts(m.group("to"))[0], paras))]
     # One address per moved thing: a second line would leave readers to pick between two homes.
-    had, seen = moves_in(old), Counter()
+    # A line this change rewrites in place is no longer the log's, so a corrected target passes.
+    kept = set(new.splitlines())
+    had, seen = Moves(), Counter()
+    for sec, _, line, m in log_move_lines(old):
+        if move_held(sec) and line in kept:
+            had[move_key(m.group("what"))] = m.group("to").strip()
+    rewritten = {k for k in moves_in(old) if k not in had}
+    # A moved id's home is the pararepo now: superseding it here would give it two.
+    gone_down = moves_in(new)
+    named_before = {i for e in log_entries(old, prefix) for i in replaced(e, prefix)}
+    out += [f"{LOG}: {e['id']} supersedes {i}, which the log moved to {gone_down[i]}: its home "
+            f"is there now, so a change to it is that repo's"
+            for e in log_entries(new, prefix) for i in replaced(e, prefix)
+            if i in gone_down and i not in named_before]
     added = [(line, m) for line in sorted(removed_lines(new) - removed_lines(old)) if (m := MOVE_LINE.match(line))]
     for _, m in added:
         seen[move_key(m.group("what"))] += 1
@@ -6137,7 +6160,7 @@ def move_rules(trunk: str, staged: bool, meta: dict | None) -> list[str]:
                        f"holds is its successor, so move that one")
             continue
         # One the log still has is the strike check's refusal (struck_ids reads move lines too).
-        if num is not None and num not in old_ids and num not in new_ids:
+        if num is not None and num not in old_ids and num not in new_ids and key not in rewritten:
             out.append(f"{LOG}: `{line}` moves {what}, which this change doesn't remove from the log: "
                        f"a moved entry leaves in the commit that writes its line")
             continue
@@ -6166,7 +6189,7 @@ def move_rules(trunk: str, staged: bool, meta: dict | None) -> list[str]:
             out.append(f"{LOG}: `{line}`: {repo}'s {t} has no {path} (read {loc}/{path} on {t}): "
                        f"land it there first")
         elif section and path == LOG:
-            if section not in {e["id"] for e in log_entries(body, log_prefix_of(body))}:
+            if move_key(section) not in {move_key(e["id"]) for e in log_entries(body, log_prefix_of(body))}:
                 out.append(f"{LOG}: `{line}`: {repo}'s {LOG} on {t} has no entry {section}: "
                            f"land it there first")
         elif section and pointer_gap(path, section, True, body)[0] != RESOLVES:
@@ -8610,9 +8633,11 @@ def stage_pin_bumps(root: Path, meta: dict, prev: str, tag: str) -> list[str]:
             # another prefix; with the same one, only a qualified citation (above) is its.
             if own != prefix and (i in gone or i in hopped):
                 cited = {f.split(":", 1)[0] for f in files}
+                # jig's own files are no citation: its specs, ledgers, log and process are the repo's.
                 files += [g for f in git("grep", "-l", "-w", "-F", i, trunk, "--", ".", f":!{HANDOFFS}",
                                          cwd=str(there)).splitlines()
-                          if (g := f.split(":", 1)[1]) not in cited]
+                          if (g := f.split(":", 1)[1]) not in cited
+                          and (not g.startswith(f"{DIR}/") or g.startswith((f"{DIR}/specs/", f"{DIR}/ledgers/", LOG, PROCESS)))]
             if files:
                 by = holds_now(i, now_log, prefix, tag, str(root))
                 state = f" (moved: {shown_pointer(by, here)})" if by and "/" in by else f" (now {by})" if by else " (removed)"

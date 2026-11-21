@@ -1094,11 +1094,13 @@ page needs no line to leave, but takes it all the same, so readers see it moved,
 These are the only two reasons a `### Removed` line lets a released entry go; any other text
 lets nothing go, and the refusal names both lines. The hook checks a move line the commit adds:
 the line is under `## Unreleased` (a move line anywhere else is refused, and nothing reads
-one there); it is the only move line for its id, page or section, in the log or the commit;
+one there); it is the only move line for its id, page or section, in the log or the commit (a line not
+yet released may be corrected in place);
 the repo is one of `meta.json`'s `pararepos`; a moved id is an entry this commit removes, not
 one an accepted entry supersedes (its successor is what moves); this repo no longer has the
 page or section; and the target is on that repo's trunk, read through `jig repos` (an id as an entry
-heading in its log, a heading as `§` resolves). It refuses a target that repo lacks, naming the
+heading in its log, matched by number, a heading as `§` resolves). An entry that supersedes a
+moved id is refused: its home is the pararepo now. It refuses a target that repo lacks, naming the
 file it read, and passes with a warning when the repo can't be reached. Released, the line is
 frozen like any change line, so the map from old id or path to new home needs no history: a
 supersedes chain that reaches a moved id ends at its pointer, and `jig decision`, `jig

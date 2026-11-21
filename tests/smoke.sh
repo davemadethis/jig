@@ -8607,7 +8607,7 @@ git switch -q -c mv 2>/dev/null || git switch -q mv
 rment E-004 && ulog '### Removed
 
 - E-004: moved to L/.jig/decisions.md § D-009.' Open && git add -A; tryit
-expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'is under ## Open: a move line goes under ## Unreleased'" "$out"; [ $rc != 0 ] || echo "$out"
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'is under ## Open ### Removed: a move line goes under ## Unreleased'" "$out"; [ $rc != 0 ] || echo "$out"
 msg="moves: two move lines for one id in one change are refused"
 moveit && ulog '### Removed
 
@@ -8649,6 +8649,26 @@ git switch -q -c again && ulog '### Removed
 - E-002: moved to L/.jig/decisions.md § D-001.' && git add -A; tryit
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'which the log already moves to L/.jig/decisions.md § D-002'" "$out"; [ $rc != 0 ] || echo "$out"
 git switch -q main && git branch -qD again
+msg="moves: a merged, unreleased move line corrected in place commits, its target id matched by number (§ D-2 is D-002)"
+git switch -q -c fix && sed -i.bak 's/^- E-2: moved to L\/.jig\/decisions.md § D-002\.$/- E-2: moved to L\/.jig\/decisions.md § D-2./' .jig/decisions.md && rm .jig/decisions.md.bak && git add -A
+out=$(git commit -qm "E-002: correct its move" 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && grep -qx -- '- E-2: moved to L/.jig/decisions.md § D-2.' .jig/decisions.md" "$out"; [ $rc = 0 ] || echo "$out"
+git switch -q main && git branch -qD fix
+msg="moves: a later entry superseding a moved id is refused: its home is the pararepo"
+git switch -q -c sup && ulog '### E-005 five
+Accepted (owner, 2026-11-03). Supersedes E-002.
+Touches: docs/products/walyt/walyt.md
+
+The battery is 500 mAh.' && git add -A; tryit
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'E-005 supersedes E-002, which the log moved to L/.jig/decisions.md § D-002'" "$out"; [ $rc != 0 ] || echo "$out"
+msg="moves: a move-shaped line naming a pararepo under ### Changed is refused"
+ulog '### Changed
+
+- E-003: moved to L/.jig/decisions.md § D-001.' && git add -A; tryit
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'is under ## Unreleased ### Changed: a move line goes under ## Unreleased ### Removed'" "$out"; [ $rc != 0 ] || echo "$out"
+git switch -q main && git branch -qD sup
+# jig's own files in the pararepo are no citation: an id there alone asks for nothing.
+(cd "$L" && printf '# per E-001 and E-004\n' >> .jig/scripts/setup.sh && git add -A && git commit -qm "setup mentions E-001" >/dev/null 2>&1)
 msg="moves: jig decision E-002 names the release it stood in and the move"
 out=$($J decision E-002 2>&1)
 expect_pass sh -c "echo \"\$0\" | grep -q 'stood last at .*, in v0.1.0' && echo \"\$0\" | grep -q 'moved to L/.jig/decisions.md § D-002'" "$out"
@@ -8664,7 +8684,7 @@ expect_pass sh -c "echo \"\$0\" | grep -q 'E-002 moved to L/.jig/decisions.md §
 msg="moves: the release stages L's pin bump, every id and page moved, nothing removed or missing"
 out=$($J release 2>&1)
 PB="$L/.jig/staging/pin-bump-M.md"
-expect_pass sh -c "echo \"\$0\" | grep -q '^L: staged .jig/staging/pin-bump-M.md (.*moved)' && grep -q 'E-002 (moved: .jig/decisions.md § D-002, this repo)' '$PB' && grep -q 'E-001 (moved: .jig/decisions.md § D-002, this repo)' '$PB' && grep -q 'E-004 (moved: .jig/decisions.md § D-001, this repo)' '$PB' && grep -q 'battery.md, which M v0.1.1 moved: now docs/battery.md, this repo' '$PB' && grep -q 'walyt.md § Mods, which M v0.1.1 moved: now docs/walyt.md § Mods, this repo' '$PB' && ! grep -q 'removed)\\|doesn.t have\\|has no heading for' '$PB'" "$out"; [ "$fail" = 0 ] || cat "$PB"
+expect_pass sh -c "echo \"\$0\" | grep -q '^L: staged .jig/staging/pin-bump-M.md (.*moved)' && grep -q 'E-002 (moved: .jig/decisions.md § D-002, this repo)' '$PB' && grep -qx -- '- E-001 (moved: .jig/decisions.md § D-002, this repo): cited in docs/dock.md' '$PB' && ! grep -q '.jig/scripts' '$PB' && grep -q 'E-004 (moved: .jig/decisions.md § D-001, this repo)' '$PB' && grep -q 'battery.md, which M v0.1.1 moved: now docs/battery.md, this repo' '$PB' && grep -q 'walyt.md § Mods, which M v0.1.1 moved: now docs/walyt.md § Mods, this repo' '$PB' && ! grep -q 'removed)\\|doesn.t have\\|has no heading for' '$PB'" "$out"; [ "$fail" = 0 ] || cat "$PB"
 cd "$L"
 msg="moves: L's jig sync lists E-002 and E-004 as moved"
 out=$($J sync 2>&1)
