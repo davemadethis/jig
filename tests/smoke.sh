@@ -1385,6 +1385,25 @@ mainbefore=$(git -C mrclone rev-parse main)
 $J propose .jig/specs/x.md fmt >/dev/null
 expect_pass sh -c "git -C mrclone rev-parse -q --verify refs/heads/propose/pr-fmt && grep -q 'meta: docs proposal propose/pr-fmt' .jig/specs/x.md && test \"\$(git -C mrclone rev-parse main)\" = '$mainbefore' && test \"\$(git -C mrclone branch --show-current)\" = main"
 git add -A && git commit -qm "specs: proposal"
+msg="propose: the branch opens with a commit of its own, so the metarepo's --no-merged lists it, the release's buffer branch too"
+expect_pass sh -c "git -C mrclone branch --no-merged main --list 'propose/pr-*' | grep -q 'propose/pr-fmt\$' && git -C mrclone branch --no-merged main --list 'propose/pr-*' | grep -q 'propose/pr-buffer-v0.1.1\$' && git -C mrclone log -1 --format=%s propose/pr-fmt | grep -q '^propose: .*nothing written yet\$'"
+msg="sync: a proposal with nothing written on it is named empty, with the date, the worktree command and the withdraw, not 'not released'"
+out=$($J sync 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -F 'proposal propose/pr-fmt (.jig/specs/x.md): empty: nothing written on it in docs since $(date +%F)' | grep -F 'worktree add <dir> propose/pr-fmt' | grep -qF 'jig propose --withdraw propose/pr-fmt' && ! echo \"\$0\" | grep -q 'pr-fmt.*not released'" "$out"
+# The report's shape: a buffer proposal branch made before the opening commit, at the
+# metarepo's trunk tip, cited with its row Open. Undone after, so later cases see none of it.
+emptytip=$(git rev-parse HEAD); git -C mrclone branch propose/pr-buffer-b3 main
+printf '| B3 | the help page | api/a.py, none (third) | owner, 2026-11-02 | Open |\n' >> .jig/ledgers/BUFFER.md
+printf '# buffer-b3\n\n## Decisions\n- meta: docs proposal propose/pr-buffer-b3\n\n## Buffer rows\n- B3\n' > .jig/specs/buffer-b3.md
+msg="sync: an old-style empty branch whose spec isn't committed yet reads empty since uncommitted"
+expect_pass sh -c "$J sync 2>&1 | grep -qF 'proposal propose/pr-buffer-b3 (.jig/specs/buffer-b3.md): empty: nothing written on it in docs since uncommitted'"
+git add -A && git commit -qm "buffer: B3, proposed the old way" >/dev/null 2>&1
+msg="sync: an old-style empty branch at the metarepo's trunk tip, its row Open, reads empty with the spec's date"
+expect_pass sh -c "$J sync 2>&1 | grep -qF 'proposal propose/pr-buffer-b3 (.jig/specs/buffer-b3.md): empty: nothing written on it in docs since $(date +%F)'"
+msg="propose --buffer: there, a new proposal makes a branch the metarepo's --no-merged lists"
+$J propose --buffer b3again >/dev/null 2>&1
+expect_pass sh -c "git -C mrclone branch --no-merged main --list 'propose/pr-*' | grep -q 'propose/pr-b3again\$'"
+git reset -q --hard "$emptytip" && git -C mrclone branch -q -D propose/pr-buffer-b3 propose/pr-b3again
 
 # R2 on a metarepo's proposal branch, in a clone of its own so mrclone keeps its state: the
 # proposal is on no job by design, so it commits while the metarepo has a job open.
@@ -1403,6 +1422,11 @@ msg="R2: the metarepo's trunk checkout on propose/pr-fmt is still refused, namin
 out=$(cd "$MP" && git -c core.hooksPath=/dev/null checkout -q -b propose/pr-two && $J check 2>&1); rc=$?
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '^R1 '" "$out"
 git -C "$MP" -c core.hooksPath=/dev/null checkout -q main
+msg="sync: with a commit written on top of the opening commit, the proposal reads not released"
+(git -C mrclone -c core.hooksPath=/dev/null worktree add -q "$T/mrclone-fmt" propose/pr-fmt && cd "$T/mrclone-fmt" \
+  && printf 'f\n' > fmt.md && git add fmt.md && git -c core.hooksPath=/dev/null commit -qm "fmt: write it") >/dev/null 2>&1
+git -C mrclone worktree remove --force "$T/mrclone-fmt"
+expect_pass sh -c "$J sync 2>&1 | grep -qF 'proposal propose/pr-fmt (.jig/specs/x.md): not released'"
 msg="R2: a propose/ branch in a repo that isn't a metarepo is on no job, as any other branch"
 NM="$T/nometa"; mkdir -p "$NM" && git -C "$NM" init -q -b main && git -C "$NM" config user.email t@t && git -C "$NM" config user.name t
 out=$(cd "$NM" && cp -r "$P/jig" .jig && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board \
@@ -1645,6 +1669,19 @@ msg="para sync: a path in a folder here named like the metarepo is this repo's o
 expect_pass sh -c "! echo \"\$0\" | grep -q 'docs/b.md'" "$out"
 msg="para sync: a Closed BUFFER row and a handoff citing the old path are not named"
 expect_pass sh -c "echo \"\$0\" | grep -q 'BUFFER.md:.*walyt' && ! echo \"\$0\" | grep -qE 'Closedonly|Handoffonly|handoffs/'" "$out"
+# The metarepo's roadmap is in no release: a cite of it is read on its trunk, in its checkout.
+(cd mmclone && mkdir -p .jig && printf '# Roadmap\n\n## Up next\n\n- x\n' > .jig/roadmap.md && git add .jig/roadmap.md \
+  && git -c core.hooksPath=/dev/null commit -qm "roadmap") >/dev/null 2>&1
+printf '# r\n\nPer `mm/.jig/roadmap.md § Up next`.\nAnd `mm/.jig/roadmap.md § Nowhere`.\n' > .jig/specs/r.md && git add -A && git commit -qm "specs: r" >/dev/null 2>&1
+out=$($J sync 2>&1)
+msg="para sync: a roadmap cite whose heading the metarepo's trunk has, unreleased, is not named"
+expect_pass sh -c "! echo \"\$0\" | grep -q 'specs/r.md:3'" "$out"
+msg="para sync: a roadmap cite of a missing heading names the metarepo's trunk, not the pin"
+expect_pass sh -c "echo \"\$0\" | grep -qF '.jig/specs/r.md:4 cites mm/.jig/roadmap.md § Nowhere, which mm main has no heading for' && ! echo \"\$0\" | grep 'r.md' | grep -q \"doesn't have\"" "$out"
+msg="para sync: the heading committed on the metarepo's trunk, with no release, clears it"
+(cd mmclone && printf '\n## Nowhere\n' >> .jig/roadmap.md && git -c core.hooksPath=/dev/null commit -qam "roadmap: nowhere") >/dev/null 2>&1
+expect_pass sh -c "! $J sync 2>&1 | grep -q 'specs/r.md'"
+git rm -q .jig/specs/r.md && git commit -qm "specs: r done" >/dev/null 2>&1 && git -C mmclone reset -q --hard origin/main
 
 cd "$MM" && git switch -q -c sup && ulog '### D-002 the api page is `pp/docs/old.md`
 Accepted (owner, 2026-11-10).
@@ -3549,7 +3586,7 @@ before=$(git rev-parse HEAD); out=$($J sync --answered B1 --in v0.2.0 --reason a
 expect_pass sh -c "test $rc != 0 && test \"\$(git rev-parse HEAD)\" = $before && echo \"\$0\" | grep -q 'not an Open row of .jig/ledgers/BUFFER.md: B1'" "$out"
 msg="answered: sync names the proposal as carrying no Open row, with the withdraw"
 out=$($J sync 2>&1)
-expect_pass sh -c "echo \"\$0\" | grep -q 'proposal propose/ba-para-moot (.jig/specs/moot.md): not released, and carries no Open row: .jig propose --withdraw propose/ba-para-moot'" "$out"
+expect_pass sh -c "echo \"\$0\" | grep -q 'proposal propose/ba-para-moot (.jig/specs/moot.md): empty: .*, and carries no Open row: .jig propose --withdraw propose/ba-para-moot'" "$out"
 msg="withdraw: the spec's line reads withdrawn; committed, sync no longer names the branch, and the metarepo still has it"
 $J propose --withdraw propose/ba-para-moot --reason "answered by v0.2.0" >/dev/null && git add -A && git commit -qm "specs: withdraw moot"; out=$($J sync 2>&1)
 expect_pass sh -c "grep -qx -- '- meta: bam withdrawn propose/ba-para-moot — answered by v0.2.0' .jig/specs/moot.md && ! echo \"\$0\" | grep -q 'ba-para-moot' && git -C '$SM' rev-parse -q --verify refs/heads/propose/ba-para-moot >/dev/null" "$out"
@@ -3599,6 +3636,20 @@ out=$($J gate gj 2>&1); git worktree remove --force .git/jig/worktrees/gate-gj 2
 $J propose --withdraw propose/ba-para-gj --reason "no longer needed" >/dev/null && git add -A && git commit -qm "specs: withdraw gj"
 out2=$($J gate gj 2>&1); git worktree remove --force .git/jig/worktrees/gate-gj 2>/dev/null
 expect_pass sh -c "echo \"\$0\" | grep -q 'cites proposal propose/ba-para-gj' && ! echo \"\$1\" | grep -q 'cites proposal propose/ba-para-gj' && ! git -C .git/jig/worktrees/gj show HEAD:.jig/specs/gj.md | grep -q withdrawn" "$out" "$out2"
+msg="buffer cites: a buffer proposal spec's copy of a row it lists is history; the Open BUFFER row and a DEFERRED row with the same cite are named"
+brow B7 '`bam/docs/nopage.md`' 'seven' 'fifth' Open >> .jig/ledgers/BUFFER.md
+printf '# cp\n\n## Buffer rows\n- B7\n\n' > .jig/specs/cp.md && tail -1 .jig/ledgers/BUFFER.md >> .jig/specs/cp.md
+printf '# Deferred\n\n| Finding | Why |\n|---|---|\n| see `bam/docs/nopage.md` | later |\n' > .jig/ledgers/DEFERRED.md
+git add -A && git commit -qm "buffer: B7, copied" >/dev/null 2>&1; out=$($J sync 2>&1)
+expect_pass sh -c "! echo \"\$0\" | grep -q 'specs/cp.md' && echo \"\$0\" | grep -q \"BUFFER.md:[0-9]* cites bam/docs/nopage.md, which bam v[0-9.]* doesn't have\" && echo \"\$0\" | grep -q \"DEFERRED.md:5 cites bam/docs/nopage.md, which bam v[0-9.]* doesn't have\"" "$out"
+msg="buffer: an empty proposal merged into the metarepo and released closes none of its rows"
+brow B8 'eight' 'not eight' 'sixth' Open >> .jig/ledgers/BUFFER.md && printf 't=8\n' >> api/a.py && git add -A && git commit -qm "api: t"
+$J propose --buffer b8 >/dev/null && git add -A && git commit -qm "specs: b8"
+(cd "$SM" && git switch -q propose/ba-para-b8 && $J reviewed >/dev/null && git switch -q main \
+  && git merge -q --no-ff --no-edit propose/ba-para-b8 && git switch -q -c n8 && ulog '- an empty merge' && git add -A \
+  && git commit -qm "TOOL: note" && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-edit n8 && $J release $(mf)) >/dev/null 2>&1
+out=$($J sync 2>&1)
+expect_pass sh -c "test -n \"\$(git -C '$SM' tag --contains propose/ba-para-b8)\" && grep -q '^| B8 .*| Open |\$' .jig/ledgers/BUFFER.md && echo \"\$0\" | grep -q 'proposal propose/ba-para-b8 (.jig/specs/b8.md): empty: '" "$out"
 msg="answered: RULES.md names the answered state, the withdrawn line and both commands"
 expect_pass sh -c "grep -q 'Closed (answered in <release>: <reason>)' '$P/jig/RULES.md' && grep -q 'meta: <name> withdrawn <branch>' '$P/jig/RULES.md' && grep -q '^jig propose --withdraw' '$P/jig/RULES.md' && grep -q '^jig sync --answered' '$P/jig/RULES.md'"
 }
@@ -8264,7 +8315,8 @@ PBT="$T/pb"; mkdir -p "$PBT"
 emerge() { b=$1 s=$2; shift 2; git switch -q -c "$b" && git add -A -- "$@" && git commit -qm "$s" && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-edit "$b"; }
 M="$PBT/M"; mkdir -p "$M" && cd "$M" && git init -q -b main && git config user.email t@t && git config user.name t
 cp -r "$P/jig" .jig && cp "$P/AGENTS.md" "$P/CLAUDE.md" . && mkdir -p docs/products && printf '# X\n\nThe x product.\n' > docs/products/x.md && printf '# W\n\nThe w product.\n' > docs/products/w.md
-git add -A && git commit -qm init && $J init --meta --name M --prefix E- >/dev/null && git add -A && git commit -qm "TOOL: meta-init"
+printf '# Roadmap\n\n## Up next\n\n## Later\nExit when:\n- [ ] later\n' > .jig/roadmap.md.keep
+git add -A && git commit -qm init && $J init --meta --name M --prefix E- >/dev/null && mv .jig/roadmap.md.keep .jig/roadmap.md && git add -A && git commit -qm "TOOL: meta-init"
 setjson .jig/meta.json pararepos '[]' && python3 -c "import json; f='.jig/meta.json'; d=json.load(open(f)); d['pararepos']=['A','B','C','D']; json.dump(d, open(f,'w'), indent=2)"
 ulog '### E-001 one
 Accepted (owner, 2026-11-01).
@@ -8279,11 +8331,14 @@ for r in A B C D; do
 done
 cd "$PBT/A" && mkdir -p docs && printf '# A\n\nA reads `M/docs/products/x.md`.\n' > docs/a.md && git add -A && git commit -qm "a cites x"
 cd "$PBT/B" && mkdir -p .jig/specs && printf '# b\n\nSource: chat\n\nPer `M/.jig/decisions.md § E-002`.\n' > .jig/specs/b.md && git add -A && git commit -qm "b cites E-002"
-cd "$PBT/C" && mkdir -p src && printf '# the x product\nx = 1\n' > src/c.py && git add -A && git commit -qm c
+cd "$PBT/C" && mkdir -p src .jig/specs && printf '# the x product\nx = 1\n' > src/c.py && printf '# c\n\nSource: chat\n\nPer `M/.jig/roadmap.md § Later`.\n' > .jig/specs/c.md && git add -A && git commit -qm c
 cd "$PBT/D" && mkdir -p docs && printf '# D\n\nD reads `M/docs/products/x.md`.\n' > docs/d.md && setjson .jig/para.json defer_until 2999-01-01 && git add -A && git commit -qm "d cites x, defers"
 counts() { for r in A B C D; do echo "$r $(git -C "$PBT/$r" rev-list --count HEAD) $(git -C "$PBT/$r" show HEAD:.jig/para.json | grep '"pin"')"; done; }
 before=$(counts)
-cd "$M" && git mv docs/products/x.md docs/products/z.md && ulog '- **Breaking:** docs/products/x.md moved to docs/products/z.md.' && python3 - <<'PY'
+# The release also drops a roadmap heading C cites (the owner's edit, on main): read on trunk
+# at both tags, it asks no bump.
+cd "$M" && printf '# Roadmap\n\n## Up next\n' > .jig/roadmap.md && git commit -qm "TOOL: drop the Later phase" .jig/roadmap.md
+git mv docs/products/x.md docs/products/z.md && ulog '- **Breaking:** docs/products/x.md moved to docs/products/z.md.' && python3 - <<'PY'
 f = '.jig/decisions.md'; s = open(f).read()
 s = s.replace("### E-002 two\nAccepted (owner, 2026-11-01).\nTouches: docs/products/x.md\n", "")
 s = s.replace("## Unreleased\n", "## Unreleased\n\n### E-003 two, again\nAccepted (owner, 2026-11-02). Supersedes E-002.\nTouches: docs/products/z.md\n", 1)

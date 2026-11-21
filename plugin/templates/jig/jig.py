@@ -8070,16 +8070,29 @@ def glossary_changes(loc: Path, old: str, new: str) -> tuple[list[str], list[str
             [], was_home, now_home)
 
 
+OPENING = "propose: "
+
+
+def proposal_empty(loc: Path, branch: str, trunk: str) -> bool:
+    """Whether a proposal branch exists with nothing written on it: its tip is the opening commit
+    `jig propose` made, or, for a branch made before there was one, sits on trunk's own line."""
+    tip = git("rev-parse", "-q", "--verify", f"refs/heads/{branch}^{{commit}}", cwd=str(loc))
+    if not tip:
+        return False
+    subject = git("log", "-1", "--format=%s", tip, cwd=str(loc))
+    return (subject.startswith(OPENING) and subject.endswith("nothing written yet")) \
+        or tip in git("rev-list", "--first-parent", trunk, cwd=str(loc)).split()
+
+
 def proposal_in(loc: Path, branch: str, tag: str) -> bool:
     """Whether a proposal is in a release: its branch is an ancestor of the tag, or, the branch
     deleted after its merge, a merge reachable from the tag names it. M4 makes every change to
     the metarepo's trunk a merge, and git's default subject names the branch."""
     tip = git("rev-parse", "-q", "--verify", f"refs/heads/{branch}^{{commit}}", cwd=str(loc))
     if tip:
-        # A proposal `jig propose` just made sits on the metarepo's trunk with nothing of its
-        # own, so it is an ancestor of every later tag. M4 keeps a real one off that line.
-        on_trunk = tip in git("rev-list", "--first-parent", tag, cwd=str(loc)).split()
-        return not on_trunk and subprocess.run(["git", "merge-base", "--is-ancestor", tip, tag],
+        # An empty proposal is an ancestor of every later tag (its opening commit merged, or the
+        # trunk commit an old one sits on): nothing of it is released.
+        return not proposal_empty(loc, branch, Board.trunk_name(loc)) and subprocess.run(["git", "merge-base", "--is-ancestor", tip, tag],
                                                cwd=loc, capture_output=True).returncode == 0
     # git's own subject names the branch; `jig merge`'s names the job, whose board entry, read
     # just before that merge deleted it, names the branch.
@@ -8193,8 +8206,17 @@ def sync_meta(root: Path) -> int:
                               if proposal_in(loc, m.group("branch"), t)), None)
                 # A buffer proposal whose rows all left Open some other way waits on nothing.
                 idle = not first and listed_rows(text) and not set(listed_rows(text)) & open_ids
-                print(f"proposal {m.group('branch')} ({spec.relative_to(root)}): "
-                      f"{'released by ' + first if first else 'not released'}"
+                b = m.group("branch")
+                if first:
+                    state = f"released by {first}"
+                elif proposal_empty(loc, b, Board.trunk_name(loc)):
+                    since = git("log", "--diff-filter=A", "-1", "--format=%cs", "--",
+                                str(spec.relative_to(root))) or "uncommitted"
+                    state = (f"empty: nothing written on it in {name} since {since}; write the change "
+                             f"there (git -C {loc} worktree add <dir> {b}), or {withdraw_line(b)}")
+                else:
+                    state = "not released"
+                print(f"proposal {b} ({spec.relative_to(root)}): {state}"
                       + (f", and carries no Open row: {withdraw_line(m.group('branch'))} if it won't be"
                          if idle else ""))
                 rows = [i for i, r in proposed_copy(text).items() if tuple(r) in still]
@@ -8508,6 +8530,12 @@ def closed_row(path: str, line: str) -> bool:
     return path == BUFFER and line.lstrip().startswith("|") and row_state((table_cells(line) or [""])[-1]) == "Closed"
 
 
+def buffer_copy(listed: set[str], line: str) -> bool:
+    """A buffer proposal spec's copy of a row it lists under `## Buffer rows`: history, as a
+    Closed row is. The BUFFER row itself is still checked while it is Open."""
+    return bool(listed) and line.lstrip().startswith("|") and (table_cells(line) or [""])[0] in listed
+
+
 def used_in(text: str, whole: bool = False) -> list[str]:
     """This repo's files that use TEXT. Of jig's own files only specs and ledgers count: the
     rulebook's examples and the cache aren't the repo's use, but a spec or an Open BUFFER row is."""
@@ -8559,11 +8587,19 @@ def meta_citations(root: Path, para: dict, ids: str, loc: Path | None = None,
     stale_pointers. A citation is `<meta>/<path> § <section>`; a section that is a decision id
     (IDS, the metarepo's prefix) names a row, any other a heading. A bare path that names an
     entry file at the pin and nothing here is named too, since it can't be told from this repo's
-    own. Handoffs and Closed BUFFER rows cite the pin they were written at, so they are left out.
+    own. Handoffs, Closed BUFFER rows and a buffer proposal's copies of its rows cite the pin
+    they were written at, so they are left out. A cite of the metarepo's roadmap is read on its
+    trunk, not at the pin.
     Reported, never refused. Read at HEAD against the cache, as stale_pointers reads it; with AT,
     (this repo's revision, the metarepo's tag in LOC), read there instead: a metarepo's release
     compares its pararepos' citations against two of its tags."""
     cache, name, pin = root / CACHE, para["meta"], para["pin"]
+    # The metarepo's roadmap is project data, not a contract: no pin holds it, so a cite of it
+    # is read on the metarepo's trunk, and a pin bump never changes what it finds.
+    mtrunk = Board.trunk_name(loc) if loc else None
+
+    def live(path: str) -> str | None:
+        return git("show", f"{mtrunk}:{path}", cwd=str(loc)) or None if mtrunk else None
     if at:
         rev, pin = at
         mfiles = git("-c", "core.quotePath=false", "ls-tree", "-r", "--name-only", pin, cwd=str(loc)).splitlines()
@@ -8608,8 +8644,9 @@ def meta_citations(root: Path, para: dict, ids: str, loc: Path | None = None,
         # A released section's change lines are frozen, and its entries change only by being
         # superseded: a citation there isn't fixed in place, so isn't named.
         frozen = released_lines(text) if f == LOG else set()
+        copies = set(listed_rows(text)) if f.startswith(f"{DIR}/specs/") else set()
         for n, line in enumerate(text.splitlines(), 1):
-            if closed_row(f, line) or n - 1 in frozen:
+            if closed_row(f, line) or buffer_copy(copies, line) or n - 1 in frozen:
                 continue
             for m in POINTER.finditer(line) if any(t in line.casefold() for t in named) else ():
                 if not name_in(m.group("name"), {name}):
@@ -8622,7 +8659,11 @@ def meta_citations(root: Path, para: dict, ids: str, loc: Path | None = None,
                 code = m.start() > 0 and line[m.start() - 1] == "`" and not m.group("shut")
                 rest = m.group("rest")
                 section = (rest.split("`")[0].strip() if code else rest) if rest else None
-                body = meta_text(path)
+                roadmap = path in (ROADMAP, ROADMAP_VIEW)
+                if roadmap and not mtrunk:
+                    continue
+                body = live(path) if roadmap else meta_text(path)
+                at_ = mtrunk if roadmap else pin
                 row = rows.match(plain(section)) if section and body else None
                 if row and (not code or row.group(1) == plain(section)):
                     # A decision is a log entry's heading, or a row in a register from before the log.
@@ -8641,10 +8682,10 @@ def meta_citations(root: Path, para: dict, ids: str, loc: Path | None = None,
                          and (term := glossary_term_in(plain(section), gloss)) else "")
                 if level == NO_FILE:
                     out.append(f"{f}:{n} cites {name}/{path}{f' § {shown_section(plain(section), code)}' if moved else ''}, "
-                               f"which {name} {pin} doesn't have{moved}")
+                               f"which {name} {at_} doesn't have{moved}")
                 elif level == NO_HEADING:
                     out.append(f"{f}:{n} cites {name}/{path} § {shown_section(plain(section), code)}, "
-                               f"which {name} {pin} has no heading for{moved}")
+                               f"which {name} {at_} has no heading for{moved}")
             for m in one.finditer(line) if one else ():
                 before, after = line[m.start() - 1:m.start()], line[m.end():m.end() + 1]
                 if not re.match(r"[\w./:-]", before) and not re.match(r"[\w/-]", after):
@@ -9106,7 +9147,12 @@ def open_proposal(para: dict, loc: Path, slug: str) -> str:
     if git("rev-parse", "-q", "--verify", f"refs/heads/{branch}", cwd=str(loc)):
         die(f"{branch} already exists in {para['meta']}", 2)
     # A branch from the metarepo's trunk, made without checking anything out: main is untouched.
-    git("branch", branch, Board.trunk_name(loc), cwd=str(loc), check=True)
+    # Its opening commit is its own, so the metarepo's list of unmerged branches shows it before
+    # anything is written on it; a branch at trunk's tip is merged already and listed nowhere.
+    trunk = Board.trunk_name(loc)
+    opening = git("commit-tree", f"{trunk}^{{tree}}", "-p", trunk, "-m",
+                  f"{OPENING}{main_root().name}: nothing written yet", cwd=str(loc), check=True)
+    git("branch", branch, opening, cwd=str(loc), check=True)
     return branch
 
 
