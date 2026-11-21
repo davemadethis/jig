@@ -1672,15 +1672,18 @@ expect_pass sh -c "echo \"\$0\" | grep -q 'BUFFER.md:.*walyt' && ! echo \"\$0\" 
 # The metarepo's roadmap is in no release: a cite of it is read on its trunk, in its checkout.
 (cd mmclone && mkdir -p .jig && printf '# Roadmap\n\n## Up next\n\n- x\n' > .jig/roadmap.md && git add .jig/roadmap.md \
   && git -c core.hooksPath=/dev/null commit -qm "roadmap") >/dev/null 2>&1
-printf '# r\n\nPer `mm/.jig/roadmap.md § Up next`.\nAnd `mm/.jig/roadmap.md § Nowhere`.\n' > .jig/specs/r.md && git add -A && git commit -qm "specs: r" >/dev/null 2>&1
+(cd mmclone && printf '# Roadmap\n\n## Up next\n' > ROADMAP.md && git add ROADMAP.md && git -c core.hooksPath=/dev/null commit -qm "roadmap view") >/dev/null 2>&1
+printf '# r\n\nPer `mm/.jig/roadmap.md § Up next`.\nAnd `mm/.jig/roadmap.md § Nowhere`.\nThe view: `mm/ROADMAP.md § Up next`, not `mm/ROADMAP.md § Elsewhere`.\n' > .jig/specs/r.md && git add -A && git commit -qm "specs: r" >/dev/null 2>&1
 out=$($J sync 2>&1)
 msg="para sync: a roadmap cite whose heading the metarepo's trunk has, unreleased, is not named"
 expect_pass sh -c "! echo \"\$0\" | grep -q 'specs/r.md:3'" "$out"
 msg="para sync: a roadmap cite of a missing heading names the metarepo's trunk, not the pin"
 expect_pass sh -c "echo \"\$0\" | grep -qF '.jig/specs/r.md:4 cites mm/.jig/roadmap.md § Nowhere, which mm main has no heading for' && ! echo \"\$0\" | grep 'r.md' | grep -q \"doesn't have\"" "$out"
+msg="para sync: a cite of the metarepo's ROADMAP.md view is read on its trunk too"
+expect_pass sh -c "echo \"\$0\" | grep -qF '.jig/specs/r.md:5 cites mm/ROADMAP.md § Elsewhere, which mm main has no heading for' && ! echo \"\$0\" | grep -q 'ROADMAP.md § Up next'" "$out"
 msg="para sync: the heading committed on the metarepo's trunk, with no release, clears it"
 (cd mmclone && printf '\n## Nowhere\n' >> .jig/roadmap.md && git -c core.hooksPath=/dev/null commit -qam "roadmap: nowhere") >/dev/null 2>&1
-expect_pass sh -c "! $J sync 2>&1 | grep -q 'specs/r.md'"
+expect_pass sh -c "! $J sync 2>&1 | grep -q 'specs/r.md:[34]'"
 git rm -q .jig/specs/r.md && git commit -qm "specs: r done" >/dev/null 2>&1 && git -C mmclone reset -q --hard origin/main
 
 cd "$MM" && git switch -q -c sup && ulog '### D-002 the api page is `pp/docs/old.md`
@@ -3586,7 +3589,7 @@ before=$(git rev-parse HEAD); out=$($J sync --answered B1 --in v0.2.0 --reason a
 expect_pass sh -c "test $rc != 0 && test \"\$(git rev-parse HEAD)\" = $before && echo \"\$0\" | grep -q 'not an Open row of .jig/ledgers/BUFFER.md: B1'" "$out"
 msg="answered: sync names the proposal as carrying no Open row, with the withdraw"
 out=$($J sync 2>&1)
-expect_pass sh -c "echo \"\$0\" | grep -q 'proposal propose/ba-para-moot (.jig/specs/moot.md): empty: .*, and carries no Open row: .jig propose --withdraw propose/ba-para-moot'" "$out"
+expect_pass sh -c "echo \"\$0\" | grep -q 'proposal propose/ba-para-moot (.jig/specs/moot.md): empty: .*or .jig propose --withdraw propose/ba-para-moot --reason <text>.; it carries no Open row\$' && test \$(echo \"\$0\" | grep 'ba-para-moot (' | grep -o 'propose --withdraw' | wc -l) = 1" "$out"
 msg="withdraw: the spec's line reads withdrawn; committed, sync no longer names the branch, and the metarepo still has it"
 $J propose --withdraw propose/ba-para-moot --reason "answered by v0.2.0" >/dev/null && git add -A && git commit -qm "specs: withdraw moot"; out=$($J sync 2>&1)
 expect_pass sh -c "grep -qx -- '- meta: bam withdrawn propose/ba-para-moot — answered by v0.2.0' .jig/specs/moot.md && ! echo \"\$0\" | grep -q 'ba-para-moot' && git -C '$SM' rev-parse -q --verify refs/heads/propose/ba-para-moot >/dev/null" "$out"
@@ -3650,6 +3653,9 @@ $J propose --buffer b8 >/dev/null && git add -A && git commit -qm "specs: b8"
   && git commit -qm "TOOL: note" && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-edit n8 && $J release $(mf)) >/dev/null 2>&1
 out=$($J sync 2>&1)
 expect_pass sh -c "test -n \"\$(git -C '$SM' tag --contains propose/ba-para-b8)\" && grep -q '^| B8 .*| Open |\$' .jig/ledgers/BUFFER.md && echo \"\$0\" | grep -q 'proposal propose/ba-para-b8 (.jig/specs/b8.md): empty: '" "$out"
+msg="buffer: the same empty proposal, its branch deleted after the merge, still reads not released and closes nothing"
+git -C "$SM" branch -q -D propose/ba-para-b8; out=$($J sync 2>&1)
+expect_pass sh -c "grep -q '^| B8 .*| Open |\$' .jig/ledgers/BUFFER.md && echo \"\$0\" | grep -qF 'proposal propose/ba-para-b8 (.jig/specs/b8.md): not released' && ! echo \"\$0\" | grep 'ba-para-b8' | grep -q 'released by'" "$out"
 msg="answered: RULES.md names the answered state, the withdrawn line and both commands"
 expect_pass sh -c "grep -q 'Closed (answered in <release>: <reason>)' '$P/jig/RULES.md' && grep -q 'meta: <name> withdrawn <branch>' '$P/jig/RULES.md' && grep -q '^jig propose --withdraw' '$P/jig/RULES.md' && grep -q '^jig sync --answered' '$P/jig/RULES.md'"
 }

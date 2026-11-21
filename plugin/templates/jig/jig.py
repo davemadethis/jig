@@ -8079,9 +8079,13 @@ def proposal_empty(loc: Path, branch: str, trunk: str) -> bool:
     tip = git("rev-parse", "-q", "--verify", f"refs/heads/{branch}^{{commit}}", cwd=str(loc))
     if not tip:
         return False
-    subject = git("log", "-1", "--format=%s", tip, cwd=str(loc))
-    return (subject.startswith(OPENING) and subject.endswith("nothing written yet")) \
-        or tip in git("rev-list", "--first-parent", trunk, cwd=str(loc)).split()
+    return opening_commit(loc, tip) or tip in git("rev-list", "--first-parent", trunk, cwd=str(loc)).split()
+
+
+def opening_commit(loc: Path, rev: str) -> bool:
+    """Whether REV is the commit `jig propose` opens a branch with: nothing written on it."""
+    subject = git("log", "-1", "--format=%s", rev, cwd=str(loc))
+    return subject.startswith(OPENING) and subject.endswith("nothing written yet")
 
 
 def proposal_in(loc: Path, branch: str, tag: str) -> bool:
@@ -8099,7 +8103,8 @@ def proposal_in(loc: Path, branch: str, tag: str) -> bool:
     named = re.compile(rf"^Merge branch '{re.escape(branch)}'( into \S+)?$")
     for line in git("log", "--merges", "--format=%H %s", tag, cwd=str(loc)).splitlines():
         sha, _, subject = line.partition(" ")
-        if named.match(subject):
+        # An empty proposal merged and deleted is still empty: nothing of it is released.
+        if named.match(subject) and not opening_commit(loc, f"{sha}^2"):
             return True
         job = re.search(r"(?:^|: )merge (\S+)$", subject)
         if job:
@@ -8210,10 +8215,16 @@ def sync_meta(root: Path) -> int:
                 if first:
                     state = f"released by {first}"
                 elif proposal_empty(loc, b, Board.trunk_name(loc)):
-                    since = git("log", "--diff-filter=A", "-1", "--format=%cs", "--",
-                                str(spec.relative_to(root))) or "uncommitted"
+                    # The opening commit is the proposal's date; a branch from before it has
+                    # only the spec here that cites it.
+                    tip = f"refs/heads/{b}"
+                    since = (git("log", "-1", "--format=%cs", tip, cwd=str(loc)) if opening_commit(loc, tip)
+                             else git("log", "--diff-filter=A", "-1", "--format=%cs", "--",
+                                      str(spec.relative_to(root))) or "uncommitted")
                     state = (f"empty: nothing written on it in {name} since {since}; write the change "
-                             f"there (git -C {loc} worktree add <dir> {b}), or {withdraw_line(b)}")
+                             f"there (git -C {loc} worktree add <dir> {b}), or {withdraw_line(b)}"
+                             + ("; it carries no Open row" if idle else ""))
+                    idle = False
                 else:
                     state = "not released"
                 print(f"proposal {b} ({spec.relative_to(root)}): {state}"
