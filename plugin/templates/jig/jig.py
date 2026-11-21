@@ -6019,21 +6019,42 @@ MOVE_LINE = re.compile(r"^- `?(?P<what>[^`\s][^`]*?)`?: moved to `?(?P<to>[\w.-]
 
 
 def move_key(what: str) -> str:
-    """How a moved thing is looked up: an id or a path as written, a section by its plain heading."""
+    """How a moved thing is looked up: an id by its number, as R6 counts it (E-2 is E-002), a
+    path as written, a section by its plain heading."""
     path, _, section = what.partition(" § ")
-    return f"{path.strip()} § {plain(section)}" if section else path.strip()
+    if section:
+        return f"{path.strip()} § {plain(section)}"
+    m = re.fullmatch(r"([A-Za-z][\w]*-)0*(\d+)", path.strip())
+    return f"{m.group(1)}{int(m.group(2))}" if m else path.strip()
 
 
-def moves_in(text: str) -> dict[str, str]:
-    """Every move line in log TEXT, in any section, as {moved id, path or path § heading:
-    pointer}. A released section's change lines are frozen, so the map needs no history."""
-    out, group = {}, ""
+class Moves(dict):
+    """moves_in's map, looked up by move_key, so E-002 finds the line written `- E-2: …`."""
+    def __getitem__(self, k): return super().__getitem__(move_key(k))
+    def __contains__(self, k): return super().__contains__(move_key(k))
+    def get(self, k, default=None): return super().get(move_key(k), default)
+
+
+def log_move_lines(text: str) -> list[tuple[str, str, re.Match]]:
+    """(section, line, match) for each move line under a ### Removed group in log TEXT."""
+    out, section, group = [], "", ""
     for line in text.splitlines():
         if line.startswith("## "):
-            group = ""
+            section, group = line[3:].strip(), ""
         elif line.startswith("### "):
             group = line[4:].strip()
         elif group == "Removed" and (m := MOVE_LINE.match(line.rstrip())):
+            out.append((section, line.rstrip(), m))
+    return out
+
+
+def moves_in(text: str) -> Moves:
+    """Every move line in log TEXT under ## Unreleased or a release, as {moved id, path or path
+    § heading: pointer}: where the hook checks one. A released section's change lines are
+    frozen, so the map needs no history."""
+    out = Moves()
+    for section, _, m in log_move_lines(text):
+        if section == "Unreleased" or RELEASE_HEADING.match(f"## {section}"):
             out[move_key(m.group("what"))] = m.group("to").strip()
     return out
 
@@ -6084,11 +6105,42 @@ def move_rules(trunk: str, staged: bool, meta: dict | None) -> list[str]:
     the line passes with a warning: the check is a courtesy to the reader, not the move's record."""
     new, old = in_index(LOG, staged), at_rev(since_trunk(trunk), LOG)
     paras = set((meta or {}).get("pararepos") or [])
+    prefix = log_prefix(trunk)
     out = []
-    for line in sorted(removed_lines(new) - removed_lines(old)):
-        if not (m := MOVE_LINE.match(line)):
-            continue
+    # A move line anywhere else is read by nothing and checked by nothing: only one place holds them.
+    was = {(sec, line) for sec, line, _ in log_move_lines(old)}
+    out += [f"{LOG}: `{line}` is under ## {sec}: a move line goes under ## Unreleased ### Removed"
+            for sec, line, _ in log_move_lines(new) if (sec, line) not in was
+            and sec != "Unreleased" and not RELEASE_HEADING.match(f"## {sec}")]
+    # One address per moved thing: a second line would leave readers to pick between two homes.
+    had, seen = moves_in(old), Counter()
+    added = [(line, m) for line in sorted(removed_lines(new) - removed_lines(old)) if (m := MOVE_LINE.match(line))]
+    for _, m in added:
+        seen[move_key(m.group("what"))] += 1
+    old_ids = {id_number(e["id"], prefix) for e in log_entries(old, prefix)}
+    new_ids = {id_number(e["id"], prefix) for e in log_entries(new, prefix)}
+    superseded = {id_number(i, prefix) for e in log_entries(new, prefix) for i in replaced(e, prefix)}
+    for line, m in added:
         what, ptr = m.group("what"), m.group("to").strip()
+        key = move_key(what)
+        if key in had:
+            out.append(f"{LOG}: `{line}` moves {what}, which the log already moves to {had[key]}: "
+                       f"one move line per thing")
+            continue
+        if seen[key] > 1:
+            out.append(f"{LOG}: `{line}`: this change adds {seen[key]} move lines for {what}: "
+                       f"one move line per thing")
+            continue
+        num = id_number(what, prefix)
+        if num is not None and num in superseded:
+            out.append(f"{LOG}: `{line}` moves {what}, which an accepted entry supersedes: what "
+                       f"holds is its successor, so move that one")
+            continue
+        # One the log still has is the strike check's refusal (struck_ids reads move lines too).
+        if num is not None and num not in old_ids and num not in new_ids:
+            out.append(f"{LOG}: `{line}` moves {what}, which this change doesn't remove from the log: "
+                       f"a moved entry leaves in the commit that writes its line")
+            continue
         repo, path, section = pointer_parts(ptr)
         if not name_in(repo, paras):
             listed = f" ({', '.join(sorted(paras))})" if paras else ""
@@ -6096,7 +6148,7 @@ def move_rules(trunk: str, staged: bool, meta: dict | None) -> list[str]:
                        f"{listed}: a claim moves down to a pararepo of this metarepo only")
             continue
         wpath, _, wsec = what.partition(" § ")
-        if not re.fullmatch(rf"{re.escape(log_prefix(trunk))}\d+", what) and (body := in_index(wpath.strip(), staged)):
+        if num is None and (body := in_index(wpath.strip(), staged)):
             if not wsec:
                 out.append(f"{LOG}: `{line}` moves {wpath}, which this repo still has: delete it in "
                            f"the same commit, or drop the line")

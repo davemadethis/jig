@@ -8512,7 +8512,7 @@ stagef() {  # stagef <name> <target> <kind> <destination> <body>: a staged file 
   mkdir -p .jig/staging && printf -- '---\nstaged: true\ntarget: %s\nkind: %s\nchange: %s\ndestination: %s\nsource: owner / 2026-11-21\nstatus: staged\n---\n%b' "$2" "$3" "$([ "$3" = roadmap ] && echo update || echo new)" "$4" "$5" > ".jig/staging/$1"; }
 mvlines() { ulog "### Removed
 
-- E-002: moved to ${1:-L/.jig/decisions.md § D-002}.
+- E-2: moved to ${1:-L/.jig/decisions.md § D-002}.
 - E-004: moved to ${2:-L/.jig/decisions.md § D-001}.
 - docs/products/walyt/battery.md: moved to ${3:-L/docs/battery.md}.
 - docs/products/walyt/walyt.md § Mods: moved to ${4:-L/docs/walyt.md § Mods}."; }
@@ -8602,6 +8602,27 @@ for bad in "§ D-009:L/.jig/decisions.md § D-009::::has no entry D-009" "nope.m
   moveit "${a:-}" "${b:-}" "${c:-}" "${d:-}"; tryit
   expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '$want'" "$out"; [ $rc != 0 ] && echo "$out" | grep -q "$want" || echo "$out"
 done
+msg="moves: a move line under ## Open is refused: only ## Unreleased holds one"
+git switch -q -c mv 2>/dev/null || git switch -q mv
+rment E-004 && ulog '### Removed
+
+- E-004: moved to L/.jig/decisions.md § D-009.' Open && git add -A; tryit
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'is under ## Open: a move line goes under ## Unreleased'" "$out"; [ $rc != 0 ] || echo "$out"
+msg="moves: two move lines for one id in one change are refused"
+moveit && ulog '### Removed
+
+- E-002: moved to L/.jig/decisions.md § D-001.' && git add -A; tryit
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'adds 2 move lines for E-00\\?2'" "$out"; [ $rc != 0 ] || echo "$out"
+msg="moves: a move of an id a live entry supersedes is refused"
+git switch -q mv && ulog '### Removed
+
+- E-001: moved to L/.jig/decisions.md § D-002.' && git add -A; tryit
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'E-001, which an accepted entry supersedes'" "$out"; [ $rc != 0 ] || echo "$out"
+msg="moves: a move of an id this change doesn't remove from the log is refused"
+ulog '### Removed
+
+- E-009: moved to L/.jig/decisions.md § D-002.' && git add -A; tryit
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \"E-009, which this change doesn't remove\"" "$out"; [ $rc != 0 ] || echo "$out"
 msg="moves: with L out of the repos file, the move passes with a warning naming L"
 moveit; out=$(JIG_CONFIG="$MV/none.json" git commit -qm "E-002, E-004: move to L" 2>&1); rc=$?; git reset -q --hard HEAD~1 2>/dev/null
 expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q 'warning: .*L isn.t in .jig repos'" "$out"; [ $rc = 0 ] || echo "$out"
@@ -8622,6 +8643,12 @@ printf '# Roadmap\n\n## alpha\nScopes:\n- `battery`: the battery\n\n## Up next\n
 out=$(git commit -qm "merge mv" 2>&1); rc=$?
 expect_pass test $rc = 0; [ $rc = 0 ] || echo "$out"
 
+msg="moves: a second move line for an id the log already moves is refused"
+git switch -q -c again && ulog '### Removed
+
+- E-002: moved to L/.jig/decisions.md § D-001.' && git add -A; tryit
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'which the log already moves to L/.jig/decisions.md § D-002'" "$out"; [ $rc != 0 ] || echo "$out"
+git switch -q main && git branch -qD again
 msg="moves: jig decision E-002 names the release it stood in and the move"
 out=$($J decision E-002 2>&1)
 expect_pass sh -c "echo \"\$0\" | grep -q 'stood last at .*, in v0.1.0' && echo \"\$0\" | grep -q 'moved to L/.jig/decisions.md § D-002'" "$out"
