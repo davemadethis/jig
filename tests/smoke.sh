@@ -2187,6 +2187,15 @@ msg="gate: a spec's ## Roles is read: a review-change below its review line is w
 out=$($J gate 2>&1)
 expect_pass sh -c "echo \"\$0\" | grep -q 'warning: review-change ran at tier 2, effort 3; the spec asks for tier 2, effort 1' && ! echo \"\$0\" | grep -q 'review ran at'" "$out"
 git worktree remove --force .git/jig/worktrees/gate-g2 2>/dev/null; git switch -q main
+# A bug role's spec nests Roles under its own step: still read.
+printf '# rn\n\n## 5. Spec\n\n### Roles\nspec: tier 2, effort 2\nbug: tier 2, effort 1\nwork: tier 2, effort 3\nreview: tier 2, effort 1\ncheck: tier 3, effort 4\n\n### Out of scope\n- none\n' > .jig/specs/rn.md
+git add -A && git commit -qm "spec rn" && git switch -q -c g3
+printf 'rn\n' > rn.txt && git add -A && git commit -qm rn && $J reviewed --tier 2 --effort 2 >/dev/null && $J handoff --spec .jig/specs/rn.md >/dev/null
+sed -i.bak 's/^- \[ \]/- [x]/' .jig/handoffs/g3-*.md && rm .jig/handoffs/*.bak && git add -A && git commit -qm "note g3"
+msg="gate: a ### Roles nested under another heading is read: a review below its line is warned about"
+out=$($J gate 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -q 'warning: review ran at tier 2, effort 2; the spec asks for tier 2, effort 1'" "$out"
+git worktree remove --force .git/jig/worktrees/gate-g3 2>/dev/null; git switch -q main
 $J open k --spec .jig/specs/t.md --owns 'k/**' >/dev/null && git add -A && git commit -qm "open k"
 (cd .git/jig/worktrees/k && mkdir k && printf 'x\n' > k/x.txt && git add -A && git commit -qm x \
   && $J reviewed >/dev/null && $J handoff >/dev/null && sed -i.bak 's/^- \[ \]/- [x]/' .jig/handoffs/k-*.md \
@@ -7458,6 +7467,21 @@ out=$($J consolidate 2>&1)
 expect_pass sh -c "echo \"\$0\" | grep -q 'group 1: 2 specs' && echo \"\$0\" | grep -q 'y and z share: app/src/x.ts' && ! echo \"\$0\" | grep -qE '(x|w)\.md|group 2'" "$out"
 git checkout -q -- .jig/jobs.json && git worktree remove --force .git/jig/worktrees/X && git branch -q -D X && rm .jig/specs/[xyzw].md
 
+# A bug role nests the template's sections under its own steps: the Touches is read wherever it sits.
+printf '# n1\n\nSource: chat n1\n\n## Touches\n- `lib/a.py`\n```sh\n# run it\n```\n- `lib/n0.py`\n\n### Notes\n- `lib/n1.py`\n\n## Out of scope\n- `lib/far.py`\n' > .jig/specs/n1.md
+printf '# n2\n\nSource: chat n2\n\n## 5. Spec\n\n### Touches\n- `lib/a.py`\n\n### Out of scope\n- `app/src/x.ts`\n' > .jig/specs/n2.md
+msg="consolidate: a ### Touches nested under another heading overlaps a ## Touches"
+out=$($J consolidate 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -q 'n1 and n2 share: lib/a.py'" "$out"
+msg="rig: a nested Touches ends at its level's next heading; a ### or a fenced # comment inside a ## Touches stays in it"
+expect_pass sh -c "$J rig --json | python3 -c \"import json,sys; t={i['id']: i['touches'] for i in json.load(sys.stdin)['items']}; assert t['n2'] == ['lib/a.py'] and t['n1'] == ['lib/a.py', 'lib/n0.py', 'lib/n1.py'], t\""
+rm .jig/specs/n1.md .jig/specs/n2.md
+msg="proposals: a top-level ## Proposals is read in order, and ends at the next ## heading"
+expect_pass python3 -c "
+import importlib.util; s = importlib.util.spec_from_file_location('j', '.jig/jig.py'); j = importlib.util.module_from_spec(s); s.loader.exec_module(j)
+t = '# p\n\n## Proposals\n- \`propose/x-two\`\n- \`propose/x-one\`\n\n## Notes\n- \`propose/x-not\`\n'
+assert j.proposal_branches(t) == ['propose/x-two', 'propose/x-one'], j.proposal_branches(t)"
+
 msg="open: a Touches path in neither owns, shares nor common is warned about, by name; a § term counts as its page"
 cspec g 'app/src/x.ts' && cspec h 'lib/a.py § Load' 'Kept separate from g: no overlap' && git add -A && git commit -qm "specs g h"
 out=$($J open G --spec .jig/specs/g.md --shares 'docs/**' 2>&1)
@@ -7488,9 +7512,9 @@ done
 # A release needs an entry file changed: proposal one also adds a glossary term and its line.
 git switch -q propose/pa-one && printf '\n### one\n' >> README.md && ulog '- one' \
   && git add -A && git commit -qm "GLOSSARY: one" && $J reviewed >/dev/null && git switch -q main
-mkdir -p .jig/specs && printf '# m\n\nSource: pa one\nSource: pa two\n\n## Touches\n- `docs/products/**`\n\n## Proposals\n- `propose/pa-two`\n- `propose/pa-one`\n' > .jig/specs/m.md
+mkdir -p .jig/specs && printf '# m\n\nSource: pa one\nSource: pa two\n\n## Spec\n\n### Touches\n- `docs/products/**`\n\n### Proposals\n- `propose/pa-two`\n- `propose/pa-one`\n' > .jig/specs/m.md
 git add -A && git commit -qm "TOOL: spec m"
-msg="metarepo: open on a spec listing proposals: the kickoff says to merge each into the job's branch, in the spec's order"
+msg="metarepo: open on a spec listing proposals (nested under ## Spec): the kickoff says to merge each into the job's branch, in the spec's order"
 out=$($J open M --spec .jig/specs/m.md --owns 'docs/products/**' 2>&1)
 expect_pass sh -c "echo \"\$0\" | grep -q 'Run .jig sync., then merge each proposal into M in this order: propose/pa-two, propose/pa-one'" "$out"
 git add -A && git commit -qm "TOOL: open M"
