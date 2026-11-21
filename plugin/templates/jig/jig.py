@@ -6019,7 +6019,7 @@ MOVE_LINE = re.compile(r"^- `?(?P<what>[^`\s][^`]*?)`?: moved to `?(?P<to>[\w.-]
 
 
 def move_key(what: str) -> str:
-    """How a moved thing is looked up: an id by its number, as R6 counts it (E-2 is E-002), a
+    """How a moved thing is looked up: an id by its number, as R6 counts it (D-7 is D-007), a
     path as written, a section by its plain heading."""
     path, _, section = what.partition(" § ")
     if section:
@@ -6029,7 +6029,7 @@ def move_key(what: str) -> str:
 
 
 class Moves(dict):
-    """moves_in's map, looked up by move_key, so E-002 finds the line written `- E-2: …`."""
+    """moves_in's map, looked up by move_key, so D-007 finds the line written `- D-7: …`."""
     def __getitem__(self, k): return super().__getitem__(move_key(k))
     def __contains__(self, k): return super().__contains__(move_key(k))
     def get(self, k, default=None): return super().get(move_key(k), default)
