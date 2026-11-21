@@ -141,7 +141,7 @@ Part 2, in a throwaway metarepo `meta` with pararepos `pa` and `pb`. Both are re
 ## Out of scope
 Later versions, each its own spec once this lands, in the order they build on each other:
 - **Labels** (R1–R3): `(labels …)` on a scope, checked against the metarepo glossary's folded terms.
-- **Dependency confirmation** (R6: "the owner of the scope it waits on confirms it in its own section"): `(needed by …)`, with an unconfirmed dependency reported. Until then, the owner approves every roadmap diff (open question 4).
+- **Dependency confirmation**: superseded by the owner's 1.4 ruling; agreement is never required, and the flag is open question 4.
 - **Ideas log and open questions leaving the decision log** (R4, R5).
 - **The cross-repo report**: stale staged files and `propose/` branches, entries touching labelled scopes, and two names for one thing.
 - **A jig edit command** that refuses a line under another repo's product and stages label changes. A **conversion command** for moving in.
@@ -174,8 +174,8 @@ Later versions, each its own spec once this lands, in the order they build on ea
 ## Open questions for the owner
 1. **The first version is Parts 1 and 2 only.** Labels, `needed by`, one list per product, the ideas log, the report and the conversion command follow as later specs. Recommendation: yes. Part 1 alone already fixes Issue 3 in every repo, and Part 2 ends the drift.
 2. Answered: the first version reaches the end state (Owner's rulings).
-3. **Edits by hand in the metarepo's clean trunk checkout, on your yes, with no jig check of whose section a line is in.** Recommendation: yes for v1. You already see every roadmap diff, and the command that refuses another repo's section is later work.
-4. **R6's confirmation of a cross-product dependency is RULES.md text in v1** ("the waited-on scope's owner agrees before the `after` is committed"), with the `(needed by …)` check later. Recommendation: yes. The ring check and rig's blocked list are what end the deadlock, and confirmation only records agreement.
+3. **How a pararepo buffers a roadmap change** (the owner's 1.3 ruling: no hubnode edits another repo's content; changes are buffered and synced when the owner decides). Recommendation: the existing path up, a BUFFER row and `jig propose`, so the change is written on a `propose/<repo>-<slug>` branch in the metarepo, never its trunk, and merged there at the next sync the owner calls. No new mechanism.
+4. **Where an unconfirmed dependency is flagged** (the owner's 1.4 ruling: agreement isn't required and never blocks; a disagreement is flagged for the owner to rule on). Recommendation: in v1, `jig roadmap` in the metarepo and rig's Waiting on you list each cross-product `after` the waited-on section doesn't confirm.
 
 ## Roles
 - spec: tier 2, effort 2
