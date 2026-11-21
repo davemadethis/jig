@@ -215,3 +215,4 @@ Settled 2026-11-21; the body above follows these.
 2. A target that is reachable but missing (open question 2): refused; an unreachable repo warns. "agreed, settled".
 3. Roadmap items, the owner, 2026-11-20: "roadmap items relating to the items being moved should move too." A scope whose `(touches …)` names a page moved down follows it.
 4. Order, the owner, 2026-11-21: after bug-pararepo-sync-fixes merges ("agreed with move-to-para after job 3"), and before cross-repo-roadmap.
+5. Ruling 3's form, the owner, 2026-11-21: "Yes, open it": the dead-touch refusal names the moved page's pointer and the staged roadmap change, with nothing checking that the pararepo's roadmap took the item.
