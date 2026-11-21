@@ -14,7 +14,7 @@
   },
   "bug-nested-touches": {
     "spec": ".jig/specs/bug-nested-touches.md",
-    "state": "claimed",
+    "state": "gated",
     "after": [],
     "owns": [],
     "shares": [
@@ -23,6 +23,7 @@
       "plugin/templates/jig/RULES.md",
       "tests/smoke.sh"
     ],
-    "reserved": {}
+    "reserved": {},
+    "check": "batch"
   }
 }
