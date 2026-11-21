@@ -7,9 +7,10 @@ Kept separate from cross-repo-roadmap: the owner, 2026-11-21: "would you agree w
 A metarepo can move a decision entry (released or open), a page or a page's section to the
 pararepo that owns it. One line in the log records the move. That line is the forwarding
 address: frozen citations of the old id still resolve, `jig decision` names the new home, and
-the release tells each pararepo "moved, now here", not "removed". This is the first version:
-one line form, one helper that reads it, and the readers that today say "removed". The text
-itself moves the way it can today, by staging.
+the release tells each pararepo "moved, now here", not "removed". Roadmap items touching a
+moved page follow it. This is the first version: one line form, one helper that reads it, and
+the readers that today say "removed". The text itself, and a roadmap item, move the way they
+can today, by staging.
 
 ## Investigation
 
@@ -38,6 +39,9 @@ itself moves the way it can today, by staging.
 - [seen] A released section's change lines are frozen (`frozen_problems`, jig.py:6024). A move line written under `## Unreleased` `### Removed` becomes part of its release's section and stays in the log for good. A map from the log's text alone needs no git history.
 - [seen] A pointer is `<repo>/<path> § <section>` (RULES.md:1323–1339). `POINTER` (jig.py:8697) parses it, and `pointer_gap` (jig.py:8786) checks a path and heading against a file's text.
 - [seen] `peer_logs` (jig.py:6457) and `meta_checkout` (jig.py:7588) read another repo's trunk through `repo_path` (jig.py:7322). The held `cross-repo-roadmap` spec reads the metarepo's roadmap the same way.
+- [seen] At trunk 8605d2c, `meta_citations` reads the metarepo's roadmap on its trunk through a nested `live(path)`, `git show <trunk>:<path>` in that repo's checkout (added by bug-pararepo-sync-fixes). It is the one live read of another repo's trunk text, and it is local to that function.
+- [seen] At 8605d2c, `boundary_rules` refuses a trunk commit that leaves an `## Up next` item or a scope touching a page it deletes (`dead_touches`): "re-point its (touches …) in this commit" (smoke `boundary`). In a metarepo a page leaves in a job (M4), so the refusal falls on `jig merge`'s commit, which runs the hook. Its message names no new home.
+- [seen] A staged `kind: roadmap` file with `target: <repo>` forwards to that repo's staging like any other kind (RULES.md, Staging), and its hubnode applies it on trunk on the owner's yes (R5).
 - [assumed] The metarepo's hubnode can reach the receiving pararepo's checkout through `jig repos`. That holds on this machine (all four Maige repos are registered with paths). Where it can't, the move line passes with a warning (Change 2), so nothing depends on it.
 
 
@@ -72,12 +76,16 @@ closes that.
 
    The repo named must be one of `meta.json`'s `pararepos`. A move line for a released entry
    lets it leave its release, as a strike line does. An Open entry or a page needs no
-   permission to leave, and the line is its address.
+   permission to leave, and the line is its address. Open entries take it now, E-017, E-043
+   and E-044 among them, not a later ideas log.
 2. **The hook checks it.** On a commit that adds a move line, the hook:
    - refuses a repo that isn't in `pararepos`;
-   - reads that repo's trunk through `jig repos` and refuses a target id, page or heading
-     that isn't there, naming the file it read;
-   - warns, naming the repo, when the repo can't be reached;
+   - reads that repo's trunk and refuses a target id, page or heading that isn't there,
+     naming the file it read. The repo is found by `repo_path`; its text is read by
+     `trunk_show(loc, path)`, the `live` read `meta_citations` has today, lifted out of it
+     and used by both, not a second reader. An id is checked as an entry heading in that
+     repo's log, a heading by `pointer_gap`;
+   - warns, naming the repo, when the repo can't be reached, and passes;
    - refuses a moved entry or page the metarepo still has, as it refuses a strike of an entry
      still in the log.
 
@@ -91,13 +99,32 @@ closes that.
    - `jig decision E-085`: after "was removed", it prints "moved to <pointer>".
    - `jig reading-list --claims E-085`: its note names the move in place of "no entry … in its
      history".
-   - `stage_pin_bumps`: a gone id with a move prints `E-085 (moved: <pointer>): cited in …`,
-     never `(removed)`. A citation of a moved page or heading ends `: now <pointer>`, as a
-     rename's does. In the receiving pararepo itself, the pointer is its own path
-     (`now docs/battery.md, this repo`). The release's count line says `n moved`.
-   - `meta_citations` and `jig sync`'s "Changed" list: a moved id or page reads
+   - `meta_citations`: a `doesn't have` or `has no heading for` line whose path or path §
+     heading moved ends `: now <pointer>`, as a glossary term's does today; a row line takes
+     the pointer `holds_now` gives. In the receiving pararepo itself, the pointer is its own
+     path (`now docs/battery.md, this repo`).
+   - `stage_pin_bumps`' `broken`: a gone id with a move prints `E-085 (moved: <pointer>):
+     cited in …`, never `(removed)`. Page lines come from `meta_citations` already ending
+     `: now …`, which its rename guard keeps. The release's count line says `n moved`.
+   - `changes_report`, `jig sync`'s "Changed" list: a moved id or page reads
      `(moved: <pointer>)` with its uses.
-4. **RULES.md**, four places:
+4. **Roadmap items follow a moved page.** The hook already refuses a trunk commit that
+   leaves an Up next item or a scope touching a page it deletes (`dead_touches` in
+   `boundary_rules`), and in a metarepo that commit is the job's merge. So a page can't move
+   down while the metarepo's roadmap still touches it. When the page has a move line, the
+   refusal says so and names the way down: `` `<id>` touches <page>, moved to <pointer>:
+   stage a roadmap change with `target: <repo>` carrying it, and drop it, or the page from its
+   (touches …), here in this commit``. The item reaches the pararepo's roadmap as any roadmap
+   change does: forwarded, then applied on that repo's trunk on the owner's yes. A section
+   move leaves its page, so it moves no item. Nothing reads the pararepo's roadmap.
+
+   Why this form: the refusal holds the ruling today, and only its message changes. Listing
+   the scope in the move line adds a second record the line would carry frozen for good, and
+   having the pararepo's roadmap gain the scope writes another repo's roadmap, which R5 keeps
+   to its own trunk and its owner's yes. Both are cross-repo-roadmap's ground: once the
+   metarepo holds the one roadmap, a scope stays in that file whichever repo holds its page,
+   and anything built here to carry it across would be undone.
+5. **RULES.md**, five places:
    - Released sections: the move line beside the strike line, and the strike's one reason.
    - What the metarepo holds: moving a claim down to its one owner. The pararepo lands the
      text first, through staging. Its entry keeps who and date and drops a `Supersedes` of
@@ -105,32 +132,41 @@ closes that.
      removes it, with the move line, in one commit.
    - A pin-bump request: a moved id or path is listed with its new home.
    - Versioning: a move with no change in meaning is Z, as a file move is.
+   - Roadmap (A touched page exists): a page moved down takes its items with it, by a roadmap
+     change staged to that repo.
 
-The order is fixed by the check: the receiving entry or page has to be on the pararepo's trunk
-before the metarepo's commit can name it.
+The order is fixed by the checks: the receiving entry or page has to be on the pararepo's
+trunk before the metarepo's commit can name it, and the metarepo's roadmap lets go of the page
+in or before the merge that removes it.
 
 ## Done when
 Fixture: a throwaway metarepo `M` (`decision_prefix` `E-`, `pararepos` `["L"]`) and pararepo `L`
 (`D-`), both in `jig repos`, every jig command run with `JIG_CONFIG` and `XDG_CONFIG_HOME` beside
 the repos. `M` releases v0.1.0 with E-002 (accepted, `Supersedes E-001.`, E-001 removed in that commit),
-E-003 (accepted, citing E-002 in its body), `docs/products/walyt/battery.md`, and
-`docs/products/walyt/walyt.md` with a `## Mods` section. `L` pins v0.1.0, and its `docs/dock.md`
-cites `M/.jig/decisions.md § E-002`, a bare `E-001`, `M/docs/products/walyt/battery.md` and
-`M/docs/products/walyt/walyt.md § Mods`.
+E-003 (accepted, citing E-002 and E-004 in its body), E-004 under `## Open`,
+`docs/products/walyt/battery.md`, and `docs/products/walyt/walyt.md` with a `## Mods` section.
+`M`'s roadmap has a scope `alpha/battery` with `(touches docs/products/walyt/battery.md)` and an
+Up next item `charge` touching the same page. `L` pins v0.1.0, and its `docs/dock.md` cites
+`M/.jig/decisions.md § E-002`, a bare `E-001`, a bare `E-004`, `M/docs/products/walyt/battery.md`
+and `M/docs/products/walyt/walyt.md § Mods`. `M`'s changes run in a job and land by `jig merge`
+(M4); "the commit" below is the job's commit, then its merge.
 
 - [ ] **The strike has one reason.** `M`'s commit removing E-002 with `- E-002: moved to L as D-001.` is refused, and the refusal names the strike line and the move line. `- E-002: project scope, not a product decision.` still passes. (Today the first passes: the first Given, step 2.)
-- [ ] **The text lands first.** A `kind: decisions` file staged in `M` with `target: L` forwards to `L`, lands in a job there and merges as `D-001`, with E-002's who and date unchanged. The same with a `kind: doc` file lands `docs/battery.md` and a `docs/walyt.md` with `## Mods`.
-- [ ] **The move line is checked.** In `M`, removing E-002 from v0.1.0, deleting `battery.md` and removing `## Mods`, with move lines naming `L/.jig/decisions.md § D-001`, `L/docs/battery.md` and `L/docs/walyt.md § Mods`, commits. Each of these is refused, naming `L`'s file: a move line naming `§ D-009`, which `L` lacks; one naming `L/docs/nope.md`; one naming `§ Nope`; one naming a repo not in `pararepos`. With `L` dropped from the repos file, the good commit passes with a warning naming `L`.
-- [ ] **History reads the move.** `jig decision E-002` in `M` prints the entry, "stood last … in v0.1.0", and `moved to L/.jig/decisions.md § D-001`. `jig decision E-001` walks E-001 → E-002 → the move. `jig reading-list --claims E-002` names the move in its note.
-- [ ] **Frozen citations still pass.** E-003, which cites E-002, is unchanged, and `M`'s log check passes.
-- [ ] **The symptom is gone.** `M`'s release stages `L`'s pin-bump request, in which E-002 and E-001 are each `(moved: …)` with `L`'s own path, and `battery.md` and `walyt.md § Mods` each end `: now docs/battery.md, this repo` and the like. It has no `(removed)`, no "doesn't have" and no "has no heading for". The release prints `L: staged … (… moved)`. Today it prints `(2 rewrites, 1 removed id)`. `L`'s `jig sync` lists E-002 with `(moved: …)`.
-- [ ] **No regression.** `python3 .jig/jig.py queue -- bash tests/smoke.sh moves decisions supersede removals pin_bump pararepo staging claims` passes (`moves` is the new section holding the checks above), and so does `claude plugin validate ./plugin`.
+- [ ] **The text lands first.** A `kind: decisions` file staged in `M` with `target: L` forwards to `L`, lands in a job there and merges as accepted `D-001`, with E-002's who and date unchanged, and Open `D-002` from E-004. The same with a `kind: doc` file lands `docs/battery.md` and a `docs/walyt.md` with `## Mods`.
+- [ ] **The move line is checked** (rulings 1 and 2). In `M`, removing E-002 from v0.1.0, removing Open E-004, deleting `battery.md` and removing `## Mods`, with move lines naming `L/.jig/decisions.md § D-001`, `L/.jig/decisions.md § D-002`, `L/docs/battery.md` and `L/docs/walyt.md § Mods`, commits. Each of these is refused, naming `L`'s file: a move line naming `§ D-009`, which `L` lacks; one naming `L/docs/nope.md`; one naming `§ Nope`. One naming a repo not in `pararepos` is refused. With `L` dropped from the repos file, the good commit passes with a warning naming `L`.
+- [ ] **Roadmap items follow the page** (ruling 3). The merge of that job is refused while `M`'s roadmap still touches `battery.md`: the refusal names `alpha/battery` and `charge`, `moved to L/docs/battery.md` and `target: L`. A `kind: roadmap` file staged in `M` with `target: L` forwards to `L`'s staging. With `charge` dropped and the page dropped from `alpha/battery`'s `(touches …)` in the merge commit, the merge passes. A job moving only `walyt.md § Mods` merges with the roadmap untouched.
+- [ ] **History reads the move.** `jig decision E-002` in `M` prints the entry, "stood last … in v0.1.0", and `moved to L/.jig/decisions.md § D-001`. `jig decision E-001` walks E-001 → E-002 → the move. `jig decision E-004` names `§ D-002`. `jig reading-list --claims E-002` names the move in its note.
+- [ ] **Frozen citations still pass.** E-003, which cites E-002 and E-004, is unchanged, and `M`'s log check passes.
+- [ ] **The symptom is gone.** `M`'s release stages `L`'s pin-bump request, in which E-002, E-001 and E-004 are each `(moved: …)` with `L`'s own path, and `battery.md` and `walyt.md § Mods` each end `: now docs/battery.md, this repo` and the like. It has no `(removed)`, no "doesn't have" and no "has no heading for". The release prints `L: staged … (… moved)`. Today it prints `(… rewrites, … removed id)`. `L`'s `jig sync` lists E-002 and E-004 with `(moved: …)`.
+- [ ] **One live read.** `git grep -n 'def live\b' plugin/templates/jig/jig.py` finds nothing; `trunk_show` is defined once and called by `meta_citations` and the move-line check.
+- [ ] **No regression.** `python3 .jig/jig.py queue -- bash tests/smoke.sh moves decisions supersede removals pin_bump pararepo staging claims boundary roadmap` passes (`moves` is the new section holding the checks above), and so does `claude plugin validate ./plugin`.
 
 ## Out of scope
 - **Which entries and pages move, and when.** Dave's call, made in maige-ecosystem. Meanwhile they stay there, by his word.
 - **A record on the receiving side.** The landed entry may say "Moved from maige-ecosystem E-085." in its body. jig doesn't parse it, and `jig decision D-016` doesn't name an origin: the metarepo's line is the one record, and the check at Change 2 already ties the two ends.
 - **Listing live citations in the move commit.** `jig reading-list --claims <id>` lists every line naming the id already, and a metarepo spec that changes a claim starts from it (RULES.md, Every copy). With Change 3 its note names the move.
-- **Where Open questions should live** (the report's ideas log). That is the held `cross-repo-roadmap` work. An Open entry that moves now takes the move line like any other (Open question 1).
+- **Where Open questions should live** (the report's ideas log). That is the held `cross-repo-roadmap` work. An Open entry that moves now takes the move line like any other (ruling 1).
+- **Carrying a roadmap item across in jig.** The item goes down by a staged roadmap change, and nothing checks that the pararepo's roadmap took it. One roadmap in the metarepo is `cross-repo-roadmap`'s.
 - **Moving a claim up, or between two pararepos.** Up already goes through `jig propose` and BUFFER rows. Sideways can be asked for when a case comes up.
 - **One command that does both ends.** This version is two commits, a job in the pararepo and a commit in the metarepo, checked by the hook.
 - **A stub page left at the old path.** The move line is the address. A stub would be a page with no claim of its own.
@@ -138,11 +174,13 @@ cites `M/.jig/decisions.md § E-002`, a bare `E-001`, `M/docs/products/walyt/bat
 ## Touches
 - `plugin/templates/jig/jig.py`:
   - `struck_ids`, `removed_entries` and `frozen_problems`: the move line lets a released entry leave; the strike's reason is checked;
-  - a new move-line helper, and the hook check of its target, through `repo_path` as `peer_logs` reads a peer;
+  - `meta_citations`' nested `live`, lifted to a top-level `trunk_show(loc, path)` that `meta_citations` keeps calling;
+  - a new move-line helper, and the hook check of its target, through `repo_path` and `trunk_show`;
   - `hold_chain`, `holds_now`, `cmd_decision` and `claims_of_id`: the hop to a move;
-  - `stage_pin_bumps`, `meta_citations` and `changes_report`: a moved id or path with its new home.
-- `plugin/templates/jig/RULES.md`: Decision log (Released sections); Metarepo and pararepos (What the metarepo holds, A pin-bump request); Versioning (Z).
-- `tests/smoke.sh`: a new `moves` section; `decisions`, `supersede`, `removals`, `pin_bump`, `pararepo`, `staging` and `claims` rerun.
+  - `meta_citations`, `stage_pin_bumps`' `broken` and `changes_report`: a moved id or path with its new home;
+  - `boundary_rules`: the dead-touch refusal names a moved page's pointer and the roadmap change that carries its items.
+- `plugin/templates/jig/RULES.md`: Decision log (Released sections); Metarepo and pararepos (What the metarepo holds, A pin-bump request); Versioning (Z); Roadmap (A touched page exists).
+- `tests/smoke.sh`: a new `moves` section; `decisions`, `supersede`, `removals`, `pin_bump`, `pararepo`, `staging`, `claims`, `boundary` and `roadmap` rerun.
 
 ## Alternatives considered
 - **A cross-repo `Supersedes Maige-Lite/D-016.`** — rejected because a move isn't a reversal: a supersede asks for a `**Breaking:**` line and reads as a change of decision (RULES.md:1073–1078), and `status_parts` would have to read every repo's prefix — reason is [seen].
@@ -156,11 +194,12 @@ cites `M/.jig/decisions.md § E-002`, a bare `E-001`, `M/docs/products/walyt/bat
 ## Decisions
 - The metarepo writes the move, not the pararepo: it is the repo losing the claim, the one whose readers see "removed", and the one whose release builds the pin bump.
 - Open entries and pages take the same line. They need no permission to leave, but without it the pin bump reads them as removed (Givens).
-- Shares a mechanism with the held `cross-repo-roadmap` spec: both read another repo's trunk live through `jig repos` (`repo_path`, as `peer_logs` and `meta_checkout` do). Neither waits on the other. Whichever lands second reuses the first's read helper if one exists by then. This spec doesn't change that one.
+- Builds after bug-pararepo-sync-fixes (merged, 8605d2c) and before `cross-repo-roadmap` (ruling 4). It lifts that job's live read into `trunk_show`, so `cross-repo-roadmap`, which reads the metarepo's roadmap the same way, reuses it. This spec doesn't change that one.
+- Roadmap items follow a moved page through the refusal jig already makes, with a message naming the move, not through the move line or a write to the pararepo's roadmap (Change 4 says why).
 
 ## Open questions for the owner
-1. **The Open entries E-017, E-043 and E-044.** Move them with the same move line now, or wait for the held roadmap work's ideas log? Recommend: the move line now. It costs nothing extra, and without it their frozen citations in E-039 and E-057 read "removed" in Maige-Lite's pin bump.
-2. **An unreachable or missing target.** When the pararepo can be reached and lacks the target, the commit is refused. When it can't be reached, the commit warns. Is that the line you want, or warn in both cases? Recommend: refuse when reachable. Once released, the move line is frozen, so a wrong address could never be corrected.
+1. **The Open entries E-017, E-043 and E-044.** Answered: they move by the move line now (ruling 1).
+2. **An unreachable or missing target.** Answered: refused when the repo is reachable and lacks it; an unreachable repo warns (ruling 2).
 
 ## Roles
 spec: tier 2, effort 2
@@ -171,8 +210,8 @@ check: tier 3, effort 4
 
 ## Owner's rulings, 2026-11-20 and 2026-11-21
 
-Still being settled; the spec's body is revised to these once they are.
-- Open entries (open question 1): "move with it now": E-017, E-043 and E-044 move by the move line, not by the roadmap's ideas log. Settled.
-- A target that is reachable but missing (open question 2): refused; an unreachable repo warns. "agreed, settled".
-- Roadmap items, the owner, 2026-11-20: "roadmap items relating to the items being moved should move too." A scope whose `(touches …)` names a page moved down follows it.
-- Order, the owner, 2026-11-21: after bug-pararepo-sync-fixes merges ("agreed with move-to-para after job 3"), and before cross-repo-roadmap.
+Settled 2026-11-21; the body above follows these.
+1. Open entries (open question 1): "move with it now": E-017, E-043 and E-044 move by the move line, not by the roadmap's ideas log. Settled.
+2. A target that is reachable but missing (open question 2): refused; an unreachable repo warns. "agreed, settled".
+3. Roadmap items, the owner, 2026-11-20: "roadmap items relating to the items being moved should move too." A scope whose `(touches …)` names a page moved down follows it.
+4. Order, the owner, 2026-11-21: after bug-pararepo-sync-fixes merges ("agreed with move-to-para after job 3"), and before cross-repo-roadmap.
