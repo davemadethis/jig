@@ -1,7 +1,7 @@
 {
   "move-to-pararepo": {
     "spec": ".jig/specs/move-to-pararepo.md",
-    "state": "claimed",
+    "state": "gated",
     "after": [],
     "owns": [],
     "shares": [
@@ -9,6 +9,7 @@
       "plugin/templates/jig/RULES.md",
       "tests/smoke.sh"
     ],
-    "reserved": {}
+    "reserved": {},
+    "check": "batch"
   }
 }
