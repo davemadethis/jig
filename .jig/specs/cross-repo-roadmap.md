@@ -6,6 +6,7 @@ Source: maige-ecosystem hubnode session, bug role (claude-opus-5-5) / 2026-11-19
 Kept separate from bug-empty-proposal: the owner, 2026-11-20: "Hold on the cross-repo roadmap until we discuss it."
 Kept separate from bug-metarepo-roadmap-cites: the owner, 2026-11-20: "Hold on the cross-repo roadmap until we discuss it."
 
+Kept separate from move-to-pararepo: the owner, 2026-11-21: "would you agree we should start both bugs and let them finish, then do 2, then 1?" and "agreed with move-to-para after job 3": built in sequence, move-to-pararepo first.
 ## Intent
 A scope or phase names what it waits on in a form jig reads, so `jig rig` never offers blocked
 work and a ring is refused when it is written. A metarepo and its pararepos then plan from one
@@ -170,3 +171,12 @@ Later versions, each its own spec once this lands, in the order they build on ea
 - work: tier 2, effort 3
 - review: tier 2, effort 2
 - check: tier 3, effort 4
+
+## Owner's rulings, 2026-11-20 and 2026-11-21
+
+Still being settled; the spec's body is revised to these once they are.
+- First version (open question 1): "1.1 yes": Parts 1 and 2 first, the rest as later specs.
+- Up next and No phase (open question 2): the owner, 2026-11-20: "roadmap items relating to the items being moved should move too." A pararepo's Up next and No phase move up with its phases, and a scope whose `(touches …)` names a page moved down follows it.
+- Section edits (open question 3), the owner, 2026-11-21: "I dont like the idea of hubnodes editing each other's content, I think they should buffer the changes and use the regular sync process periodically (as the user decides)." No hubnode edits the metarepo's roadmap from a pararepo: a pararepo's changes to its product sections are buffered and reach the metarepo by the regular sync process, when the owner decides.
+- Dependency confirmation (open question 4), the owner, 2026-11-21: "Remove the requirement that they agree and flag when they dont so the user can rule on it." A cross-product `after` the waited-on section doesn't confirm never blocks: it is flagged for the owner to rule on.
+- Order, the owner, 2026-11-21: bug-pararepo-sync-fixes and bug-nested-touches first, then move-to-pararepo, then this spec.

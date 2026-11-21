@@ -2,6 +2,7 @@
 
 Source: maige-ecosystem hubnode session, bug role (claude-opus-5-5) / 2026-11-20 / Dave, on his word: "file a short jig feedback for moving entries and pages; leave them here meanwhile" (staged as feedback-maige-ecosystem-2026-11-20-move-entries-and-pages.md): "jig can't move a decision entry or a page from a metarepo down to the pararepo that owns it. A released entry can't leave the log at all, and a page that leaves reads as removed."
 
+Kept separate from cross-repo-roadmap: the owner, 2026-11-21: "would you agree we should start both bugs and let them finish, then do 2, then 1?" and "agreed with move-to-para after job 3": built in sequence, move-to-pararepo first.
 ## Intent
 A metarepo can move a decision entry (released or open), a page or a page's section to the
 pararepo that owns it. One line in the log records the move. That line is the forwarding
@@ -167,3 +168,11 @@ bug: tier 2, effort 1
 work: tier 2, effort 3
 review: tier 2, effort 2
 check: tier 3, effort 4
+
+## Owner's rulings, 2026-11-20 and 2026-11-21
+
+Still being settled; the spec's body is revised to these once they are.
+- Open entries (open question 1): "move with it now": E-017, E-043 and E-044 move by the move line, not by the roadmap's ideas log. Settled.
+- A target that is reachable but missing (open question 2): refused; an unreachable repo warns. "agreed, settled".
+- Roadmap items, the owner, 2026-11-20: "roadmap items relating to the items being moved should move too." A scope whose `(touches …)` names a page moved down follows it.
+- Order, the owner, 2026-11-21: after bug-pararepo-sync-fixes merges ("agreed with move-to-para after job 3"), and before cross-repo-roadmap.
