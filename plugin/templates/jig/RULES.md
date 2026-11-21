@@ -1472,7 +1472,9 @@ change, and the rows it carried that are still `Open` go again in the next propo
 in the metarepo is the metarepo's to delete. A proposal a release already holds can't be withdrawn: the
 pin moves instead, and sync closes its rows. One withdrawn and released anyway, sync names, with
 the `--answered` that closes its rows. Sync names a buffer proposal that carries no `Open`
-row as one to withdraw.
+row as one to withdraw. `jig propose` opens its branch with a commit of its own, so the
+metarepo's list of unmerged branches shows it from the start; sync names a proposal with nothing
+written past that as empty, with the date it was proposed.
 `jig sync` also names each file here that a decision at the pin cites and `contract_paths`
 doesn't cover. A path under a folder counts bare or after this repo's name; a root file every
 repo has (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `README.md`, `CHANGELOG.md`) counts only after
@@ -1484,8 +1486,11 @@ and adds the path only if the decision describes something this repo can change 
 `<meta>/<path>` (or `<meta>:<path>`), with `§ <section>` for a heading, matched as above. On
 every run, `jig sync` and the release name each citation in this repo's tracked files, specs and
 ledgers included, whose file or heading the pin doesn't have, and each bare path that names an
-entry file at the pin and no file here, as `write it as <meta>/<path>`. Handoffs and `Closed`
-BUFFER rows are left out: they cite the pin they were written at. Reported; nothing refuses.
+entry file at the pin and no file here, as `write it as <meta>/<path>`. A cite of the metarepo's
+roadmap (`<meta>/.jig/roadmap.md`, `<meta>/ROADMAP.md`) is read on the metarepo's trunk, not at
+the pin: it is project data no release holds, so a pin bump never changes it. Handoffs, `Closed`
+BUFFER rows and a buffer proposal's copies of the rows it lists are left out: they cite the pin
+they were written at. Reported; nothing refuses.
 
 Two rules for the metarepo's own pages:
 
