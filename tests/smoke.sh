@@ -7468,14 +7468,19 @@ expect_pass sh -c "echo \"\$0\" | grep -q 'group 1: 2 specs' && echo \"\$0\" | g
 git checkout -q -- .jig/jobs.json && git worktree remove --force .git/jig/worktrees/X && git branch -q -D X && rm .jig/specs/[xyzw].md
 
 # A bug role nests the template's sections under its own steps: the Touches is read wherever it sits.
-printf '# n1\n\nSource: chat n1\n\n## Touches\n- `lib/a.py`\n\n### Notes\n- `lib/n1.py`\n\n## Out of scope\n- `lib/far.py`\n' > .jig/specs/n1.md
+printf '# n1\n\nSource: chat n1\n\n## Touches\n- `lib/a.py`\n```sh\n# run it\n```\n- `lib/n0.py`\n\n### Notes\n- `lib/n1.py`\n\n## Out of scope\n- `lib/far.py`\n' > .jig/specs/n1.md
 printf '# n2\n\nSource: chat n2\n\n## 5. Spec\n\n### Touches\n- `lib/a.py`\n\n### Out of scope\n- `app/src/x.ts`\n' > .jig/specs/n2.md
 msg="consolidate: a ### Touches nested under another heading overlaps a ## Touches"
 out=$($J consolidate 2>&1)
 expect_pass sh -c "echo \"\$0\" | grep -q 'n1 and n2 share: lib/a.py'" "$out"
-msg="rig: a nested Touches ends at its level's next heading; a ### inside a ## Touches stays in it"
-expect_pass sh -c "$J rig --json | python3 -c \"import json,sys; t={i['id']: i['touches'] for i in json.load(sys.stdin)['items']}; assert t['n2'] == ['lib/a.py'] and t['n1'] == ['lib/a.py', 'lib/n1.py'], t\""
+msg="rig: a nested Touches ends at its level's next heading; a ### or a fenced # comment inside a ## Touches stays in it"
+expect_pass sh -c "$J rig --json | python3 -c \"import json,sys; t={i['id']: i['touches'] for i in json.load(sys.stdin)['items']}; assert t['n2'] == ['lib/a.py'] and t['n1'] == ['lib/a.py', 'lib/n0.py', 'lib/n1.py'], t\""
 rm .jig/specs/n1.md .jig/specs/n2.md
+msg="proposals: a top-level ## Proposals is read in order, and ends at the next ## heading"
+expect_pass python3 -c "
+import importlib.util; s = importlib.util.spec_from_file_location('j', '.jig/jig.py'); j = importlib.util.module_from_spec(s); s.loader.exec_module(j)
+t = '# p\n\n## Proposals\n- \`propose/x-two\`\n- \`propose/x-one\`\n\n## Notes\n- \`propose/x-not\`\n'
+assert j.proposal_branches(t) == ['propose/x-two', 'propose/x-one'], j.proposal_branches(t)"
 
 msg="open: a Touches path in neither owns, shares nor common is warned about, by name; a § term counts as its page"
 cspec g 'app/src/x.ts' && cspec h 'lib/a.py § Load' 'Kept separate from g: no overlap' && git add -A && git commit -qm "specs g h"

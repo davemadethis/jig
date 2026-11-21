@@ -1294,7 +1294,8 @@ def spec_section(text: str, *names: str) -> str | None:
     if not m:
         return None
     rest = text[m.end():]
-    end = re.search(rf"^#{{1,{len(m.group(1))}}} ", rest, re.M)
+    # From `##`: a `# ` line inside a section is a fenced shell comment, never its end.
+    end = re.search(rf"^#{{2,{len(m.group(1))}}} ", rest, re.M)
     return rest[:end.start()] if end else rest
 
 
