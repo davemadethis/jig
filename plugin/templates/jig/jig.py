@@ -551,6 +551,7 @@ def check_rules(root: Path, board: Board, *, staged: bool) -> list[str]:
         out += para_rules(root, board, para, staged)
     if LOG in guarded:
         out += log_rules(trunk, staged, on_trunk(trunk, branch))
+        out += move_rules(trunk, staged, meta)
 
     # R1 the trunk checkout stays on trunk (only when jobs are open: solo, one checkout
     # with a feature branch is normal and nobody else's tree is being moved)
@@ -3033,7 +3034,12 @@ def claims_of_id(root: Path, want: str, prefix: str) -> tuple[list[str], list[tu
         if by := holds_now(spelt, text, prefix, "HEAD", str(root)):
             ids = hold_chain(spelt, text, prefix, "HEAD", str(root))
             break
-    if by:
+    if by and "/" in by:
+        # Moved down to a pararepo: its home is there now, and every line here naming it is a copy.
+        ids = ids[:-1]
+        notes.append(f"{ids[-1]} moved to {by}: lines naming any of {', '.join(ids)} are listed.")
+        entry = None
+    elif by:
         notes.append(f"{ids[0]} is superseded; what holds now is {by}: lines naming any of "
                      f"{', '.join(ids)} are listed.")
         entry = next((e for e in entries if e["id"] == by), None)
@@ -6005,13 +6011,191 @@ def removed_lines(text: str) -> set[str]:
     return out
 
 
+STRIKE_WHY = "project scope, not a product decision."
+# A metarepo's forwarding address for a claim it handed down to the pararepo that owns it:
+# `- D-040: moved to <repo>/.jig/decisions.md § D-016.`, a page or `<page> § <heading>` in
+# place of the id. The target is a pointer, as the pararepo cites with, so one form covers all three.
+MOVE_LINE = re.compile(r"^- `?(?P<what>[^`\s][^`]*?)`?: moved to `?(?P<to>[\w.-]+/[^`]+?)`?\.?$")
+
+
+def move_key(what: str) -> str:
+    """How a moved thing is looked up: an id by its number, as R6 counts it (D-7 is D-007), a
+    path as written, a section by its plain heading."""
+    path, _, section = what.partition(" § ")
+    if section:
+        return f"{path.strip()} § {plain(section)}"
+    m = re.fullmatch(r"([A-Za-z][\w]*-)0*(\d+)", path.strip())
+    return f"{m.group(1)}{int(m.group(2))}" if m else path.strip()
+
+
+class Moves(dict):
+    """moves_in's map, looked up by move_key, so D-007 finds the line written `- D-7: …`."""
+    def __getitem__(self, k): return super().__getitem__(move_key(k))
+    def __contains__(self, k): return super().__contains__(move_key(k))
+    def get(self, k, default=None): return super().get(move_key(k), default)
+
+
+def log_move_lines(text: str, removed_only: bool = True) -> list[tuple[str, str, str, re.Match]]:
+    """(section, group, line, match) for each move-shaped line in log TEXT: under a ### Removed
+    group, or with REMOVED_ONLY false under any."""
+    out, section, group = [], "", ""
+    for line in text.splitlines():
+        if line.startswith("## "):
+            section, group = line[3:].strip(), ""
+        elif line.startswith("### "):
+            group = line[4:].strip()
+        elif (group == "Removed" or not removed_only) and (m := MOVE_LINE.match(line.rstrip())):
+            out.append((section, group, line.rstrip(), m))
+    return out
+
+
+def move_held(section: str) -> bool:
+    """Whether a move line under ## SECTION is one: ## Unreleased, or a release it went out in."""
+    return section == "Unreleased" or bool(RELEASE_HEADING.match(f"## {section}"))
+
+
+def moves_in(text: str) -> Moves:
+    """Every move line in log TEXT under ## Unreleased or a release, as {moved id, path or path
+    § heading: pointer}: where the hook checks one. A released section's change lines are
+    frozen, so the map needs no history."""
+    out = Moves()
+    for section, _, _, m in log_move_lines(text):
+        if move_held(section):
+            out[move_key(m.group("what"))] = m.group("to").strip()
+    return out
+
+
+def pointer_parts(ptr: str) -> tuple[str, str, str | None]:
+    """A move's pointer as (repo, path, section or None)."""
+    repo, _, rest = ptr.partition("/")
+    path, _, section = rest.partition(" § ")
+    return repo, path.strip(), section.strip() or None
+
+
+def shown_pointer(ptr: str, here: set[str]) -> str:
+    """PTR as a repo named in HERE reads it: its own path, `docs/battery.md, this repo`."""
+    repo, path, section = pointer_parts(ptr)
+    return f"{path}{f' § {section}' if section else ''}, this repo" if name_in(repo, here) else ptr
+
+
+def moved_to(moves: dict[str, str], path: str, section: str | None) -> str | None:
+    """Where a citation of PATH (§ SECTION) went: the section's own move, or its page's, the
+    cited heading carried over when the page's pointer names none."""
+    if section and (ptr := moves.get(move_key(f"{path} § {section}"))):
+        return ptr
+    if ptr := moves.get(path):
+        return ptr if not section or " § " in ptr else f"{ptr} § {plain(section)}"
+    return None
+
+
 def struck_ids(old: str, new: str, prefix: str) -> set[int]:
     """The numbers of the ids NEW's added `- D-040: …` lines under ## Unreleased ### Removed
-    open with: a project entry struck from the log has no product successor, so that line is
-    what lets it go, even from a release. Only the line's own id: one it mentions later in a
-    sentence is a change line about something else."""
-    rx = re.compile(rf"- {re.escape(prefix)}(\d+):")
-    return {int(m.group(1)) for line in removed_lines(new) - removed_lines(old) if (m := rx.match(line))}
+    open with, when the line gives one of the two reasons that let an entry go, even from a
+    release: struck as project scope, which has no product successor, or moved to the
+    pararepo that owns it. Only the line's own id: one it mentions later in a sentence is a
+    change line about something else, and any other reason lets nothing go."""
+    rx = re.compile(rf"- {re.escape(prefix)}(\d+): (.*)$")
+    return {int(m.group(1)) for line in removed_lines(new) - removed_lines(old)
+            if (m := rx.match(line)) and (m.group(2) == STRIKE_WHY or MOVE_LINE.match(line))}
+
+
+def trunk_show(loc: Path, path: str) -> str | None:
+    """PATH on the trunk of the repo checked out at LOC, None where it has no such file: the
+    one live read of another repo's text, for what no pin holds."""
+    return git("show", f"{Board.trunk_name(loc)}:{path}", cwd=str(loc)) or None
+
+
+def move_rules(trunk: str, staged: bool, meta: dict | None) -> list[str]:
+    """Each move line the change adds names one of the metarepo's pararepos, a thing this repo
+    no longer has, and a target on that pararepo's trunk. Where the pararepo can't be reached
+    the line passes with a warning: the check is a courtesy to the reader, not the move's record."""
+    new, old = in_index(LOG, staged), at_rev(since_trunk(trunk), LOG)
+    paras = set((meta or {}).get("pararepos") or [])
+    prefix = log_prefix(trunk)
+    out = []
+    # A move line anywhere else is read by nothing and checked by nothing: only one place holds
+    # them. Outside ### Removed, only a line naming a pararepo is taken for a misplaced move: a
+    # change line saying a page moved inside this repo has the same shape.
+    was = {(sec, grp, line) for sec, grp, line, _ in log_move_lines(old, False)}
+    out += [f"{LOG}: `{line}` is under ## {sec}{f' ### {grp}' if grp else ''}: a move line goes "
+            f"under ## Unreleased ### Removed"
+            for sec, grp, line, m in log_move_lines(new, False) if (sec, grp, line) not in was
+            and (grp == "Removed" and not move_held(sec)
+                 or grp != "Removed" and name_in(pointer_parts(m.group("to"))[0], paras))]
+    # One address per moved thing: a second line would leave readers to pick between two homes.
+    # A line this change rewrites in place is no longer the log's, so a corrected target passes.
+    kept = set(new.splitlines())
+    had, seen = Moves(), Counter()
+    for sec, _, line, m in log_move_lines(old):
+        if move_held(sec) and line in kept:
+            had[move_key(m.group("what"))] = m.group("to").strip()
+    rewritten = {k for k in moves_in(old) if k not in had}
+    # A moved id's home is the pararepo now: superseding it here would give it two.
+    gone_down = moves_in(new)
+    named_before = {i for e in log_entries(old, prefix) for i in replaced(e, prefix)}
+    out += [f"{LOG}: {e['id']} supersedes {i}, which the log moved to {gone_down[i]}: its home "
+            f"is there now, so a change to it is that repo's"
+            for e in log_entries(new, prefix) for i in replaced(e, prefix)
+            if i in gone_down and i not in named_before]
+    added = [(line, m) for line in sorted(removed_lines(new) - removed_lines(old)) if (m := MOVE_LINE.match(line))]
+    for _, m in added:
+        seen[move_key(m.group("what"))] += 1
+    old_ids = {id_number(e["id"], prefix) for e in log_entries(old, prefix)}
+    new_ids = {id_number(e["id"], prefix) for e in log_entries(new, prefix)}
+    superseded = {id_number(i, prefix) for e in log_entries(new, prefix) for i in replaced(e, prefix)}
+    for line, m in added:
+        what, ptr = m.group("what"), m.group("to").strip()
+        key = move_key(what)
+        if key in had:
+            out.append(f"{LOG}: `{line}` moves {what}, which the log already moves to {had[key]}: "
+                       f"one move line per thing")
+            continue
+        if seen[key] > 1:
+            out.append(f"{LOG}: `{line}`: this change adds {seen[key]} move lines for {what}: "
+                       f"one move line per thing")
+            continue
+        num = id_number(what, prefix)
+        if num is not None and num in superseded:
+            out.append(f"{LOG}: `{line}` moves {what}, which an accepted entry supersedes: what "
+                       f"holds is its successor, so move that one")
+            continue
+        # One the log still has is the strike check's refusal (struck_ids reads move lines too).
+        if num is not None and num not in old_ids and num not in new_ids and key not in rewritten:
+            out.append(f"{LOG}: `{line}` moves {what}, which this change doesn't remove from the log: "
+                       f"a moved entry leaves in the commit that writes its line")
+            continue
+        repo, path, section = pointer_parts(ptr)
+        if not name_in(repo, paras):
+            listed = f" ({', '.join(sorted(paras))})" if paras else ""
+            out.append(f"{LOG}: `{line}` moves to {repo}, which isn't one of {META}'s pararepos"
+                       f"{listed}: a claim moves down to a pararepo of this metarepo only")
+            continue
+        wpath, _, wsec = what.partition(" § ")
+        if num is None and (body := in_index(wpath.strip(), staged)):
+            if not wsec:
+                out.append(f"{LOG}: `{line}` moves {wpath}, which this repo still has: delete it in "
+                           f"the same commit, or drop the line")
+            elif pointer_gap(wpath.strip(), wsec, True, body)[0] == RESOLVES:
+                out.append(f"{LOG}: `{line}` moves {what}, which {wpath.strip()} still has: remove "
+                           f"the section in the same commit, or drop the line")
+        loc = repo_path(repo)
+        if not loc or not loc.is_dir():
+            print(f"jig: warning: `{line}`: {repo} isn't in `jig repos` here, so its target "
+                  f"wasn't checked", file=sys.stderr)
+            continue
+        t = Board.trunk_name(loc)
+        body = trunk_show(loc, path)
+        if body is None:
+            out.append(f"{LOG}: `{line}`: {repo}'s {t} has no {path} (read {loc}/{path} on {t}): "
+                       f"land it there first")
+        elif section and path == LOG:
+            if move_key(section) not in {move_key(e["id"]) for e in log_entries(body, log_prefix_of(body))}:
+                out.append(f"{LOG}: `{line}`: {repo}'s {LOG} on {t} has no entry {section}: "
+                           f"land it there first")
+        elif section and pointer_gap(path, section, True, body)[0] != RESOLVES:
+            out.append(f"{LOG}: `{line}`: {repo}'s {path} on {t} has no heading {section}: "
+                       f"land it there first")
+    return out
 
 
 def id_number(eid: str, prefix: str) -> int | None:
@@ -6045,9 +6229,9 @@ def frozen_problems(old: str, new: str, trunk: str, only: set[str] | None = None
         bare = [e for e in bare if e["section"] in only]
     out += [f"{LOG}: {e['id']} is removed from release {e['section']}, and no entry in the log "
             f"supersedes it: an entry is removed only by the commit adding the accepted one "
-            f"that says `Supersedes {e['id']}.`, or, struck as project scope, by the commit adding "
-            f"under ## Unreleased ### Removed the line `- {e['id']}: project scope, not a product "
-            f"decision.`: add it in the same commit" for e in bare if e["section"] not in ("Unreleased", "")]
+            f"that says `Supersedes {e['id']}.`, or by the commit adding under ## Unreleased "
+            f"### Removed one of two lines: the strike, `- {e['id']}: {STRIKE_WHY}`, or the move, "
+            f"`- {e['id']}: moved to <pararepo>/{LOG} § <its id there>.`: add it in the same commit" for e in bare if e["section"] not in ("Unreleased", "")]
     prefix = log_prefix_of(new)
     have = {id_number(e["id"], prefix) for e in log_entries(new, prefix)}
     out += [f"{LOG}: the ### Removed line for {prefix}{n:03d} strikes an entry the log still has: "
@@ -6213,21 +6397,27 @@ def removed_entry(want: str, prefix: str, rev: str = "HEAD",
 def holds_now(want: str, text: str, prefix: str, rev: str | None = None,
               cwd: str | None = None) -> str | None:
     """The entry in log TEXT that holds in place of WANT: each accepted supersedes link
-    followed forward, and with REV, through git where TEXT no longer has a link's entry."""
+    followed forward, and with REV, through git where TEXT no longer has a link's entry. A
+    chain that ends at a move gives the move's pointer, `<repo>/<path> § <id>`."""
     chain = hold_chain(want, text, prefix, rev, cwd)
     have = {e["id"] for e in log_entries(text, prefix)}
-    return chain[-1] if len(chain) > 1 and chain[-1] in have else None
+    return chain[-1] if len(chain) > 1 and (chain[-1] in have or "/" in chain[-1]) else None
 
 
 def hold_chain(want: str, text: str, prefix: str, rev: str | None = None,
                cwd: str | None = None) -> list[str]:
-    """WANT and each id that superseded it in turn, oldest first, as holds_now walks them."""
+    """WANT and each id that superseded it in turn, oldest first, as holds_now walks them, and
+    last the pointer of the move that took the final one to a pararepo, if one did."""
     entries = log_entries(text, prefix)
     have = {e["id"] for e in entries}
     by = {s: e["id"] for e in entries for s in replaced(e, prefix)}
+    moves = moves_in(text)
     chain = [want]
     while True:
         cur = chain[-1]
+        if cur not in have and cur in moves:
+            chain.append(moves[cur])
+            break
         if cur in by:
             nxt = by[cur]
         elif rev and cur not in have and (found := removed_entry(cur, prefix, rev, cwd)) and found[2]:
@@ -6271,6 +6461,9 @@ def cmd_decision(root: Path, args) -> int:
         for _, old, by in steps:
             if by:
                 print(f"  {old['id']} is superseded by {by['id']} {by['title']}")
+        last = steps[-1][1]["id"]
+        if not steps[-1][2] and (ptr := moves_in(path.read_text() if path.exists() else "").get(last)):
+            print(f"  {last} moved to {ptr}: `jig decision {pointer_parts(ptr)[2] or last}` in {pointer_parts(ptr)[0]} reads it.")
         if cur in by_id:
             print(f"What holds now is {cur} {by_id[cur]['title']}: `jig decision {cur}` reads it.")
         return 0
@@ -6807,7 +7000,9 @@ def start_entry(root: Path, want: str, logs: list[tuple[str, str, str]], every: 
         # An id this repo superseded or removed is ours: another log's entry with the same number
         # is a different decision, so it is refused here as `jig decision` reads it.
         prefix = log_prefix_of(logs[0][2])
-        if by := holds_now(want, logs[0][2], prefix, "HEAD", str(root)):
+        if (by := holds_now(want, logs[0][2], prefix, "HEAD", str(root))) and "/" in by:
+            die(f"{want} moved to {by}: its peers are read there", 1)
+        if by:
             die(f"{want} was superseded in {LOG}; what holds now is {by}: `jig decision {by} --peers`", 1)
         if removed_entry(want, prefix, cwd=str(root)):
             die(f"{want} was removed from {LOG}: `jig decision {want}` reads it", 1)
@@ -8401,7 +8596,7 @@ def stage_pin_bumps(root: Path, meta: dict, prev: str, tag: str) -> list[str]:
     now_log = git("show", f"{tag}:{LOG}")
     key = lambda line: line.split(", which ")[0]
 
-    def broken(there: Path, para: dict, trunk: str, since: str) -> tuple[list[str], list[str]]:
+    def broken(there: Path, para: dict, trunk: str, since: str, here: set[str]) -> tuple[list[str], list[str]]:
         """What the releases after SINCE up to TAG broke there: its citations that resolve at
         SINCE and dangle at TAG, each with the new home a move gives it, and the decision ids
         SINCE had and TAG doesn't, each with the files citing it."""
@@ -8411,9 +8606,9 @@ def stage_pin_bumps(root: Path, meta: dict, prev: str, tag: str) -> list[str]:
             if parts[0].startswith("R") and len(parts) == 3:
                 moved[parts[1]] = parts[2]
         # A row citation's loss is the id list's; this list is the paths and headings.
-        was = {key(l) for l in meta_citations(there, para, decision_ids(root, since), root, (trunk, since))}
+        was = {key(l) for l in meta_citations(there, para, decision_ids(root, since), root, (trunk, since), here)}
         rewrites, rows = [], {}
-        for l in meta_citations(there, para, decision_ids(root, tag), root, (trunk, tag)):
+        for l in meta_citations(there, para, decision_ids(root, tag), root, (trunk, tag), here):
             if key(l) in was or " bare: " in l:
                 continue
             # A citation of a row the release took away: the ids' list, with where it is cited.
@@ -8424,23 +8619,29 @@ def stage_pin_bumps(root: Path, meta: dict, prev: str, tag: str) -> list[str]:
             if cited and cited.group(1) in moved and ": now " not in l:
                 l += f": now `{name}/{moved[cited.group(1)]}`"
             rewrites.append(l)
-        gone = sorted({e["id"] for e in log_entries(git("show", f"{since}:{LOG}"), prefix)}
-                      - {e["id"] for e in log_entries(now_log, prefix)})
+        then = log_entries(git("show", f"{since}:{LOG}"), prefix)
+        gone = sorted({e["id"] for e in then} - {e["id"] for e in log_entries(now_log, prefix)})
+        # An id a gone entry had superseded hopped to it; once that one moves down, the old id's
+        # new home is the move's too, so a bare citation of it is news.
+        hopped = {o for e in then if e["id"] in gone for o in replaced(e, prefix)
+                  if "/" in (holds_now(o, now_log, prefix, tag, str(root)) or "")}
         own = log_prefix_of(git("show", f"{trunk}:{LOG}", cwd=str(there)))
         ids = []
-        for i in sorted(set(gone) | set(rows)):
+        for i in sorted(set(gone) | hopped | set(rows)):
             files = list(rows.get(i, []))
             # A bare id is this metarepo's only where the pararepo numbers its own decisions with
             # another prefix; with the same one, only a qualified citation (above) is its.
-            if own != prefix and i in gone:
+            if own != prefix and (i in gone or i in hopped):
                 cited = {f.split(":", 1)[0] for f in files}
+                # jig's own files are no citation: its specs, ledgers, log and process are the repo's.
                 files += [g for f in git("grep", "-l", "-w", "-F", i, trunk, "--", ".", f":!{HANDOFFS}",
                                          cwd=str(there)).splitlines()
-                          if (g := f.split(":", 1)[1]) not in cited]
+                          if (g := f.split(":", 1)[1]) not in cited
+                          and (not g.startswith(f"{DIR}/") or g.startswith((f"{DIR}/specs/", f"{DIR}/ledgers/", LOG, PROCESS)))]
             if files:
                 by = holds_now(i, now_log, prefix, tag, str(root))
-                ids.append(f"{i}{f' (now {by})' if by else ' (removed)'}: cited in "
-                           + ", ".join(files))
+                state = f" (moved: {shown_pointer(by, here)})" if by and "/" in by else f" (now {by})" if by else " (removed)"
+                ids.append(f"{i}{state}: cited in " + ", ".join(files))
         return rewrites, ids
 
     for para_name in meta.get("pararepos", []):
@@ -8475,7 +8676,8 @@ def stage_pin_bumps(root: Path, meta: dict, prev: str, tag: str) -> list[str]:
         # request would be; a file of that name that isn't ours is never touched.
         ours = h.get("kind") == PIN_BUMP_KIND and h.get("from") == name
         open_ = ours and bool(h.get("release")) and (not pin or version_key(h["release"]) > version_key(pin))
-        if not open_ and not any(broken(there, para, trunk, prev)):
+        here = {para_name}
+        if not open_ and not any(broken(there, para, trunk, prev, here)):
             out.append(f"{para_name}: skipped, it cites nothing {tag} broke")
             continue
         if dest.exists() and not ours:
@@ -8484,7 +8686,7 @@ def stage_pin_bumps(root: Path, meta: dict, prev: str, tag: str) -> list[str]:
             continue
         # The request covers the whole gap from the pin, so one file serves every release since.
         since = pin if pin and git("rev-parse", "-q", "--verify", f"{pin}^{{commit}}") else prev
-        rewrites, ids = broken(there, para, trunk, since)
+        rewrites, ids = broken(there, para, trunk, since, here)
         breaking = breaking_lines(root, since, tag)
         # Only what it broke (the owner, 2026-11-18): a gap from the pin that breaks nothing it
         # cites asks for nothing, so an open request is left as it stands.
@@ -8513,9 +8715,13 @@ def stage_pin_bumps(root: Path, meta: dict, prev: str, tag: str) -> list[str]:
             continue
         plural = lambda n, what: f"{n} {what}{'s' if n != 1 else ''}"
         sup = sum(" (now " in i for i in ids)
-        counts = ([plural(len(rewrites), "rewrite")] if rewrites else []) \
+        went = sum(" (moved: " in i for i in ids) + sum(" moved: now " in r for r in rewrites)
+        plain_rewrites = sum(" moved: now " not in r for r in rewrites)
+        gone_ids = len(ids) - sup - sum(" (moved: " in i for i in ids)
+        counts = ([plural(plain_rewrites, "rewrite")] if plain_rewrites else []) \
             + ([plural(sup, "superseded id")] if sup else []) \
-            + ([plural(len(ids) - sup, "removed id")] if len(ids) > sup else [])
+            + ([f"{went} moved"] if went else []) \
+            + ([plural(gone_ids, "removed id")] if gone_ids else [])
         out.append(f"{para_name}: staged {STAGING}/{dest.name} ({', '.join(counts) or 'nothing to rewrite'})")
     return out
 
@@ -8570,14 +8776,22 @@ def used_in(text: str, whole: bool = False) -> list[str]:
 
 def changes_report(root: Path, loc: Path, old: str, new: str) -> list[str]:
     out = ["Changed, in this repo's terms:"]
+    # What the metarepo moved down reads as moved, with its new home, never as removed.
+    moves = moves_in(git("show", f"{new}:{LOG}", cwd=str(loc)))
+    here = this_repo_names(root)
     for was, now in entries_moved(loc, old, new):
         users = used_in(was)
-        out.append(f"  {was} ({'now ' + now if now else 'removed'}): "
+        state = (f"moved: {shown_pointer(moves[was], here)}" if not now and was in moves
+                 else 'now ' + now if now else 'removed')
+        out.append(f"  {was} ({state}): "
                    + (f"used in {', '.join(users)}" if users else "not used here"))
     for term in terms_changed(loc, old, new):
         # An id as a whole word: D-1 is not a use of D-12. A heading's term may be inflected.
         users = used_in(term, bool(re.fullmatch(decision_ids(loc, new), term)))
-        out.append(f"  {term}: " + (f"used in {', '.join(users)}" if users else "not used here"))
+        # A heading moves as `<page> § <heading>`, and its term is the heading alone.
+        ptr = moves.get(term) or next((p for k, p in moves.items() if k.endswith(f" § {term}")), None)
+        state = f" (moved: {shown_pointer(ptr, here)})" if ptr else ""
+        out.append(f"  {term}{state}: " + (f"used in {', '.join(users)}" if users else "not used here"))
     _, moved, was, now = glossary_changes(loc, old, new)
     for term in moved:
         users = used_in(term)
@@ -8606,7 +8820,7 @@ def head_texts(paths: list[str], rev: str = "HEAD", cwd: str | None = None) -> l
 
 
 def meta_citations(root: Path, para: dict, ids: str, loc: Path | None = None,
-                   at: tuple[str, str] | None = None) -> list[str]:
+                   at: tuple[str, str] | None = None, ours: set[str] | None = None) -> list[str]:
     """This repo's citations of the metarepo checked against the cache: the mirror of
     stale_pointers. A citation is `<meta>/<path> § <section>`; a section that is a decision id
     (IDS, the metarepo's prefix) names a row, any other a heading. A bare path that names an
@@ -8616,14 +8830,14 @@ def meta_citations(root: Path, para: dict, ids: str, loc: Path | None = None,
     trunk, not at the pin.
     Reported, never refused. Read at HEAD against the cache, as stale_pointers reads it; with AT,
     (this repo's revision, the metarepo's tag in LOC), read there instead: a metarepo's release
-    compares its pararepos' citations against two of its tags."""
+    compares its pararepos' citations against two of its tags. A citation of what the metarepo
+    moved down ends with its new home, read as OURS (this repo's names) calls it."""
     cache, name, pin = root / CACHE, para["meta"], para["pin"]
     # The metarepo's roadmap is project data, not a contract: no pin holds it, so a cite of it
     # is read on the metarepo's trunk, and a pin bump never changes what it finds.
     mtrunk = Board.trunk_name(loc) if loc else None
-
-    def live(path: str) -> str | None:
-        return git("show", f"{mtrunk}:{path}", cwd=str(loc)) or None if mtrunk else None
+    if ours is None:
+        ours = this_repo_names(root)
     if at:
         rev, pin = at
         mfiles = git("-c", "core.quotePath=false", "ls-tree", "-r", "--name-only", pin, cwd=str(loc)).splitlines()
@@ -8658,6 +8872,7 @@ def meta_citations(root: Path, para: dict, ids: str, loc: Path | None = None,
     rows = re.compile(rf"(?<!\w)({ids})(?!\w)")
     named = (f"{name.casefold()}/", f"{name.casefold()}:")
     gloss = glossary_terms(meta_text(GLOSSARY) or "")
+    moves = moves_in(meta_text(LOG) or "")
     out = []
     for f, text in head_texts([p for p in small if not p.startswith(f"{DIR}/")
                                or p.startswith((f"{DIR}/specs/", f"{DIR}/ledgers/", LOG, PROCESS))],
@@ -8686,7 +8901,7 @@ def meta_citations(root: Path, para: dict, ids: str, loc: Path | None = None,
                 roadmap = path in (ROADMAP, ROADMAP_VIEW)
                 if roadmap and not mtrunk:
                     continue
-                body = live(path) if roadmap else meta_text(path)
+                body = trunk_show(loc, path) if roadmap else meta_text(path)
                 at_ = mtrunk if roadmap else pin
                 row = rows.match(plain(section)) if section and body else None
                 if row and (not code or row.group(1) == plain(section)):
@@ -8696,15 +8911,21 @@ def meta_citations(root: Path, para: dict, ids: str, loc: Path | None = None,
                         # A superseded entry is removed from the log: the citation moves to its successor.
                         by = holds_now(row.group(1), body, log_prefix_of(body), pin if loc else None,
                                        str(loc) if loc else None)
+                        now = shown_pointer(by, ours) if by and "/" in by else f"{name}/{path} § {by}"
                         out.append(f"{f}:{n} cites {name}/{path} § {row.group(1)}, which {name} {pin} has no row for"
-                                   + (f": now {name}/{path} § {by}" if by else ""))
+                                   + (f": now {now}" if by else ""))
                     continue
                 level, _ = pointer_gap(path, section or None, code, body)
                 # A term the README's glossary held is in the glossary file now.
                 moved = (f": now `{name}/{GLOSSARY} § {term}`"
                          if level and path == "README.md" and section
                          and (term := glossary_term_in(plain(section), gloss)) else "")
-                if level == NO_FILE:
+                gone_to = moved_to(moves, path, section) if level and not roadmap else None
+                if gone_to:
+                    # Moved down: not missing, but somewhere else, which the reader rewrites to.
+                    out.append(f"{f}:{n} cites {name}/{path}{f' § {shown_section(plain(section), code)}' if section else ''}, "
+                               f"which {name} {at_} moved: now {shown_pointer(gone_to, ours)}")
+                elif level == NO_FILE:
                     out.append(f"{f}:{n} cites {name}/{path}{f' § {shown_section(plain(section), code)}' if moved else ''}, "
                                f"which {name} {at_} doesn't have{moved}")
                 elif level == NO_HEADING:
@@ -10493,8 +10714,18 @@ def boundary_rules(trunk: str, branch: str, staged: bool, paths: list[str],
         now = set(git("-c", "core.quotePath=false", "ls-files").splitlines())
         before = set(git("-c", "core.quotePath=false", "ls-tree", "-r", "--name-only", "HEAD").splitlines())
         broke = dead_touches(in_index(ROADMAP, staged), now) - dead_touches(at_rev("HEAD", ROADMAP), before)
-        out += [f"{ROADMAP}: {iid} touches {page}, which this commit leaves with no page: re-point "
-                "its (touches …) in this commit" for iid, page in sorted(broke)]
+        # A page a metarepo moved down takes its items with it: they go by a roadmap change
+        # staged to the pararepo, applied there on its owner's yes (R5), not by this repo.
+        moves = moves_in(in_index(LOG, staged))
+        for iid, page in sorted(broke):
+            if ptr := moves.get(page):
+                repo = pointer_parts(ptr)[0]
+                out.append(f"{ROADMAP}: `{iid}` touches {page}, moved to {ptr}: stage a roadmap change "
+                           f"with `target: {repo}` carrying it, and drop it, or the page from its "
+                           f"(touches …), here in this commit")
+            else:
+                out.append(f"{ROADMAP}: {iid} touches {page}, which this commit leaves with no page: "
+                           "re-point its (touches …) in this commit")
     files = [f for f in paths if product_file(f, meta)]
     if not files:
         return out

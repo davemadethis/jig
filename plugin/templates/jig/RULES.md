@@ -937,7 +937,10 @@ The product is the repo, so there is one roadmap and no product level in it.
 - **A touched page exists**, in either form. `jig roadmap` reports one that doesn't; on trunk
   the hook refuses a commit that leaves an item or a scope touching no page, so a page renamed
   or deleted there is re-pointed in the same commit; and `jig merge` re-points each page the job
-  moved.
+  moved. A page a metarepo moves down to a pararepo takes its items with it: the refusal names
+  the move's pointer, and the item goes by a roadmap change staged with `target: <pararepo>`,
+  applied there on its owner's yes, while this commit drops it, or the page from its
+  `(touches …)`. A section moved down leaves its page, so it moves no item.
 - **Specs take scopes** with a `Scope:` line under `Source:`, e.g. `Scope: alpha/screen,
   alpha/battery`. Many-to-many: a spec may take several scopes, a scope may be taken by several
   specs, and a spec with no `Scope:` line takes none. A spec removed once its job merged keeps
@@ -1082,7 +1085,26 @@ not what it decided (M2 checks its pages); and so is removing an entry no accept
 name what it would supersede, and retires nothing until it is accepted. The one other removal is
 a struck entry, project scope rather than a decision (Documentation: Product and project): the
 commit removing it adds, under `## Unreleased` `### Removed`, a line naming its id
-(`- D-040: project scope, not a product decision.`). Before the log, a register row struck so
+(`- D-040: project scope, not a product decision.`). In a metarepo the other is a move: a claim
+handed down to the pararepo that owns it (Metarepo and pararepos, What the metarepo holds), whose
+line is its forwarding address, a pointer to its new home: `- D-040: moved to
+app/.jig/decisions.md § D-016.`, and for a page or a section `- docs/ui.md: moved to
+app/docs/ui.md.` or `- docs/ui.md § Build: moved to app/docs/ui.md § Build.`. An Open entry or a
+page needs no line to leave, but takes it all the same, so readers see it moved, not removed.
+These are the only two reasons a `### Removed` line lets a released entry go; any other text
+lets nothing go, and the refusal names both lines. The hook checks a move line the commit adds:
+the line is under `## Unreleased` (a move line anywhere else is refused, and nothing reads
+one there); it is the only move line for its id, page or section, in the log or the commit (a line not
+yet released may be corrected in place);
+the repo is one of `meta.json`'s `pararepos`; a moved id is an entry this commit removes, not
+one an accepted entry supersedes (its successor is what moves); this repo no longer has the
+page or section; and the target is on that repo's trunk, read through `jig repos` (an id as an entry
+heading in its log, matched by number, a heading as `§` resolves). An entry that supersedes a
+moved id is refused: its home is the pararepo now. It refuses a target that repo lacks, naming the
+file it read, and passes with a warning when the repo can't be reached. Released, the line is
+frozen like any change line, so the map from old id or path to new home needs no history: a
+supersedes chain that reaches a moved id ends at its pointer, and `jig decision`, `jig
+reading-list --claims`, `jig sync` and the pin-bump request name it. Before the log, a register row struck so
 says `struck` in its Status cell, and `--merge-log` leaves it out, its number still taken. `jig decision <id>` prints an
 entry and its supersedes chain, newest last; for a removed id it reads the entry from git, with
 the commit and release it stood in, and names what holds now. `jig update` lists a superseded
@@ -1337,6 +1359,13 @@ or `## 20`, and words after the number aren't compared. Headings are compared as
 and emphasis marks dropped. The name folds case (`App/…` is `app/…`); the path and heading
 don't. A superseded or rejected decision row isn't checked.
 
+A claim found to have one owner moves down to it, released or not. The pararepo lands the text
+first, through staging (`target: <pararepo>`) and a job there: its entry keeps who and date and
+drops a `Supersedes` of the metarepo's ids, since that chain stays in the metarepo's log. The
+metarepo then removes the entry, page or section with its move line (Decision log, Released
+sections), in one commit. Frozen citations of the old id keep resolving through the line, so
+nothing released is rewritten. A claim moves down only: up is `jig propose` and the buffer.
+
 The metarepo's decisions are its `.jig/decisions.md` (Decision log), cited as
 `<meta>/.jig/decisions.md § D-012`. A superseded entry, and a released section's change lines,
 are history: their paths aren't pointers, and this repo's own released lines aren't checked as
@@ -1427,7 +1456,10 @@ A rewording, an Open entry accepted or a glossary term reworded doesn't select i
 `jig sync` reports those. The request is `.jig/staging/pin-bump-<metarepo>.md`, `kind:
 pin-bump`, `destination: .jig/para.json`, with `from`, `pin` and `release` in its header and,
 from the pin to the new tag, the `**Breaking:**` lines, the citations to rewrite with each new
-home jig can name, and the removed or superseded ids with the files that cite them. A later
+home jig can name, and the removed or superseded ids with the files that cite them. What the
+metarepo moved down is listed as moved, with its new home: `D-040 (moved: .jig/decisions.md §
+D-016, this repo)` in the repo that received it, and a page or heading cited ends `: now
+<home>`, never reading as removed or missing; the release's line counts them as `n moved`. A later
 release rewrites it in place, covering the whole gap from the pin, while it is open (its release
 above the pin) and something in that gap breaks what the pararepo cites; when nothing does, the
 release leaves it as it stands and prints a skip line. Once the pin holds it, it is answered, and a later release rewrites it only when
@@ -1519,7 +1551,7 @@ jig repos use `MILESTONE.FEATURE.PATCH`. A version says how much the product cha
 
 - **X — Milestone (`+1.0.0`).** The product's identity, architecture or core experience changes shape. *Code:* a rewrite of the core engine, a new platform, an overhaul of the interface. *Metarepo:* a product added, merged or retired; a principle reversed; a core model replaced.
 - **Y — Feature (`+0.1.0`).** A new capability, or a change in what the product offers or how it is used. *Code:* a new feature set, a redesigned workflow, a new integration. *Metarepo:* a decision accepted or superseded that changes what a product offers; a new product, feature or concept page; a glossary term for a new thing. Rule of thumb: it earns a highlight in the release notes.
-- **Z — Polish (`+0.0.1`).** Nothing the product offers changes. *Code:* fixes, small tweaks, copy, dependency bumps, performance, refactors. *Metarepo:* wording, pointers, file moves and renames with no change in meaning, a name's status, Open questions, struck project-scope entries, research marked Proposed. *Pararepo:* a pin bump on its own.
+- **Z — Polish (`+0.0.1`).** Nothing the product offers changes. *Code:* fixes, small tweaks, copy, dependency bumps, performance, refactors. *Metarepo:* wording, pointers, file moves and renames with no change in meaning, a claim moved down to its pararepo with no change in meaning, a name's status, Open questions, struck project-scope entries, research marked Proposed. *Pararepo:* a pin bump on its own.
 
 **What others must do doesn't count.** A change a reader has to act on still gets a `**Breaking:**` line saying what to change, but it doesn't raise the level. A metarepo release sends each pararepo whose citations the release broke a pin-bump request with its rewrite list, whatever the level.
 
