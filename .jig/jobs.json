@@ -1,7 +1,7 @@
 {
   "bug-pararepo-sync-fixes": {
     "spec": ".jig/specs/bug-pararepo-sync-fixes.md",
-    "state": "claimed",
+    "state": "gated",
     "after": [],
     "owns": [],
     "shares": [
@@ -10,19 +10,7 @@
       "plugin/templates/jig/RULES.md",
       "tests/smoke.sh"
     ],
-    "reserved": {}
-  },
-  "bug-nested-touches": {
-    "spec": ".jig/specs/bug-nested-touches.md",
-    "state": "claimed",
-    "after": [],
-    "owns": [],
-    "shares": [
-      "plugin/templates/jig/jig.py",
-      "plugin/skills/bug/SKILL.md",
-      "plugin/templates/jig/RULES.md",
-      "tests/smoke.sh"
-    ],
-    "reserved": {}
+    "reserved": {},
+    "check": "batch"
   }
 }

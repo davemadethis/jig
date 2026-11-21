@@ -12,7 +12,9 @@ A scope or phase names what it waits on in a form jig reads, so `jig rig` never 
 work and a ring is refused when it is written. A metarepo and its pararepos then plan from one
 roadmap in the metarepo, each product with its own phases, read live, so no scope exists in two
 copies to drift. This is the first version: the smallest change that ends the deadlock and the
-drift. The rest of the report's draft is listed under Out of scope as later work.
+drift. A moved-in pararepo keeps no roadmap of its own. Each product's scopes with no phase are
+one list in the metarepo's roadmap, and a spec may take one. The rest of the report's draft is
+listed under Out of scope as later work.
 
 ## Investigation
 
@@ -98,10 +100,20 @@ Two mergeable parts, in order. Part 1 stands alone; Part 2 builds on it.
 10. **Moving in, by hand.** This version has no conversion command. Once per pararepo, on the owner's yes:
     1. The metarepo gains `## <Product> <phase>` sections holding the pararepo's phases.
     2. The pararepo's next commit removes its phases and re-points every `Scope:` line. The existing drop guard enforces this.
-    3. After the move, the pararepo's hook refuses a phase in its own `.jig/roadmap.md` while the metarepo's roadmap holds a product it owns. Its `## Up next` and `## No phase` stay there until the one list per product (Out of scope) moves them.
-11. **Edits.** A pararepo's hubnode edits its own products' sections directly, as R5 ruled. It does so on the owner's yes, in the metarepo's trunk checkout, only while that checkout is clean, and it commits `.jig/roadmap.md` and `ROADMAP.md` (`jig roadmap --write` there). The metarepo's hook checks shape, refs, rings and touched pages. Labels, names and new products are the metarepo's hubnode's. RULES.md says this. No jig command checks whose section a line is in (open question 3).
+    3. The move carries the pararepo's `## Up next` and `## No phase` items into its product's list in the metarepo, and the move's commit removes the pararepo's `.jig/roadmap.md` and `ROADMAP.md`. After the move, the pararepo's hook refuses a `.jig/roadmap.md` while the metarepo's roadmap holds a product it owns.
+11. **Edits.** No hubnode edits another repo's content (the owner, 2026-11-21). A pararepo's changes to its products' sections are buffered and reach the metarepo by the regular sync process, when the owner decides: a BUFFER row and `jig propose`, so the change is written on a `propose/<repo>-<slug>` branch in the metarepo, never on its trunk, and merged there at the next sync the owner calls. A pararepo's merge writes nothing to the metarepo's roadmap. The metarepo's hook checks shape, refs, rings and touched pages. Labels, names and new products are the metarepo's hubnode's. RULES.md says this.
 12. **RULES.md, Roadmap.** "The product is the repo" is said precisely, per R6: a repo is for one software product, and the hardware that runs it may be defined there, with its pages segmented within `docs/` as the hardware skill's board pages are. A metarepo's roadmap gains the product level of item 5. The pin rule gains the live-read exception for the roadmap only.
 
+
+13. **One list per product.**
+    - Each product, and the metarepo's own work, has one list of scopes with no phase. `## Up next` and `## No phase` stop being two places for them.
+    - A scope in the list has an id a `Scope:` line can name, and it names what it touches. Its state is derived like any scope's (item 7).
+    - rig's next step, reading-list and fold-in read the list through the one reader (item 6), as they read the product's phases.
+    - A pararepo's merge writes nothing to the metarepo's roadmap, per the owner's 2026-11-21 ruling on edits.
+    - The list's syntax, and what replaces merge's Up next removal, are jig's to choose.
+    - A stand-alone repo's Up next and No phase become one list the same way, per R2: "one place for them not two".
+
+14. **Unconfirmed dependencies are flagged, never blocking.** A cross-product `after` that the waited-on product's section doesn't confirm (with `(needed by <ref>)`) is listed by `jig roadmap` in the metarepo and under rig's Waiting on you, for the owner to rule on. It blocks no commit and no step.
 ## Done when
 
 Part 1, in a throwaway stand-alone repo, every jig command run with
@@ -122,14 +134,17 @@ Part 2, in a throwaway metarepo `meta` with pararepos `pa` and `pb`. Both are re
 - [ ] (live read) A scope added under `## Walyt alpha` on `meta`'s trunk, with no release: a spec in `pa` with `Scope: Walyt alpha/<it>` commits, and `Scope: Walyt alpha/nope` is refused, naming `meta`'s roadmap.
 - [ ] (unreachable) With `pb` removed from the repos file, `jig roadmap` in `meta` shows `Familiar App alpha/host` as `unknown`, naming `pb`.
 - [ ] (drop guard) A `meta` commit dropping `Walyt alpha/pairing` while a spec in `pa` takes it is refused, naming that spec.
-- [ ] (moving in) A `pa` that had `## alpha` with `x` and a spec with `Scope: alpha/x`. After `meta` gains `x` under `## Walyt alpha`, `pa`'s commit removing its phase and re-pointing the spec to `Walyt alpha/x` passes. Re-pointing to a scope `meta` lacks is refused. After that, a new phase in `pa`'s roadmap is refused, while its `## Up next` items stay and still show in `pa`'s reading-list.
+- [ ] (moving in) A `pa` that had `## alpha` with `x` and a spec with `Scope: alpha/x`. After `meta` gains `x` under `## Walyt alpha`, `pa`'s commit removing its phase and re-pointing the spec to `Walyt alpha/x` passes. Re-pointing to a scope `meta` lacks is refused. After that, `pa` has no `.jig/roadmap.md`. What `pa` had under Up next and No phase sits in `Walyt`'s one list in `meta`. A spec in `pa` taking one of them commits, and `pa`'s reading-list shows them, read from `meta`. A new `.jig/roadmap.md` in `pa` is refused.
+- [ ] (flagged, not blocking) `Walyt alpha/pairing (after Familiar App alpha/host)` with no `(needed by Walyt alpha/pairing)` under `## Familiar App alpha` commits, and `jig roadmap` in `meta` and `jig rig` there list it as unconfirmed under Waiting on you; once `pb`'s section confirms it (through `pb`'s proposal, merged), it isn't listed.
+- [ ] (buffered edit) From `pa`, a change to `## Walyt alpha` goes through a BUFFER row and `jig propose`: it is on a `propose/pa-…` branch in `meta`, `meta`'s trunk is unchanged until that branch merges, and nothing in `pa` writes `meta`'s trunk.
+- [ ] (unphased scope, live) `pb` merges a job whose spec takes a scope from `Familiar App`'s list. `jig roadmap` in `meta` shows that scope done, and `pb`'s merge wrote nothing to `meta`.
+- [ ] (stand-alone one list) In a stand-alone repo, the Up next and No phase items are one list, a spec may take one, and `jig rig` offers from it.
 - [ ] (stand-alone unchanged) The Part 1 cases pass in a repo with no metarepo. `python3 .jig/jig.py queue -- bash tests/smoke.sh roadmap rig pararepo` passes. `claude plugin validate ./plugin` passes.
 
 ## Out of scope
 Later versions, each its own spec once this lands, in the order they build on each other:
-- **One list per product** (R2, R6, R7): `## Up next` and `## No phase` become one list of scopes with no phase per product, and a spec may take one. This also moves a pararepo's remaining reserved sections into the metarepo and removes its `.jig/roadmap.md`.
 - **Labels** (R1–R3): `(labels …)` on a scope, checked against the metarepo glossary's folded terms.
-- **Dependency confirmation** (R6: "the owner of the scope it waits on confirms it in its own section"): `(needed by …)`, with an unconfirmed dependency reported. Until then, the owner approves every roadmap diff (open question 4).
+- **Dependency confirmation**: superseded by the owner's 1.4 ruling; agreement is never required, and the flag is open question 4.
 - **Ideas log and open questions leaving the decision log** (R4, R5).
 - **The cross-repo report**: stale staged files and `propose/` branches, entries touching labelled scopes, and two names for one thing.
 - **A jig edit command** that refuses a line under another repo's product and stages label changes. A **conversion command** for moving in.
@@ -139,8 +154,8 @@ Later versions, each its own spec once this lands, in the order they build on ea
 - maige-ecosystem's own roadmap rewrite and its glossary's `Owner:` lines: its job (R6).
 
 ## Touches
-- `plugin/templates/jig/jig.py`: `SCOPE_LINE`/`split_touches` (an `after` split), `parse_roadmap` (phase `after`, products), `roadmap_state` (blocked, current per product, pulled states, unknown), `roadmap_view`, `cmd_roadmap`, `roadmap_rules` (refs, rings, `Scope:` against the metarepo, drop guard across repos, no phases in a moved-in pararepo), `rig_next_step`/`rig_state`/`rig_text`, the roadmap read sites (one reader), `dead_touches` (owning repo's pages)
-- `plugin/templates/jig/RULES.md`: Roadmap (dependencies, products, one reader, "the product is the repo"), Metarepo and pararepos (live read of the roadmap, edits in the metarepo), Workflow (rig's blocked scopes)
+- `plugin/templates/jig/jig.py`: `SCOPE_LINE`/`split_touches` (an `after` split), `parse_roadmap` (phase `after`, products), `roadmap_state` (blocked, current per product, pulled states, unknown), `roadmap_view`, `cmd_roadmap`, `roadmap_rules` (refs, rings, `Scope:` against the metarepo, drop guard across repos, no phases in a moved-in pararepo), `rig_next_step`/`rig_state`/`rig_text`, the roadmap read sites (one reader), `dead_touches` (owning repo's pages), merge's Up next removal, update's `--sweep` (which writes `## Up next`), reading-list, fold-in and `rig_next_step`'s Up next read
+- `plugin/templates/jig/RULES.md`: Roadmap (dependencies, products, one reader, "the product is the repo"), Metarepo and pararepos (live read of the roadmap, edits in the metarepo), Workflow (rig's blocked scopes), Roadmap (Up next and No phase become one list)
 - `plugin/skills/hubnode/SKILL.md` (A roadmap change: editing a product's section in the metarepo), `plugin/skills/rig/SKILL.md` (blocked scopes), `plugin/skills/spec/SKILL.md` (`Scope:` ids with a product)
 - `tests/smoke.sh`: roadmap, rig, pararepo
 
@@ -150,7 +165,7 @@ Later versions, each its own spec once this lands, in the order they build on ea
 - Parsing prose waits ("after …", "waits on"). Rejected because prose waits are what hid the ring for a week. Reason is [seen].
 - Blocked as a fourth state beside open/taken/done. Rejected because states come from specs and blocked comes from refs. Keeping it a qualifier leaves the view's columns and every state reader alone. Reason is [assumed].
 - The product map in `meta.json`. Rejected because R6 names the glossary as "the right place" for ownership, and maige-ecosystem already keeps `Owner:` lines. Reason is [seen].
-- Up next and No phase moved into the metarepo in v1. Deferred because they're R7's one list per product, a separate change that also alters stand-alone repos. Keeping them in place keeps merge's Up next removal, reading-list and fold-in unchanged. Reason is [seen] (Up next removal is in the merging repo's own commit, RULES.md Roadmap).
+- Keeping Up next and No phase in the pararepo for v1: rejected. The owner, 2026-11-21: "I want to reach the end state I specced" (R4, R2, R7).
 - Pushing progress from a pararepo's merge into the metarepo. Rejected because it would mean a second repo's commit in every merge, while states are derived everywhere else in jig. Reason is [assumed].
 
 ## Decisions
@@ -161,9 +176,9 @@ Later versions, each its own spec once this lands, in the order they build on ea
 
 ## Open questions for the owner
 1. **The first version is Parts 1 and 2 only.** Labels, `needed by`, one list per product, the ideas log, the report and the conversion command follow as later specs. Recommendation: yes. Part 1 alone already fixes Issue 3 in every repo, and Part 2 ends the drift.
-2. **A moved-in pararepo keeps `## Up next` and `## No phase` in its own `.jig/roadmap.md` until the one-list spec moves them.** R4 ("para repos wouldn't have roadmaps") is met fully only then. Recommendation: yes, as the transition, because it keeps merge's Up next removal and fold-in working unchanged.
-3. **Edits by hand in the metarepo's clean trunk checkout, on your yes, with no jig check of whose section a line is in.** Recommendation: yes for v1. You already see every roadmap diff, and the command that refuses another repo's section is later work.
-4. **R6's confirmation of a cross-product dependency is RULES.md text in v1** ("the waited-on scope's owner agrees before the `after` is committed"), with the `(needed by …)` check later. Recommendation: yes. The ring check and rig's blocked list are what end the deadlock, and confirmation only records agreement.
+2. Answered: the first version reaches the end state (Owner's rulings).
+3. Answered: a BUFFER row and `jig propose` (Owner's rulings).
+4. Answered: `jig roadmap` in the metarepo and rig's Waiting on you (Owner's rulings).
 
 ## Roles
 - spec: tier 2, effort 2
@@ -174,9 +189,12 @@ Later versions, each its own spec once this lands, in the order they build on ea
 
 ## Owner's rulings, 2026-11-20 and 2026-11-21
 
-Still being settled; the spec's body is revised to these once they are.
+Settled 2026-11-21; the body above is revised to these.
 - First version (open question 1): "1.1 yes": Parts 1 and 2 first, the rest as later specs.
 - Up next and No phase (open question 2): the owner, 2026-11-20: "roadmap items relating to the items being moved should move too." A pararepo's Up next and No phase move up with its phases, and a scope whose `(touches …)` names a page moved down follows it.
 - Section edits (open question 3), the owner, 2026-11-21: "I dont like the idea of hubnodes editing each other's content, I think they should buffer the changes and use the regular sync process periodically (as the user decides)." No hubnode edits the metarepo's roadmap from a pararepo: a pararepo's changes to its product sections are buffered and reach the metarepo by the regular sync process, when the owner decides.
 - Dependency confirmation (open question 4), the owner, 2026-11-21: "Remove the requirement that they agree and flag when they dont so the user can rule on it." A cross-product `after` the waited-on section doesn't confirm never blocks: it is flagged for the owner to rule on.
 - Order, the owner, 2026-11-21: bug-pararepo-sync-fixes and bug-nested-touches first, then move-to-pararepo, then this spec.
+- The end state, Source: Dave (owner), 2026-11-21, in maige-ecosystem's hubnode session, on reading that a moved-in pararepo keeps `## Up next` and `## No phase` until a later spec: "I want to reach the end state I specced". One list per product joins Part 2 (item 13), and a moved-in pararepo keeps no `.jig/roadmap.md`.
+- Buffered edits (open question 3), the owner, 2026-11-21: "Q3 agree, settled": a BUFFER row and `jig propose`, merged at the next sync the owner calls.
+- Unconfirmed dependencies (open question 4), the owner, 2026-11-21: "Q4 agree, settled": flagged in `jig roadmap` in the metarepo and rig's Waiting on you, never blocking.

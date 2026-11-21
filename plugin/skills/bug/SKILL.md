@@ -50,6 +50,9 @@ Does the fix handle the symptom where it appears, or change the thing that produ
 Prefer the correction. A workaround is fine when it is the right fix — say why in one line.
 
 ## 5. Write the spec
+The spec takes the template's sections (`.jig/specs/_template.md`, as `/jig:spec` finds it), each a
+`## ` heading. Steps 1–4 go in as `## Why`, `## Givens`, `## One layer up` and `## Correction`
+above them, never with the spec nested under a step.
 The spec opens with `Source:` naming who reported it, when, and the symptom in their words.
 For a job at its third strike, it carries `Bug-for: <job>` on a line of its own: `jig
 reviewed` refuses that job's next review until a committed spec says so.

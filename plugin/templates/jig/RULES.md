@@ -55,14 +55,15 @@ does not look for a home for those files.
 **Owns is narrow on purpose.** Before opening a job, `jig open` diffs every open job's
 branch against trunk and refuses an `owns` entry another live branch already touched. Those
 go in `shares` from the start, or both jobs get blocked on every commit afterward.
-It also warns, naming each path, when a backticked path in the spec's `## Touches` is in
+It also warns, naming each path, when a backticked path in the spec's Touches section (a
+`## Touches`, or a `### Touches` nested under another heading) is in
 neither `owns`, `shares` nor `common`; `jig share <job> <path>…` adds paths to an open job's
 shares, refusing one another open job owns.
 
 **Overlapping specs are answered before they open.** A spec is *waiting* when no open job names
 it, no handoff note's `Spec:` line names it, and the newest release tag doesn't hold it (any spec,
 with no tag yet), unless it carries `Bug-for: <job>` on a line of its own, outside fenced code: a bug spec
-is built in the job it names and reaches trunk only when that job merges, so it never waits. Two waiting specs overlap when their `## Touches` meet: one path, a glob
+is built in the job it names and reaches trunk only when that job merges, so it never waits. Two waiting specs overlap when their Touches sections meet, at any heading level: one path, a glob
 covering the other's path, or the same `<page> § <term>` (a whole page meets any term on it).
 `jig consolidate` lists each group of overlapping waiting specs with the paths they share, as
 one proposed job. A group is answered one of two ways: one spec carries every input's `Source:`
