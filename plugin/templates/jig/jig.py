@@ -1284,12 +1284,25 @@ def cmd_reserve(root: Path, args) -> int:
 
 # ---------------------------------------------------------------- consolidate
 
+def spec_section(text: str, *names: str) -> str | None:
+    """The body of a spec's first section named one of NAMES, or None. The one reader of a
+    spec section: a bug role nests the template's sections under its own steps (`## 5. Spec`
+    / `### Touches`), so any level from `##` down counts, and the body runs to the next
+    heading at that level or higher. Never `# `: that is the spec's title."""
+    alt = "|".join(re.escape(n) for n in names)
+    m = re.search(rf"^(#{{2,}}) (?:{alt})[ \t]*\n", text, re.M)
+    if not m:
+        return None
+    rest = text[m.end():]
+    end = re.search(rf"^#{{1,{len(m.group(1))}}} ", rest, re.M)
+    return rest[:end.start()] if end else rest
+
+
 def touches_spans(text: str) -> list[str]:
-    """The backticked paths in a spec's `## Touches`, a `<page> § <term>` kept whole. A span
+    """The backticked paths in a spec's Touches section, a `<page> § <term>` kept whole. A span
     with neither a slash nor an extension is a function or a flag, not a path."""
-    m = re.search(r"^## Touches[ \t]*\n(.*?)(?=^## |\Z)", text, re.M | re.S)
     out = []
-    for span in re.findall(r"`([^`\n]+)`", m.group(1) if m else ""):
+    for span in re.findall(r"`([^`\n]+)`", spec_section(text, "Touches") or ""):
         page = span.split("§")[0].strip()
         # A folder is everything under it; a skill's /name is a command, not a path.
         page = page + "**" if page.endswith("/") else page
@@ -1442,9 +1455,8 @@ def uncovered_touches(board: "Board", spec_text: str, owns: list[str], shares: l
 
 
 def proposal_branches(text: str) -> list[str]:
-    """The metarepo proposals a consolidated spec takes in, in its `## Proposals` order."""
-    m = re.search(r"^## Proposals[ \t]*\n(.*?)(?=^## |\Z)", text, re.M | re.S)
-    return re.findall(r"`(propose/[^`\s]+)`", m.group(1)) if m else []
+    """The metarepo proposals a consolidated spec takes in, in its Proposals section's order."""
+    return re.findall(r"`(propose/[^`\s]+)`", spec_section(text, "Proposals") or "")
 
 
 def cmd_share(root: Path, args) -> int:
@@ -3194,7 +3206,7 @@ def review_shortfall(root: Path, branch: str, name: str, note: str) -> str:
             break
     # A spec from before roles has `## Workflow`, with execute and recheck lines; a newer one
     # has `## Roles`, where review-change runs at review's line.
-    sec = re.search(r"^## (?:Roles|Workflow)\n(.*?)(?=^## |\Z)", text, re.S | re.M)
+    sec = spec_section(text, "Roles", "Workflow")
     out = []
     for step, label, lines in (("review", "Review", ("review",)),
                                ("review-change", "Review-change|Recheck", ("recheck", "review"))):
@@ -3202,7 +3214,7 @@ def review_shortfall(root: Path, branch: str, name: str, note: str) -> str:
             break
         asked = None
         for line in lines:
-            asked = asked or (re.search(rf"^{line}: tier (\d+), effort (\d+)", sec.group(1), re.M)
+            asked = asked or (re.search(rf"^{line}: tier (\d+), effort (\d+)", sec, re.M)
                               if sec else None)
         if not asked:
             continue
