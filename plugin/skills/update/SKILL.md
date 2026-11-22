@@ -115,18 +115,18 @@ pages and out of decisions, one item at a time, each only on a yes. jig lists on
 never product text, and searches no words: a heading like `## Status`, "phase 3" or "launch" in
 old text is left alone unless the owner raises it.
 
-- An **`## Undefined` entry** is listed as the Up next item it would become. Ask per entry: parked
-  work goes to Up next (the default); an open product question becomes an `## Open` entry in
+- An **`## Undefined` entry** is listed as the `## No phase` item it would become. Ask per entry:
+  parked work goes to `## No phase` (the default); an open product question becomes an `## Open` entry in
   `.jig/decisions.md` that the page cites; a present-tense product fact goes into the page body,
   undated. Make the second and third by hand first. Then `jig update --apply --sweep` moves the
-  rest to `## Up next` in `.jig/roadmap.md`, creating it when absent, and removes the emptied
+  rest to `## No phase` in `.jig/roadmap.md`, creating it when absent, and removes the emptied
   sections; a section holding other text stays, to move by hand. The roadmap is trunk's (R5), so
   run it there; in a metarepo the pages are a job's (M4): ask the hubnode to open the job the
   run names, and run `--apply --sweep` again in its worktree, which removes the sections whose
   entries trunk's roadmap holds. A clean tree is required.
 - A **page line** naming a spec, a handoff, the roadmap or a scope id in code quotes: propose
   the rewrite that drops the reference and keeps the product fact. A sentence that is all project leaves the
-  page, and if its work is still live it becomes an Up next item.
+  page, and if its work is still live it becomes a `## No phase` item.
 - A **decision entry** the owner names as project scope (none is listed): sort it with them. **Strike**, the
   whole entry is project: remove it, and add under `## Unreleased` `### Removed` the line
   `- D-040: project scope, not a product decision.` in the same commit (that line is what lets
