@@ -5245,6 +5245,15 @@ git revert --no-edit -q HEAD >/dev/null 2>&1
 ( cd .git/jig/worktrees/G && sed -i.bak 's/^Source: smoke$/Source: smoke\nScope: No phase\/p/' .jig/specs/g.md && rm .jig/specs/g.md.bak && git commit -qam scope ) >/dev/null 2>&1
 msg="one list: with the spec taking it, the built answer passes the gate"
 gate_ok G; rc=$?; expect_pass sh -c "! echo \"\$0\" | grep -q 'no spec of this job takes'" "$out"
+pcnew "$T/gq" && mkdir -p docs src && printf '# X\n\nX is.\n' > docs/x.md && printf 'x = 1\n' > src/x.py
+git add -A && git commit -qm init && $J init >/dev/null && board "b['docmap'] = {'docs/x.md': ['src/**']}" && git add -A && git commit -qm board
+printf '# Roadmap\n\n## No phase\n- `p`: offline (touches docs/x.md)\n- `q`: other (touches docs/x.md)\n' > .jig/roadmap.md && mkdir -p .jig/specs && printf '# G\n\nSource: smoke\nScope: No phase/p\n\n## Intent\nx\n' > .jig/specs/g.md
+git add -A && git commit -qm plan && $J open G --spec .jig/specs/g.md --owns 'src/**' >/dev/null && git add -A && git commit -qm "open G"
+( cd .git/jig/worktrees/G && sed -i.bak 's|^Scope: No phase/p$|Scope: No phase/q|' .jig/specs/g.md && rm .jig/specs/g.md.bak && git commit -qam "g: q, not p" \
+  && printf 'x = 2\n' > src/x.py && git commit -qam work && $J reviewed >/dev/null && $J handoff >/dev/null 2>&1 \
+  && pcfold && sed -i.bak 's/ — built \/ untouched \/ departed: smoke/ — built: it works/' .jig/handoffs/G-*.md && rm .jig/handoffs/*.bak && git add -A && git commit -qm "note G" ) >/dev/null 2>&1
+msg="one list: a spec the branch re-points away from an item no longer takes it: built on it is refused, as the merge would leave it open"
+gate_ok G; expect_pass sh -c "test $? != 0 && echo \"\$0\" | grep -q 'no spec of this job takes No phase/p' && ! echo \"\$0\" | grep -q 'takes No phase/q'" "$out"
 msg="no phase: the review, spec and RULES texts send work with no phase, parked or not, to ## No phase"
 expect_pass sh -c "for f in '$P/../skills/review/SKILL.md' '$P/../skills/spec/SKILL.md' '$P/jig/RULES.md'; do grep -q 'No phase' \"\$f\" || exit 1; done"
 

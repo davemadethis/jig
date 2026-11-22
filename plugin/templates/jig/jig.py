@@ -3232,6 +3232,21 @@ def proposed_added(trunk: str, commit: str) -> list[dict]:
             if e["status"].startswith("Proposed") and before.get(e["id"]) != e["block"]]
 
 
+def merged_copies(branch: str, trunk: str, path: str) -> list[str]:
+    """PATH as merging BRANCH into TRUNK leaves it: the side that changed it since their merge
+    base, the branch's when neither did. When both did, both copies, since the merge is theirs
+    to resolve. A scope re-pointed on trunk, or added there after the job opened, counts; one
+    the branch re-pointed away from doesn't."""
+    base = git("merge-base", branch, trunk)
+    b, t = git("show", f"{branch}:{path}"), git("show", f"{trunk}:{path}")
+    m = git("show", f"{base}:{path}") if base else ""
+    if b == m:
+        return [t]
+    if t == m:
+        return [b]
+    return [b, t]
+
+
 def cmd_gate(root: Path, args) -> int:
     """Hubnode-side verification. Prints what to run; refuses what it can decide."""
     board = Board.load(root, working_tree=True)
@@ -3265,8 +3280,7 @@ def cmd_gate(root: Path, args) -> int:
         # such spec would leave built work open, offered again.
         named_spec = re.search(r"^Spec: (\S+)", body, re.M)
         specs = job_specs(branch, name, trunk) | ({named_spec.group(1)} if named_spec else set())
-        # Trunk's copy counts too: a scope re-pointed there, or added after the job opened.
-        took = {sc for f in specs for rev in (branch, trunk) for sc in spec_scopes(git("show", f"{rev}:{f}"))} \
+        took = {sc for f in specs for text in merged_copies(branch, trunk, f) for sc in spec_scopes(text)} \
             | set(scopes_in(note, body))
         for l in sec.group(1).splitlines():
             u = ITEM_LINE.match(l.strip())

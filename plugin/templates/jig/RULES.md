@@ -546,7 +546,7 @@ anything after the answer the answerer's to add. Built means the work's descript
 page's body now. An answer changes no roadmap: an item's state, like a scope's, comes from the
 specs that take it, so a built item stays, read done once its spec is complete, until the
 owner's roadmap change removes it. So `jig gate` refuses built on a `## No phase` item that no
-spec of the job takes, on the branch or on trunk: the spec's `Scope: No phase/<id>` is what
+spec of the job takes, as the merge leaves the spec: the spec's `Scope: No phase/<id>` is what
 makes it read done. `jig gate` refuses while a line is unanswered; untouched and
 departed are answers.
 
