@@ -5180,7 +5180,8 @@ ranew 2
 printf '# Roadmap\n\n## beta\nThe second stage.\n(after alpha)\n\nScopes:\n- `b1`: one\n\n## alpha\nScopes:\n- `a1`: first\n' > .jig/roadmap.md
 git add -A && git commit -qm phases
 msg="after: a phase waiting on another isn't current, and none of its scopes is offered"
-expect_pass sh -c "test '$(rnext)' = 'alpha/a1:open' && $J roadmap | grep -qx 'beta  next' && $J roadmap | grep -qx 'alpha  current'"
+expect_pass sh -c "test '$(rnext)' = 'alpha/a1:open beta/b1:blocked' && $J roadmap | grep -qx 'beta  next' && $J roadmap | grep -qx 'alpha  current' \
+  && $J rig | sed -n '/^Waiting on:/,/^\$/p' | grep -q 'next    beta/b1  waits on alpha'"
 rspec a alpha/a1 && git add -A && git commit -qm a && rsolo a
 msg="after: once alpha is done, beta's first scope is offered"
 expect_pass test "$(rnext)" = "beta/b1:open"
@@ -5203,10 +5204,10 @@ expect_pass test "$(rnext)" = "alpha/a:blocked beta/b:open"
 ranew 5
 printf '# Roadmap\n\n## beta\nWhat beta needs:\n- a working host\n(after alpha)\n\nScopes:\n- `b`: y\n\n## alpha\nScopes:\n- `a`: x\n' > .jig/roadmap.md && git add -A && git commit -qm e5
 msg="after: a phase (after …) after a list in its note is read, not dropped: rig offers alpha/a, not beta/b"
-expect_pass sh -c "test '$(rnext)' = 'alpha/a:open' && $J roadmap | grep -qx 'beta  next'"
+expect_pass sh -c "test '$(rnext)' = 'alpha/a:open beta/b:blocked' && $J roadmap | grep -qx 'beta  next'"
 printf '# Roadmap\n\n## beta\nExit when:\n- [ ] ships\n(after alpha)\nScopes:\n- `b`: y\n\n## alpha\nScopes:\n- `a`: x\n' > .jig/roadmap.md && git add -A && git commit -qm boxes
 msg="after: a phase (after …) among its Exit when boxes is read too"
-expect_pass test "$(rnext)" = "alpha/a:open"
+expect_pass test "$(rnext)" = "alpha/a:open beta/b:blocked"
 rjs() { $J rig --json | python3 -c "import json,sys; d=json.load(sys.stdin); i={x['path']: x for x in d['items']}; $1"; }
 ranew 6
 printf '# Roadmap\n\n## alpha\nScopes:\n- `pairing`: pairing (after alpha/host)\n- `host`: the host\n' > .jig/roadmap.md && rspec sp alpha/pairing && git add -A && git commit -qm sp
@@ -5232,6 +5233,30 @@ expect_pass test "$(rnext)" = "alpha/a:blocked delta/d:open"
 rspec sd delta/d && git add -A && git commit -qm sd
 msg="after: with every scope on the chain taken, rig offers nothing and lists the blocked scope"
 expect_pass test "$(rnext)" = "alpha/a:blocked"
+ranew 9
+printf '# Roadmap\n\n## alpha\nScopes:\n- `a`: x (after beta/b)\n\n## beta\nScopes:\n- `b`: y\n' > .jig/roadmap.md && rspec sa alpha/a && git add -A && git commit -qm t6
+msg="after: a taken blocked scope stands for what it waits on: rig offers beta/b, and the spec waits on it"
+out=$($J rig 2>&1)
+expect_pass sh -c "echo \"\$0\" | sed -n '/^Waiting on you:/,/^\$/p' | grep -q 'next    beta/b (phase beta; alpha/a waits on it): y' \
+  && echo \"\$0\" | sed -n '/^Waiting on:/,/^\$/p' | grep -q 'spec    .jig/specs/sa.md  waits on beta/b'" "$out"
+ranew 10
+printf '# Roadmap\n\n## alpha\n(after gamma)\nScopes:\n- `a`: x\n\n## beta\nScopes:\n- `b`: y\n\n## gamma\nScopes:\n- `g`: z\n' > .jig/roadmap.md && git add -A && git commit -qm later
+msg="after: a phase waiting on a later phase: rig offers the current phase's beta/b and lists alpha/a waiting on gamma"
+out=$($J rig 2>&1)
+expect_pass sh -c "test '$(rnext)' = 'alpha/a:blocked beta/b:open' && echo \"\$0\" | sed -n '/^Waiting on:/,/^\$/p' | grep -q 'next    alpha/a  waits on gamma'" "$out"
+rspec sb beta/b && git add -A && git commit -qm sb
+msg="after: with beta/b taken, rig offers gamma/g, which alpha waits on"
+expect_pass sh -c "$J rig | sed -n '/^Waiting on you:/,/^\$/p' | grep -q 'next    gamma/g (phase gamma; alpha waits on it): z'"
+ranew 11
+printf '# Roadmap\n\n## alpha\nScopes:\n- `p`: x (after beta/b)\n- `f`: free\n\n## beta\nScopes:\n- `b`: y\n' > .jig/roadmap.md && git add -A && git commit -qm own
+msg="after: the current phase's own free scope comes first: rig offers alpha/f, not beta/b, and lists alpha/p"
+expect_pass sh -c "test '$(rnext)' = 'alpha/f:open alpha/p:blocked' && $J rig | sed -n '/^Waiting on:/,/^\$/p' | grep -q 'next    alpha/p  waits on beta/b'"
+ranew 12
+printf '# Roadmap\n\n## alpha\nScopes:\n- `a`: x (after beta/b)\n- `c`: x (after beta)\n\n## beta\nScopes:\n- `b`: y (after gamma/g)\n- `b2`: y2\n\n## gamma\nScopes:\n- `g`: z\n' > .jig/roadmap.md && git add -A && git commit -qm round
+msg="after: within a round the walk goes in file order: beta/b2 before gamma/g, both two waits out"
+expect_pass test "$(rnext)" = "alpha/a:blocked alpha/c:blocked beta/b2:open"
+msg="after: the scope step comes from one function: no unblocking_step is left"
+expect_refuse grep -q 'def unblocking_step' .jig/jig.py
 ranew 8
 rbad() { printf "$1" > .jig/roadmap.md && git add -A; out=$(git commit -qm bad 2>&1); rc=$?; git reset -q --hard; }
 msg="after: a ring is refused on trunk, named once with both members"

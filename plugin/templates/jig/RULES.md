@@ -982,17 +982,18 @@ The product is the repo, so there is one roadmap and no product level in it.
 - **The next step** is one step ahead, as if staging and the waiting specs were cleared: the
   first Up next item whose pages no open job's, waiting spec's or staged file's Touches names
   (by the page itself: a glob or a folder doesn't count, and an Up next item has no scope id
-  to take), else the current phase's first open scope that no waiting spec or staged file
-  takes by its `Scope:` line and that isn't blocked. An Up next item passed over is listed as
-  waiting on what names its pages, and each blocked open scope of the current phase as waiting
-  on its refs, under rig's Waiting on: it waits on work, not on an answer. A current phase
-  whose every open scope no spec takes is blocked offers no step of its own: rig offers
-  instead the first open, unblocked scope no one takes that they wait on, directly or through
-  a chain (a taken scope's waits included), so work starts as soon as it isn't blocked, as a
-  phase's own wait makes the phase it names current. A waiting spec or staged file whose
-  `Scope:` names a blocked scope waits on that scope's refs, as a `Build after` waits, and
-  never starts. `jig rig` (Workflow) proposes the step to the owner and never writes the
-  roadmap.
+  to take), else a scope from one walk out from the **front**, each phase not done up to and
+  including the current one, nearest first and in file order within a round. A phase reaches
+  its waits, then its scopes not done; the first scope that is open, unblocked and taken by
+  no waiting spec or staged file's `Scope:` line is the step; a blocked or taken scope reaches
+  what it waits on, so the work that unblocks it is offered as soon as it isn't blocked. So
+  the current phase's own first free scope comes first, and one reached past the front's own
+  scopes says who waits on it. A walk that ends at work done or under way offers no step.
+  Under rig's Waiting on (work, not an answer) are each Up next item passed over, waiting on
+  what names its pages, and each open blocked scope of a front phase that nothing takes,
+  waiting on its refs. A waiting spec or staged file whose `Scope:` names a blocked scope
+  waits on that scope's refs, as a `Build after` waits, and never starts. `jig rig`
+  (Workflow) proposes the step to the owner and never writes the roadmap.
 
 ## Decision log
 

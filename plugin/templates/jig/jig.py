@@ -14440,8 +14440,8 @@ def covered_by(page: str, covering: list[tuple[str, list[str]]]) -> list[str]:
 
 def rig_next_step(board: "Board", taken: list[str], covering: list[tuple[str, list[str]]]) -> list[dict]:
     """One step ahead on trunk's roadmap: the first Up next item whose pages no open job, waiting
-    spec or staged file names in its Touches, else the current phase's first open scope that no
-    waiting spec or staged file takes by its `Scope:` line. An Up next item has no scope id to
+    spec or staged file names in its Touches, else roadmap_step's scope, with the blocked scopes
+    it lists. An Up next item has no scope id to
     take, so its pages say work on it is under way: each one passed over comes first, waiting
     on what names its pages, so it never drops out of the picture unexplained."""
     snap = Snapshot(board.trunk)
@@ -14462,53 +14462,61 @@ def rig_next_step(board: "Board", taken: list[str], covering: list[tuple[str, li
         step = item
         break
     phases = roadmap_state(snap) or []
-    scope_item = lambda p, s, why="": {
-        "kind": "next-step", "id": s["id"], "path": f"{ROADMAP}#{s['id']}",
-        "content": f"{p['name']}\0{s['id']}\0{s['what']}", "what": s["what"],
-        "from": f"phase {p['name']}{why}", "touches": [], "after": [], "kept": [], "scopes": []}
-    # Every blocked open scope of a current phase is listed, waiting on its refs, so blocked
-    # work is in the picture (R1) while the step goes to the first scope that can start.
-    blocked = []
-    for p in phases:
-        if p["state"] != "current":
-            continue
-        for s in p["scopes"]:
-            if s["state"] != "open" or s["id"] in taken or (step and not s["waits"]):
-                continue
-            if s["waits"]:
-                blocked.append(dict(scope_item(p, s), blocked=s["waits"]))
-            else:
-                step = scope_item(p, s)
-    if not step and blocked:
-        step = unblocking_step(phases, blocked, taken, scope_item)
+    walked, blocked = roadmap_step(phases, taken)
+    step = step or walked
     return out + blocked + ([step] if step else [])
 
 
-def unblocking_step(phases: list[dict], blocked: list[dict], taken: list[str], scope_item) -> dict | None:
-    """When the current phase offers nothing because its open scopes are blocked, the first open,
-    unblocked scope no one takes that they wait on, directly or through a chain: work gets done
-    as soon as it isn't blocked (R1), as a phase's own wait makes the phase it names current."""
+def roadmap_step(phases: list[dict], taken: list[str]) -> tuple[dict | None, list[dict]]:
+    """The roadmap's next step and the blocked scopes rig lists, from one rule: walk out from
+    the front (each phase not done, in file order, up to and including the current one),
+    nearest first and in file order within a round, and offer the first scope that can start.
+    A phase reaches its waits, then its scopes not done; a blocked or taken scope stands for
+    what it waits on, so the work that unblocks it is offered as soon as it isn't blocked (R1).
+    TAKEN is the scopes rig's own items take: a scope starts only open and in none of them."""
+    def item(p: dict, s: dict, who: str = "") -> dict:
+        return {"kind": "next-step", "id": s["id"], "path": f"{ROADMAP}#{s['id']}",
+                "content": f"{p['name']}\0{s['id']}\0{s['what']}", "what": s["what"],
+                "from": f"phase {p['name']}" + (f"; {who} waits on it" if who else ""),
+                "touches": [], "after": [], "kept": [], "scopes": []}
+    current = next((n for n, p in enumerate(phases) if p["state"] == "current"), len(phases) - 1)
+    front = [p for p in phases[:current + 1] if p["state"] != "done"]
     of = {s["id"]: (p, s) for p in phases for s in p["scopes"]}
     named = {p["name"]: p for p in phases}
+    # Each open blocked scope of the front that no rig item takes: blocked work in the picture.
+    blocked = [dict(item(p, s), blocked=s["waits"]) for p in front for s in p["scopes"]
+               if s["state"] == "open" and s["waits"] and s["id"] not in taken]
+    # Where each ref sits in the file, so each round is walked in file order.
+    pos = {p["name"]: (n, -1) for n, p in enumerate(phases)}
+    pos.update({s["id"]: (n, k) for n, p in enumerate(phases) for k, s in enumerate(p["scopes"])})
+    # (ref, who): WHO is the front scope or phase whose wait the path started from, "" for the
+    # front's own scopes, so a step reached past them says who waits on it.
+    rnd = [(p["name"], "") for p in front]
     seen: set[str] = set()
-    todo = [(r, b["id"]) for b in blocked for r in b["blocked"]]
-    while todo:
-        ref, why = todo.pop(0)
-        if ref in seen:
-            continue
-        seen.add(ref)
-        if ref in named:
-            p = named[ref]
-            todo += [(x, why) for x in p["waits"]] + [(s["id"], why) for s in p["scopes"]]
-        elif ref in of:
-            p, s = of[ref]
-            if s["state"] == "done":
+    while rnd:
+        reached: dict[str, str] = {}
+        for ref, who in rnd:
+            if ref in seen:
                 continue
-            # A taken scope is under way and never offered, but what it waits on still blocks it.
-            if s["state"] == "open" and s["id"] not in taken and not s["waits"]:
-                return scope_item(p, s, f"; {why} waits on it")
-            todo += [(x, why) for x in s["waits"]]
-    return None
+            seen.add(ref)
+            if ref in named:
+                p = named[ref]
+                nxt = [(r, who or p["name"]) for r in p["waits"]]
+                nxt += [(s["id"], who) for s in p["scopes"] if s["state"] != "done"]
+            elif ref in of:
+                p, s = of[ref]
+                if s["state"] == "done":
+                    continue
+                if s["state"] == "open" and not s["waits"] and s["id"] not in taken:
+                    return item(p, s, who), blocked
+                nxt = [(r, who or s["id"]) for r in s["waits"]]
+            else:
+                continue
+            for r, w in nxt:
+                if r not in seen:
+                    reached.setdefault(r, w)
+        rnd = sorted(reached.items(), key=lambda x: pos.get(x[0], (len(phases), 0)))
+    return None, blocked
 
 
 def reach_of(start: str, deps: dict[str, list[str]]) -> set[str]:
