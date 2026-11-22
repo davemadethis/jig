@@ -35,8 +35,9 @@ listed under Waiting on, and gets no judgment and no question):
   is, with no answer from the owner; `open` when it can't. An open file gets the questions the
   owner must answer, each with two to four options, one recommended, from what the file and
   the repo say. A ready file gets its recommendation: the spec it becomes, in one line.
-- **The next step** (the open one): its question: take it now (a spec for it), or leave it
-  where it is, with one recommended and why.
+- **The next step** (the open one): a `## No phase` item naming pages, or a roadmap scope. Its
+  question: take it now (a spec for it, whose `Scope:` line takes it, `No phase/<id>` for an
+  item, so it reads done once built), or leave it where it is, with one recommended and why.
 
 Store each: `jig rig --store-put <path>` with a JSON object on stdin,
 `{"call": "ready"|"open", "about": "…", "context": "…", "questions": [{"ask": "…", "options": ["…"], "recommended": 0}], "recommend": "…"}`.

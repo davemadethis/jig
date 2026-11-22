@@ -5190,6 +5190,46 @@ expect_pass sh -c "grep -q '^- .p.: offline' .jig/roadmap.md && ! git show --nam
   && $J roadmap | grep -qE '^  No phase/p +done' && python3 -c \"import sys; t = open('ROADMAP.md').read().split('## No phase')[1]; r = [l for l in t.splitlines() if '**p**' in l][0]; assert r.split(' | ')[-1].startswith('**p**'), r\""
 msg="one list: once p is done, rig offers nothing from the list: the current phase's scope is the step"
 expect_pass test "$(rbn)" = "alpha/s:open"
+# The real migration: trunk's committed checker predates the one list, so the fold waits a run.
+pcnew "$T/mig" && git -C "$R" show 485c13e:plugin/templates/jig/jig.py > .jig/jig.py && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
+mkdir -p docs && printf '# A\n\nA is.\n' > docs/a.md && printf '# Roadmap\n\n## a\nScopes:\n- `s`: x\n\n## Up next\n- `p`: parked; stops at x (touches docs/a.md)\n\n## No phase\n- `q`: later\n' > .jig/roadmap.md
+$J roadmap --write >/dev/null; git add -A && git commit -qm roadmap
+msg="migration: with an old checker on trunk, update names the fold as waiting on the checker it installs"
+out=$($UP 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -q 'Up next waits to fold into ## No phase' && ! echo \"\$0\" | grep -q 'fold .jig/roadmap.md.s ## Up next into'" "$out"
+$UP --apply >/dev/null 2>&1
+msg="migration: the first update's commit passes the old checker: it folds nothing"
+expect_pass sh -c "grep -qx '## Up next' .jig/roadmap.md && git commit -qm 'jig update'"
+msg="migration: run again, update folds, and its commit passes the checker the first one installed"
+out=$($UP 2>&1)
+$UP --apply >/dev/null 2>&1
+expect_pass sh -c "echo \"\$0\" | grep -q 'fold .jig/roadmap.md.s ## Up next into ## No phase' && ! grep -q '## Up next' .jig/roadmap.md && grep -q '^- .p.: parked' .jig/roadmap.md && git commit -qm 'jig update: fold'" "$out"
+msg="migration: the fold rewrote ROADMAP.md with it, so jig roadmap finds the view current"
+expect_pass sh -c "! $J roadmap | grep -q stale && grep -q '\*\*p\*\*' ROADMAP.md"
+
+# The one list's waits: a spec on a blocked item, and a scope waiting on a page-less item.
+pcnew "$T/rl20" && mkdir -p docs && printf '# X\n\nX is.\n' > docs/x.md && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
+printf '# Roadmap\n\n## alpha\nScopes:\n- `s`: x\n\n## No phase\n- `q`: later (after alpha/s) (touches docs/x.md)\n' > .jig/roadmap.md && rspec sq 'No phase/q' && git add -A && git commit -qm sq
+msg="one list: a spec taking a blocked list item waits on the item's refs, never under Can start now"
+expect_pass sh -c "$J rig | sed -n '/^Waiting on:/,/^\$/p' | grep -q 'spec    .jig/specs/sq.md  waits on alpha/s' && ! $J rig | sed -n '/^Can start now:/,/^\$/p' | grep -q sq.md"
+pcnew "$T/rl21" && mkdir -p docs && printf '# X\n\nX is.\n' > docs/x.md && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
+printf '# Roadmap\n\n## alpha\nScopes:\n- `s`: x (after No phase/q)\n\n## No phase\n- `q`: later\n' > .jig/roadmap.md && git add -A && git commit -qm wait
+msg="one list: a scope waiting on a page-less item gets that item offered, as what unblocks it"
+expect_pass sh -c "test \"\$($J rig --json | python3 -c \"import json,sys; d=json.load(sys.stdin); print(' '.join(x['id'] + ':' + x['state'] for x in d['items'] if x['kind'] == 'next-step'))\")\" = 'No phase/q:open alpha/s:blocked' \
+  && $J rig | grep -q 'next    No phase/q (No phase; alpha/s waits on it): later'"
+
+# A built answer on a list item no spec takes would leave built work open: the gate says so.
+pcnew "$T/gb" && mkdir -p docs src && printf '# X\n\nX is.\n' > docs/x.md && printf 'x = 1\n' > src/x.py
+git add -A && git commit -qm init && $J init >/dev/null && board "b['docmap'] = {'docs/x.md': ['src/**']}" && git add -A && git commit -qm board
+printf '# Roadmap\n\n## No phase\n- `p`: offline (touches docs/x.md)\n' > .jig/roadmap.md && mkdir -p .jig/specs && printf '# G\n\nSource: smoke\n\n## Intent\nx\n' > .jig/specs/g.md
+git add -A && git commit -qm plan && $J open G --spec .jig/specs/g.md --owns 'src/**' >/dev/null && git add -A && git commit -qm "open G"
+( cd .git/jig/worktrees/G && printf 'x = 2\n' > src/x.py && git commit -qam work && $J reviewed >/dev/null && $J handoff >/dev/null 2>&1 \
+  && pcfold && sed -i.bak 's/ — built \/ untouched \/ departed: smoke/ — built: it works offline/' .jig/handoffs/G-*.md && rm .jig/handoffs/*.bak && git add -A && git commit -qm "note G" ) >/dev/null 2>&1
+msg="one list: the gate refuses built on a list item no spec of the job takes, saying to add its Scope: line"
+gate_ok G; expect_pass sh -c "test $? != 0 && echo \"\$0\" | grep -q 'built, but no spec of this job takes No phase/p: add .Scope: No phase/p.'" "$out"
+( cd .git/jig/worktrees/G && sed -i.bak 's/^Source: smoke$/Source: smoke\nScope: No phase\/p/' .jig/specs/g.md && rm .jig/specs/g.md.bak && git commit -qam scope ) >/dev/null 2>&1
+msg="one list: with the spec taking it, the built answer passes the gate"
+gate_ok G; rc=$?; expect_pass sh -c "! echo \"\$0\" | grep -q 'no spec of this job takes'" "$out"
 msg="no phase: the review, spec and RULES texts send work with no phase, parked or not, to ## No phase"
 expect_pass sh -c "for f in '$P/../skills/review/SKILL.md' '$P/../skills/spec/SKILL.md' '$P/jig/RULES.md'; do grep -q 'No phase' \"\$f\" || exit 1; done"
 

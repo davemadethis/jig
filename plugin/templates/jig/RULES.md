@@ -939,8 +939,10 @@ The product is the repo, so there is one roadmap and no product level in it.
   not done that name it, and fold-in asks about them (Fold-in). A built item stays, shown done,
   until the owner's roadmap change removes it: dropping a done item a note still takes is no
   drop. `## Up next`, the list's old second home, is folded into it by `jig update --apply`,
-  ids and text kept, on trunk on the owner's yes; after it the hook refuses an `## Up next`
-  heading, by line.
+  ids and text kept, on trunk on the owner's yes, in two runs: the hook runs trunk's committed
+  checker, and an older one refuses a page-naming `## No phase` item, so the first run installs
+  the checker and names the fold as waiting on it, and the run after that commit folds, and
+  rewrites `ROADMAP.md`. After it the hook refuses an `## Up next` heading, by line.
 - **A phase's note** is the prose under its heading before `Exit when:` or `Scopes:`. The view
   shows it under the phase's heading.
 - **A touched page exists**, in either form. `jig roadmap` reports one that doesn't; on trunk

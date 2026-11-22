@@ -3258,10 +3258,19 @@ def cmd_gate(root: Path, args) -> int:
                       if l.strip().startswith("- [")
                       and (l.strip().startswith("- [ ]") or "___" in l)]
         # Each item line needs one answer; anything after it is the answerer's to say.
+        # A list item reads done only through a spec that takes it, so a built answer with no
+        # such spec would leave built work open, offered again.
+        named_spec = re.search(r"^Spec: (\S+)", body, re.M)
+        specs = job_specs(branch, name, trunk) | ({named_spec.group(1)} if named_spec else set())
+        took = {sc for f in specs for sc in spec_scopes(git("show", f"{branch}:{f}"))} | set(scopes_in(note, body))
         for l in sec.group(1).splitlines():
             u = ITEM_LINE.match(l.strip())
             if u and l not in open_lines and (why := item_answer(u.group(5))):
                 open_lines.append(f"{l.strip()}   <- {why}")
+            elif u and l not in open_lines and u.group(1) == NO_PHASE and u.group(2) not in took \
+                    and u.group(5).strip().lower().startswith("built"):
+                open_lines.append(f"{l.strip()}   <- built, but no spec of this job takes {u.group(2)}: "
+                                  f"add `Scope: {u.group(2)}` to the spec, so the item reads done")
         for l in sec.group(1).splitlines():
             if l not in open_lines and (why := pair_problem(l)):
                 open_lines.append(f"{l.strip()}   <- {why}")
@@ -11423,6 +11432,25 @@ def swap_log_head(root: Path, here: Path) -> None:
         git("add", "--", LOG, check=True)
 
 
+def up_next_heading(text: str) -> bool:
+    """Whether TEXT has an `## Up next` heading outside fenced code, as fold_up_next reads it."""
+    fence = False
+    for l in text.splitlines():
+        if l.lstrip().startswith("```"):
+            fence = not fence
+        elif not fence and re.fullmatch(rf"##\s+{UP_NEXT}\s*", l, re.I):
+            return True
+    return False
+
+
+def knows_one_list(root: Path) -> bool:
+    """Whether trunk's committed jig.py, the copy the hook runs, reads the one list. An older
+    copy refuses a page-naming `## No phase` item, so the fold waits for the commit that
+    installs this one: the next `jig update --apply` folds, and this checker judges it."""
+    trunk = Board.trunk_name(root)
+    return "def list_phase(" in git("show", f"{trunk}:{DIR}/jig.py", cwd=str(root))
+
+
 def fold_up_next(text: str) -> str:
     """TEXT with every `## Up next` section's lines moved under `## No phase`, ids, text and
     nested lines kept, the heading gone: the one list for work with no phase."""
@@ -11447,14 +11475,27 @@ def fold_up_next(text: str) -> str:
 def fold_roadmap(root: Path, here: Path) -> None:
     write_raw(root / ROADMAP, fold_up_next(read_raw(root / ROADMAP)))
     git("add", "--", ROADMAP, check=True)
+    # The view is generated from the roadmap, so it moves with it rather than reading stale.
+    if (root / ROADMAP_VIEW).is_file():
+        snap = Snapshot(where="files")
+        phases = roadmap_state(snap)
+        if phases is not None:
+            write_raw(root / ROADMAP_VIEW, roadmap_view(snap, phases))
+            git("add", "--", ROADMAP_VIEW, check=True)
+
+
+def has_up_next(root: Path) -> bool:
+    return (root / ROADMAP).is_file() and up_next_heading(read_raw(root / ROADMAP))
 
 
 STEPS: list = [
     (f"fold {ROADMAP}'s ## {UP_NEXT} into ## {NO_PHASE}, ids and text kept: one list for work with "
      f"no phase, its items taken by a spec's `Scope: {NO_PHASE}/<id>`; the hook then refuses ## {UP_NEXT}",
-     lambda root, after: (root / ROADMAP).is_file() and any(
-         re.fullmatch(rf"##\s+{UP_NEXT}\s*", l, re.I) for l in read_raw(root / ROADMAP).splitlines()),
-     fold_roadmap),
+     lambda root, after: has_up_next(root) and knows_one_list(root), fold_roadmap),
+    (f"{ROADMAP}'s ## {UP_NEXT} waits to fold into ## {NO_PHASE}: the checker on trunk is older and "
+     f"would refuse the folded list. Commit this update, which installs the checker that reads it, "
+     f"then run `jig update --apply` again to fold",
+     lambda root, after: has_up_next(root) and not knows_one_list(root), lambda root, here: None),
     (f"add {STAGING}/ (its .gitignore), where chats drop files for this repo",
      lambda root, after: f"{STAGING}/.gitignore" not in after
      and not (root / STAGING / ".gitignore").exists(),
@@ -14490,26 +14531,31 @@ def rig_next_step(board: "Board", taken: list[str], covering: list[tuple[str, li
             continue
         if not step:
             step = item
-    walked, blocked = roadmap_step(phases, taken)
+    walked, blocked = roadmap_step(phases, taken, items)
     step = step or walked
     return out + blocked + ([step] if step else [])
 
 
-def roadmap_step(phases: list[dict], taken: list[str]) -> tuple[dict | None, list[dict]]:
+def roadmap_step(phases: list[dict], taken: list[str], items: list[dict] = ()) -> tuple[dict | None, list[dict]]:
     """The roadmap's next step and the blocked scopes rig lists, from one rule: walk out from
     the front (each phase not done, in file order, up to and including the current one),
     nearest first and in file order within a round, and offer the first scope that can start.
     A phase reaches its waits, then its scopes not done; a blocked or taken scope stands for
     what it waits on, so the work that unblocks it is offered as soon as it isn't blocked (R1).
-    TAKEN is the scopes rig's own items take: a scope starts only open and in none of them."""
+    TAKEN is the scopes rig's own items take: a scope starts only open and in none of them.
+    The one list's ITEMS are reached only through a ref: a scope waiting on one is unblocked
+    by it, so it is offered then, pages or not."""
+    lp = {"name": NO_PHASE}
+
     def item(p: dict, s: dict, who: str = "") -> dict:
         return {"kind": "next-step", "id": s["id"], "path": f"{ROADMAP}#{s['id']}",
-                "content": f"{p['name']}\0{s['id']}\0{s['what']}", "what": s["what"],
-                "from": f"phase {p['name']}" + (f"; {who} waits on it" if who else ""),
-                "touches": [], "after": [], "kept": [], "scopes": []}
+                "content": f"{p['name']}\0{s['id']}\0{s['what']}", "what": s.get("plain", s["what"]),
+                "from": (NO_PHASE if p is lp else f"phase {p['name']}") + (f"; {who} waits on it" if who else ""),
+                "touches": s.get("touches", []), "after": [], "kept": [], "scopes": []}
     current = next((n for n, p in enumerate(phases) if p["state"] == "current"), len(phases) - 1)
     front = [p for p in phases[:current + 1] if p["state"] != "done"]
     of = {s["id"]: (p, s) for p in phases for s in p["scopes"]}
+    of.update({s["id"]: (lp, s) for s in items})
     named = {p["name"]: p for p in phases}
     # Each open blocked scope of the front that no rig item takes: blocked work in the picture.
     blocked = [dict(item(p, s), blocked=s["waits"]) for p in front for s in p["scopes"]
@@ -14517,6 +14563,7 @@ def roadmap_step(phases: list[dict], taken: list[str]) -> tuple[dict | None, lis
     # Where each ref sits in the file, so each round is walked in file order.
     pos = {p["name"]: (n, -1) for n, p in enumerate(phases)}
     pos.update({s["id"]: (n, k) for n, p in enumerate(phases) for k, s in enumerate(p["scopes"])})
+    pos.update({s["id"]: (len(phases), k) for k, s in enumerate(items)})
     # (ref, who): WHO is the front scope or phase whose wait the path started from, "" for the
     # front's own scopes, so a step reached past them says who waits on it.
     rnd = [(p["name"], "") for p in front]
@@ -14584,8 +14631,9 @@ def rig_state(root: Path, board: "Board") -> dict:
             by_name.setdefault(Path(i["id"]).stem, i)
     # A spec or staged file taking a blocked scope waits on that scope's refs, as `Build after`
     # waits: starting it would be starting blocked work.
-    blocked_by = {s["id"]: s["waits"] for p in roadmap_state(Snapshot(board.trunk)) or []
-                  for s in p["scopes"] if s["state"] != "done" and s["waits"]}
+    phases, listed = roadmap_full(Snapshot(board.trunk)) or ([], [])
+    blocked_by = {s["id"]: s["waits"] for s in [x for p in phases for x in p["scopes"]] + listed
+                  if s["state"] != "done" and s["waits"]}
     # A spec that opened as a job under another name is still the one an item builds after.
     job_of = {n: n for n in board.jobs}
     for n, j in sorted(board.jobs.items()):
