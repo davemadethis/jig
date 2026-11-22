@@ -31,7 +31,7 @@ out as `/jig:decision-cards` says.
    a feature request is interpreted into a spec as it says). Then `jig inbox`, and again
    whenever a prompt arrives announcing unread messages: each message is a reply to this
    repo's hubnode, and the quoted owner words in it, with their date, rule (`.jig/RULES.md`,
-   Inbox). It sets aside in `.jig/inbox/misaddressed/`, and names, a message addressed to another
+   Inbox), but for a fixed rule's word, which only the owner's reply here gives. It sets aside in `.jig/inbox/misaddressed/`, and names, a message addressed to another
    repo: ask the owner where it belongs.
 5. In a pararepo (`.jig/para.json`), `jig sync` on trunk; report a newer release, and a
    header it says is out of date, in one line each; a pin it moved and the buffer rows it

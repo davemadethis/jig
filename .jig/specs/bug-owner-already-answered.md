@@ -135,8 +135,11 @@ goes to him. The card rule below says that for every repo.
 - `plugin/skills/spec/SKILL.md`
 - `plugin/skills/hubnode/SKILL.md`
 - `plugin/templates/jig/RULES.md`
+- `plugin/skills/release/SKILL.md` (its owner's-word line, added in review)
+- `plugin/templates/jig/jig.py`: one string, `jig inbox`'s closing line, so it carries the fixed-rule
+  carve-out (added in review). No logic changes.
 - Process (Homes): a rule for working with jig, written in the skills that write questions, and one line
-  in the rulebook. No `jig.py`, hooks or `tests/`, so the lighter review applies.
+  in the rulebook. No hooks or `tests/`; `jig.py` changes only in that printed string.
 
 ## Alternatives considered
 - `jig rig --store-put` refuses a question without `because` (the report's) — rejected because it checks

@@ -62,7 +62,8 @@ Before anything is built:
 
 A file in `.jig/staging/` is context, not a decision: never cite it as decided. The owner's
 quoted words in it (`The owner, <date>: "…"`) are the exception: they are the owner's ruling,
-as in an inbox message (`.jig/RULES.md`, Inbox), and the rest is context from the stager.
+as in an inbox message (`.jig/RULES.md`, Inbox), within the limits `/jig:decision-cards`
+(Is it open?) sets, and the rest is context from the stager.
 
 Keep it short. A spec longer than the diff it describes is a smell.
 
