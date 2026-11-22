@@ -69,8 +69,8 @@ goes to him. The card rule below says that for every repo.
 ## What changes
 - **`/jig:decision-cards`**, a short section before The card, "Is it open?": a block is a decision the
   owner's own words leave open. Before writing one, search them: the quoted words and `## Owner's
-  answers` of the staged file, the spec's Intent and its `Source:` quote, `.jig/decisions.md`, and his
-  rulings in this conversation. A question they answer gets no block. Act on it and record it with
+  answers` of the staged file, the spec's `Source:` quotes (not its Intent, which is the spec role's
+  wording), the accepted entries of `.jig/decisions.md`, and his rulings in this conversation. A question they answer gets no block. Act on it and record it with
   his words. A finding they decide is a fix (`/jig:review`: it misses the spec), not a question. If the
   recommended option restates his words, the question is already answered. Each block's context line
   says what leaves it open: his sentence that does, quoted, or "his words say nothing on this".
@@ -78,7 +78,7 @@ goes to him. The card rule below says that for every repo.
   `/jig:decision-cards` (Is it open?) says. Each carries `"because"` in the stored judgment, the
   context line the card draws. A judgment handed to a subagent gets that paragraph in its brief.
   **§ 4**: a "start" on an open file with unanswered questions re-checks each one. What his words
-  answer is in the Intent. Each one still open is built as its recommended option, an `Interpreted:` line
+  answer goes under the spec's Decisions, quoted and dated. Each one still open is built as its recommended option, an `Interpreted:` line
   naming it unanswered. The spec is shown before `resolve`, as `/jig:stage` already says.
 - **`/jig:stage`**: its "nothing in it is decided" line excepts the owner's quoted words, which settle
   what they say. Resolving: a note that asks what those words state is answered by them. A note that
@@ -105,7 +105,8 @@ goes to him. The card rule below says that for every repo.
       question about that list, and calls the file `ready` unless something else is open. Both outputs
       are kept in the notes folder. (Amended in review: the contrast "with the old paragraph, the same
       input yields the question" is dropped. A fresh worker with a short brief did not ask it under the
-      old text either, 0 of 2 runs, so no cheap fixture shows it. The handoff says so.)
+      old text either, 0 of 2 runs, so no cheap fixture shows it. The handoff says so. What remains
+      guards against regression; it does not show the fix works.)
 - [ ] `python3 .jig/jig.py queue -- .jig/scripts/check.sh` passes.
 
 ## Out of scope

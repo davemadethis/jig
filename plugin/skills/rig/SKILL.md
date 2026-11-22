@@ -121,7 +121,7 @@ Nothing is ever dropped for it.
   in the owner's words. The file changed, so the next run judges it again.
 - **Start on an open file with unanswered questions** (the owner says to write its spec
   anyway): re-check each question as `/jig:decision-cards` (Is it open?) says. What the owner's
-  words answer goes in the Intent. Each one still open is built as its recommended option,
+  words answer goes under the spec's Decisions, in those words, quoted and dated. Each one still open is built as its recommended option,
   with an `Interpreted:` line under the spec's Decisions naming it unanswered. Show the spec
   before `resolve`, as `/jig:stage` says.
 - **Write a spec:** resolve the staged file as `/jig:stage` says (a request or story is
