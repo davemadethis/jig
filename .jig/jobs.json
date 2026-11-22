@@ -10,7 +10,11 @@
       "plugin/skills/hubnode/SKILL.md",
       "plugin/skills/rig/SKILL.md",
       "plugin/skills/spec/SKILL.md",
-      "tests/smoke.sh"
+      "tests/smoke.sh",
+      "plugin/skills/update/SKILL.md",
+      "plugin/skills/redocument/SKILL.md",
+      "plugin/skills/review/SKILL.md",
+      "plugin/skills/retro/SKILL.md"
     ],
     "reserved": {}
   }
