@@ -10078,6 +10078,27 @@ def split_touches(what: str) -> tuple[str, list[str]]:
     return what[:m.start()].rstrip(), pages
 
 
+# `(after alpha/host, beta)` at the end of a scope, before any `(touches …)` so TOUCHES stays
+# anchored at the line's end: what the scope waits on. A line of its own in a phase's note is
+# the phase's, and applies to each of its scopes. A ref is `<phase>/<scope>` or `<phase>`.
+AFTER = re.compile(r"\s*\(after\s+([^()]*)\)\s*$")
+
+
+def split_after(what: str) -> tuple[str, list[str] | None]:
+    """A scope's text without its `(after …)`, `(touches …)` kept, and the refs it names: None
+    when it names no wait, [] when the parentheses hold nothing."""
+    m = TOUCHES.search(what)
+    head, tail = (what[:m.start()], what[m.start():]) if m else (what, "")
+    a = AFTER.search(head)
+    if not a:
+        return what, None
+    return (head[:a.start()].rstrip() + tail), refs_of(a.group(1))
+
+
+def refs_of(text: str) -> list[str]:
+    return [r.strip().strip("`").strip() for r in text.split(",") if r.strip().strip("`").strip()]
+
+
 def parse_up_next(text: str, problems: list[str] | None = None) -> list[dict]:
     """The items under `## Up next`, each {id, what, touches, line}, in file order."""
     return parse_section(text, UP_NEXT, problems)
@@ -10204,7 +10225,7 @@ def parse_roadmap(text: str, problems: list[str] | None = None) -> list[dict]:
             if any(p["name"] == m.group(1) for p in phases):
                 problems.append(f"line {n}: phase {m.group(1)} appears twice")
             phases.append({"name": m.group(1), "exit": [], "scopes": [], "line": n, "headed": False,
-                           "note": [], "noting": True})
+                           "note": [], "noting": True, "after": [], "after_line": 0, "after_of": {}})
             part = ""
         elif skip or not phases:
             continue
@@ -10212,6 +10233,13 @@ def parse_roadmap(text: str, problems: list[str] | None = None) -> list[dict]:
             phases[-1]["noting"] = False
         elif not part and phases[-1]["noting"] and not re.fullmatch(r"(?i)(exit when|scopes):", line.strip()):
             phases[-1]["note"].append(line)
+            if a := AFTER.fullmatch(line.strip()):
+                if phases[-1]["after_line"]:
+                    problems.append(f"line {n}: phase {phases[-1]['name']} has a second (after …) "
+                                    f"line: one line names all it waits on")
+                phases[-1]["after"], phases[-1]["after_line"] = refs_of(a.group(1)), n
+                if not phases[-1]["after"]:
+                    problems.append(f"line {n}: phase {phases[-1]['name']} has (after …) naming nothing")
         elif re.fullmatch(r"(?i)exit when:", line.strip()):
             part, phases[-1]["headed"] = "exit", True
         elif re.fullmatch(r"(?i)scopes:", line.strip()):
@@ -10228,7 +10256,12 @@ def parse_roadmap(text: str, problems: list[str] | None = None) -> list[dict]:
             if sid in ids:
                 problems.append(f"line {n}: scope {sid} appears twice")
             ids.add(sid)
-            phases[-1]["scopes"].append((sid, (m.group(2) or "").strip()))
+            what, refs = split_after((m.group(2) or "").strip())
+            if refs is not None:
+                phases[-1]["after_of"][sid] = (refs, n)
+                if not refs:
+                    problems.append(f"line {n}: scope {sid} has (after …) naming nothing")
+            phases[-1]["scopes"].append((sid, what))
     for p in phases:
         del p["noting"]
         p["note"] = "\n".join(p["note"]).strip("\n").splitlines()
@@ -10237,6 +10270,88 @@ def parse_roadmap(text: str, problems: list[str] | None = None) -> list[dict]:
                             f"`Scopes:` (every `## ` heading but ## {UP_NEXT} and ## {NO_PHASE} "
                             "is a phase)")
     return phases
+
+
+def waits_of(p: dict, sid: str) -> list[str]:
+    """What scope SID of phase P waits on: its own refs, then its phase's."""
+    own = p["after_of"].get(sid, ([], 0))[0]
+    return own + [r for r in p["after"] if r not in own]
+
+
+def ref_problems(phases: list[dict]) -> list[str]:
+    """Each `(after …)` ref the roadmap can't honour, by line: one naming nothing it has, one
+    naming itself (a scope its own phase, too, which waits on it), and each ring once, with all
+    its members. A ring never opens on its own: every member waits on another forever."""
+    scopes = {sid: p for p in phases for sid, _ in p["scopes"]}
+    names = {p["name"] for p in phases}
+    out: list[str] = []
+    edges: dict[str, list[str]] = {}
+    lines: dict[str, int] = {}
+    for p in phases:
+        waits = [(p["name"], p["after"], p["after_line"])] if p["after_line"] else []
+        waits += [(sid, refs, n) for sid, (refs, n) in p["after_of"].items()]
+        lines[p["name"]] = p["after_line"] or p["line"]
+        # A phase is done when its scopes are, so it waits on each of them.
+        edges[p["name"]] = [sid for sid, _ in p["scopes"]]
+        for who, refs, n in waits:
+            lines.setdefault(who, n)
+            for r in refs:
+                if r not in scopes and r not in names:
+                    out.append(f"line {n}: {who} waits on {r}, which the roadmap has no phase or "
+                               "scope for: a ref is <phase>/<scope> or <phase>")
+                elif r == who or (who in scopes and r == scopes[who]["name"]):
+                    out.append(f"line {n}: {who} waits on {r}, "
+                               + ("itself" if r == who else "its own phase, which waits on it"))
+                else:
+                    edges.setdefault(who, []).append(r)
+    for p in phases:
+        for sid, _ in p["scopes"]:
+            # A phase's wait is each of its scopes' wait.
+            for r in p["after"]:
+                if r == sid:
+                    out.append(f"line {p['after_line']}: phase {p['name']} waits on {r}, one of its "
+                               "own scopes, which then waits on itself")
+                elif (r in scopes or r in names) and r != p["name"]:
+                    edges.setdefault(sid, []).append(r)
+    for ring in rings(edges):
+        first = min(ring, key=lambda x: (lines.get(x, 0), x))
+        out.append(f"line {lines.get(first, 0)}: a ring: {', '.join(sorted(ring))} wait on each "
+                   "other, so none can start: drop one (after …)")
+    return out
+
+
+def rings(edges: dict[str, list[str]]) -> list[set[str]]:
+    """Each strongly connected set of more than one node in EDGES (Tarjan's): a ring, once."""
+    index: dict[str, int] = {}
+    low: dict[str, int] = {}
+    stack: list[str] = []
+    on: set[str] = set()
+    out: list[set[str]] = []
+
+    def visit(v: str) -> None:
+        index[v] = low[v] = len(index)
+        stack.append(v)
+        on.add(v)
+        for w in edges.get(v, []):
+            if w not in index:
+                visit(w)
+                low[v] = min(low[v], low[w])
+            elif w in on:
+                low[v] = min(low[v], index[w])
+        if low[v] == index[v]:
+            comp = set()
+            while True:
+                w = stack.pop()
+                on.discard(w)
+                comp.add(w)
+                if w == v:
+                    break
+            if len(comp) > 1:
+                out.append(comp)
+    for v in sorted(edges):
+        if v not in index:
+            visit(v)
+    return out
 
 
 def roadmap_scopes(text: str) -> set[str]:
@@ -10447,10 +10562,10 @@ def roadmap_state(snap: Snapshot) -> list[dict] | None:
             for s in spec_scopes(note_head(snap.show(note))):
                 takes.setdefault(s, []).append(spec)
                 closed[spec] = note
-    current = None
     for p in phases:
         p["scopes"] = [{"id": sid, "what": what, "specs": [(f, finished(f)) for f in takes.get(sid, [])],
-                        "notes": {f: closed[f] for f in takes.get(sid, []) if f in closed}}
+                        "notes": {f: closed[f] for f in takes.get(sid, []) if f in closed},
+                        "after": waits_of(p, sid)}
                        for sid, what in p["scopes"]]
         for s in p["scopes"]:
             s["state"] = ("open" if not s["specs"] else
@@ -10458,9 +10573,19 @@ def roadmap_state(snap: Snapshot) -> list[dict] | None:
         # A phase with nothing in it has nothing to finish, so it is never done: it would
         # otherwise read as finished work.
         p["empty"] = not p["scopes"] and not p["exit"]
-        if not p["empty"] and all(s["state"] == "done" for s in p["scopes"]) and all(t for t, _ in p["exit"]):
+        p["done"] = not p["empty"] and all(s["state"] == "done" for s in p["scopes"]) and all(t for t, _ in p["exit"])
+    # Blocked is derived from refs, as states are from specs: a qualifier, never a fourth state.
+    done = {p["name"] for p in phases if p["done"]} | {s["id"] for p in phases for s in p["scopes"]
+                                                       if s["state"] == "done"}
+    current = None
+    for p in phases:
+        p["waits"] = [r for r in p["after"] if r not in done]
+        for s in p["scopes"]:
+            s["waits"] = [r for r in s["after"] if r not in done]
+        # A phase still waiting on another isn't current work: the next one that can be is.
+        if p.pop("done"):
             p["state"] = "done"
-        elif current is None:
+        elif current is None and not p["waits"]:
             p["state"] = current = "current"
         else:
             p["state"] = "next"
@@ -10511,6 +10636,8 @@ def render_roadmap(phases: list[dict], up_next: list[dict] | None = None,
 def scope_cell(s: dict) -> str:
     name = s["id"].split("/", 1)[1]
     cell = f"**{name}**" + (f": {s['what']}" if s["what"] else "")
+    if s["state"] == "open" and s.get("waits"):
+        cell += f"<br>after {', '.join(s['waits'])}"
     # A closed spec is gone from the tree: its link is the note that completed it.
     cell += "".join(f"<br>[{Path(f).stem}]({s['notes'].get(f, f)}){' ✓' if ok else ''}" for f, ok in s["specs"])
     return cell.replace("|", "\\|")
@@ -10535,7 +10662,7 @@ def cmd_roadmap(root: Path, args) -> int:
         print(f"no roadmap: {trunk} has no {ROADMAP}")
         return 0
     problems: list[str] = []
-    parse_roadmap(snap.show(ROADMAP), problems)
+    problems += ref_problems(parse_roadmap(snap.show(ROADMAP), problems))
     up_next = parse_up_next(snap.show(ROADMAP), problems)
     no_phase = parse_no_phase(snap.show(ROADMAP), problems)
     have = set(snap.ls("docs/"))
@@ -10552,7 +10679,8 @@ def cmd_roadmap(root: Path, args) -> int:
             print(f"  [{'x' if t else ' '}] {what}")
         for s in p["scopes"]:
             specs = ", ".join(f"{f} ({'complete' if ok else 'in progress'})" for f, ok in s["specs"])
-            print(f"  {s['id']:<24} {s['state']:<6} {specs}")
+            after = f"after {', '.join(s['waits'])}" if s["state"] == "open" and s["waits"] else ""
+            print(f"  {s['id']:<24} {s['state']:<6} {'  '.join(x for x in (after, specs) if x)}".rstrip())
     if up_next:
         print(UP_NEXT)
         for i in up_next:
@@ -10888,7 +11016,7 @@ def roadmap_rules(board: "Board", branch: str, staged: bool, paths: list[str],
     out, named = [], set()
     if on_trunk and ROADMAP in paths:
         problems: list[str] = []
-        parse_roadmap(text, problems)
+        problems += ref_problems(parse_roadmap(text, problems))
         parse_up_next(text, problems)
         parse_no_phase(text, problems)
         out += [f"{ROADMAP} {x}" for x in problems]
@@ -14306,7 +14434,7 @@ def rig_next_step(board: "Board", taken: list[str], covering: list[tuple[str, li
     text = snap.show(ROADMAP)
     if not text:
         return []
-    out = []
+    out, step = [], None
     for i in parse_up_next(text):
         item = {"kind": "next-step", "id": i["id"], "path": f"{ROADMAP}#{i['id']}",
                 "content": f"{UP_NEXT}\0{i['id']}\0{i['what']}\0{i['touches']}",
@@ -14317,17 +14445,25 @@ def rig_next_step(board: "Board", taken: list[str], covering: list[tuple[str, li
             item["covered"] = sorted({w for ws in by for w in ws})
             out.append(item)
             continue
-        return out + [item]
+        step = item
+        break
+    # Every blocked open scope of a current phase is listed, waiting on its refs, so blocked
+    # work is in the picture (R1) while the step goes to the first scope that can start.
     for p in roadmap_state(snap) or []:
         if p["state"] != "current":
             continue
         for s in p["scopes"]:
-            if s["state"] == "open" and s["id"] not in taken:
-                return out + [{"kind": "next-step", "id": s["id"], "path": f"{ROADMAP}#{s['id']}",
-                               "content": f"{p['name']}\0{s['id']}\0{s['what']}", "what": s["what"],
-                               "from": f"phase {p['name']}", "touches": [], "after": [], "kept": [],
-                               "scopes": []}]
-    return out
+            if s["state"] != "open" or s["id"] in taken or (step and not s["waits"]):
+                continue
+            item = {"kind": "next-step", "id": s["id"], "path": f"{ROADMAP}#{s['id']}",
+                    "content": f"{p['name']}\0{s['id']}\0{s['what']}", "what": s["what"],
+                    "from": f"phase {p['name']}", "touches": [], "after": [], "kept": [], "scopes": []}
+            if s["waits"]:
+                item["blocked"] = s["waits"]
+                out.append(item)
+            else:
+                step = item
+    return out + ([step] if step else [])
 
 
 def reach_of(start: str, deps: dict[str, list[str]]) -> set[str]:
@@ -14352,12 +14488,13 @@ def rig_state(root: Path, board: "Board") -> dict:
         i["judged"] = held["judgment"] if isinstance(held, dict) and held.get("key") == i["key"] else None
         call = (i["judged"] or {}).get("call")
         i["state"] = ("ready" if i["kind"] == "spec" else "taken" if "covered" in i
+                      else "blocked" if "blocked" in i
                       else "built" if "built" in i else "noted" if "noted" in i
                       else "open" if i["kind"] == "next-step"
                       else (call if call in ("fixing", "concluded") else "new") if i["kind"] == "feedback"
                       else call if call in ("ready", "open") else "unjudged")
         # What carried it decides it: a judgment stored before it was carried never replays.
-        if i["state"] in ("taken", "built", "noted"):
+        if i["state"] in ("taken", "built", "noted", "blocked"):
             i["judged"] = None
     by_name = {}
     for i in items:
@@ -14372,7 +14509,7 @@ def rig_state(root: Path, board: "Board") -> dict:
     for i in items:
         i["deps"] = sorted({by_name[n]["path"] for n in i["after"] if n in by_name and by_name[n] is not i})
         i["waits_on"] = sorted({f"job {job_of[n]}" for n in i["after"] if n in job_of and n not in by_name}
-                               | set(i.pop("covered", [])))
+                               | set(i.pop("covered", [])) | set(i.pop("blocked", [])))
     # A dependency cycle never opens on its own: it waits on the owner to break it.
     deps = {i["path"]: i["deps"] for i in items}
     cycles: set[tuple[str, ...]] = set()
@@ -14496,7 +14633,8 @@ def rig_text(state: dict) -> str:
         out.append("  nothing")
     out.append("\nWaiting on:")
     waits = [i for i in items if i["waits_on"]]
-    out += [f"  {i['kind']:<7} {i['path']}  waits on {', '.join(i['waits_on'])}" for i in waits] or ["  nothing"]
+    out += [(f"  next    {i['id']}" if i["kind"] == "next-step" else f"  {i['kind']:<7} {i['path']}")
+            + f"  waits on {', '.join(i['waits_on'])}" for i in waits] or ["  nothing"]
     out.append("\nWaiting on you:")
     asks = [i for i in items if i["state"] in ("open", "unjudged", "concluded", "noted")]
     for i in asks:
@@ -14604,7 +14742,7 @@ def cmd_rig(root: Path, args) -> int:
         # A staged file's call is what places it: one stored without it would replay as unjudged.
         call = judgment.get("call", "ready" if item["kind"] not in ("staged", "feedback") else None) \
             if isinstance(judgment, dict) else None
-        if item["state"] in ("taken", "built", "noted"):
+        if item["state"] in ("taken", "built", "noted", "blocked"):
             die(f"{path} is {item['state']}: what carried it decides it, so it takes no judgment", 2)
         if item["kind"] == "feedback" and call not in ("fixing", "concluded"):
             die('--store-put on a feedback report reads a JSON object whose "call" is "fixing" (/jig:fix '

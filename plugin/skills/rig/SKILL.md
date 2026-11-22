@@ -27,8 +27,9 @@ as `/jig:fix` shows them; its specs come back as waiting specs on a later run. A
 ended with still staged is stored `concluded` (that skill says when): it waits on the owner.
 
 For each item whose `judged` is null: each staged file, and the next-step item whose `state`
-is `open` (a next-step item whose `state` is `taken` is already under way: it is listed under
-Waiting on, and gets no judgment and no question):
+is `open` (a next-step item whose `state` is `taken` is already under way, and one whose
+`state` is `blocked` is a roadmap scope waiting on the refs its `(after …)` names: each is
+listed under Waiting on, and gets no judgment and no question):
 
 - **A staged file:** read it whole. Call it `ready` when a spec can be written from it as it
   is, with no answer from the owner; `open` when it can't. An open file gets the questions the
@@ -53,7 +54,8 @@ inline visual, it may; the sections and their contents stay these.
 2. **Can start now:** each `group`, its items in the order given, each with what it comes
    after, and each overlapping pair the group's `overlaps` names.
 3. **Waiting on:** each item and what it waits for: a job, a spec or a staged file. A taken
-   staged file waits on the spec or job that carries it.
+   staged file waits on the spec or job that carries it. A blocked scope waits on the scopes
+   or phases its `(after …)` names: work, not an answer.
 4. **Waiting on you:** the open staged files, each `noted` file with the note that carried it
    (the hubnode's step), each `concluded` feedback report with what
    `/jig:fix` found, the next step whose `state` is `open`, each

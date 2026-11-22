@@ -919,6 +919,13 @@ The product is the repo, so there is one roadmap and no product level in it.
   implied, never written as a box. A duplicate phase or scope id, a phase with neither list,
   or a line under `Scopes:` that isn't a scope is refused by the hook, by line, and reported
   by `jig roadmap`. A scope may end with `(touches docs/<page>.md, …)`, the pages it will change.
+- **Dependencies**: a scope may name what it waits on, `(after <ref>, …)`, after its text and
+  before any `(touches …)`; a phase may, with a line `(after <ref>, …)` of its own in its note,
+  which applies to each of its scopes. A ref is `<phase>/<scope>` or `<phase>` in the same
+  roadmap. A wait written as prose is no wait: jig reads only this form. On trunk, when the
+  roadmap changes, the hook refuses, by line, a ref naming nothing the roadmap has, a ref to
+  itself (a scope naming its own phase too), and a ring, named once with all its members;
+  `jig roadmap` reports the same.
 - **Up next**, a reserved section that isn't a phase: work parked mid-build, in no order,
   on the owner's word. Each item reads
   `` - `<id>`: <what is parked>; stops at <where>; parked <YYYY-MM-DD> (touches docs/<page>.md, …) ``,
@@ -953,8 +960,10 @@ The product is the repo, so there is one roadmap and no product level in it.
 - **States are derived**, never edited. A scope is *open* (no spec takes it), *taken* (a spec
   that takes it isn't complete) or *done* (taken, and every spec that takes it is complete). A
   phase is *done* when every scope in it is done and every `Exit when:` box is ticked; one with
-  no scopes and no boxes is *empty*, and never done. The first phase not done is *current*,
-  the rest *next*.
+  no scopes and no boxes is *empty*, and never done. The first phase not done whose own
+  `(after …)` refs are all done is *current*, the rest *next*. A scope is **blocked** while any
+  ref, its own or its phase's, isn't done: derived like the states, a qualifier on them, never
+  a fourth. `jig roadmap` and the view add `after <ref>` beside an open blocked scope.
 - **The view**, `ROADMAP.md` at the root, generated from tracked files and never edited by hand: a line of the
   phases with their states, then per phase its note, its exit boxes and a board, a table with Open, Taken
   and Done columns holding its scopes, each with its specs linked, then Up next, each item with
@@ -973,9 +982,11 @@ The product is the repo, so there is one roadmap and no product level in it.
   first Up next item whose pages no open job's, waiting spec's or staged file's Touches names
   (by the page itself: a glob or a folder doesn't count, and an Up next item has no scope id
   to take), else the current phase's first open scope that no waiting spec or staged file
-  takes by its `Scope:` line. An Up next item passed over is listed as waiting on what names
-  its pages. `jig rig` (Workflow) proposes it to the owner and
-  never writes the roadmap.
+  takes by its `Scope:` line and that isn't blocked. An Up next item passed over is listed as
+  waiting on what names its pages, and each blocked open scope of the current phase as waiting
+  on its refs, under rig's Waiting on: it waits on work, not on an answer. A current phase
+  whose every open scope is blocked offers no step. `jig rig` (Workflow) proposes it to the
+  owner and never writes the roadmap.
 
 ## Decision log
 

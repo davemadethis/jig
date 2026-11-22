@@ -5156,6 +5156,58 @@ l = open('ROADMAP.md').read().splitlines()
 assert l.index('## a (current)') < l.index('## Up next') < l.index('## No phase'), l"
 msg="no phase: the review, spec and RULES texts send work with no phase to ## No phase, and parked work to Up next"
 expect_pass sh -c "for f in '$P/../skills/review/SKILL.md' '$P/../skills/spec/SKILL.md' '$P/jig/RULES.md'; do grep -q 'No phase' \"\$f\" || exit 1; done"
+
+# A scope or phase names what it waits on, so rig never offers blocked work and a ring is refused.
+ranew() { pcnew "$T/ra$1" && mkdir -p docs && printf '# X\n\nX is.\n' > docs/x.md && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board; }
+ranew 1
+rnext() { $J rig --json | python3 -c "import json,sys; d=json.load(sys.stdin); print(' '.join(x['id'] + ':' + x['state'] for x in d['items'] if x['kind'] == 'next-step'))"; }
+printf '# Roadmap\n\n## alpha\nScopes:\n- `pairing`: pairing with the host (after alpha/host) (touches docs/x.md)\n- `host`: the host\n' > .jig/roadmap.md
+git add -A && git commit -qm deps
+msg="after: rig offers alpha/host and lists alpha/pairing under Waiting on:, not as the next step"
+out=$($J rig 2>&1)
+expect_pass sh -c "echo \"\$0\" | sed -n '/^Waiting on:/,/^\$/p' | grep -q 'next    alpha/pairing  waits on alpha/host' \
+  && echo \"\$0\" | sed -n '/^Waiting on you:/,/^\$/p' | grep -q 'next    alpha/host (phase alpha): the host' \
+  && ! echo \"\$0\" | sed -n '/^Waiting on you:/,/^\$/p' | grep -q pairing" "$out"
+msg="after: the blocked scope is a next-step item in state blocked, the step after it"
+expect_pass test "$(rnext)" = "alpha/host:open alpha/pairing:blocked"
+msg="after: jig roadmap shows pairing open with after alpha/host, the (after …) out of its text"
+expect_pass sh -c "$J roadmap | grep -qE '^  alpha/pairing +open +after alpha/host$' && $J roadmap --write >/dev/null && grep -q 'pairing with the host (touches docs/x.md)<br>after alpha/host' ROADMAP.md"
+git checkout -q -- . 2>/dev/null; rm -f ROADMAP.md
+rspec h alpha/host && git add -A && git commit -qm h && rsolo h
+msg="after: once the spec taking alpha/host is complete, rig offers alpha/pairing"
+expect_pass test "$(rnext)" = "alpha/pairing:open"
+ranew 2
+printf '# Roadmap\n\n## beta\nThe second stage.\n(after alpha)\n\nScopes:\n- `b1`: one\n\n## alpha\nScopes:\n- `a1`: first\n' > .jig/roadmap.md
+git add -A && git commit -qm phases
+msg="after: a phase waiting on another isn't current, and none of its scopes is offered"
+expect_pass sh -c "test '$(rnext)' = 'alpha/a1:open' && $J roadmap | grep -qx 'beta  next' && $J roadmap | grep -qx 'alpha  current'"
+rspec a alpha/a1 && git add -A && git commit -qm a && rsolo a
+msg="after: once alpha is done, beta's first scope is offered"
+expect_pass test "$(rnext)" = "beta/b1:open"
+ranew 3
+printf '# Roadmap\n\n## alpha\nScopes:\n- `a`: one (after alpha/c)\n- `b`: two (after alpha/c)\n- `c`: three (after beta)\n\n## beta\nScopes:\n- `z`: later\n' > .jig/roadmap.md
+git add -A && git commit -qm blocked
+msg="after: every open scope of the current phase blocked: no roadmap next step, each listed"
+out=$($J rig 2>&1)
+expect_pass sh -c "test '$(rnext)' = 'alpha/a:blocked alpha/b:blocked alpha/c:blocked' \
+  && echo \"\$0\" | sed -n '/^Waiting on:/,/^\$/p' | grep -q 'next    alpha/c  waits on beta' \
+  && ! echo \"\$0\" | sed -n '/^Waiting on you:/,/^\$/p' | grep -q 'next '" "$out"
+rbad() { printf "$1" > .jig/roadmap.md && git add -A; out=$(git commit -qm bad 2>&1); rc=$?; git reset -q --hard; }
+msg="after: a ring is refused on trunk, named once with both members"
+rbad '## alpha\nScopes:\n- `a`: x (after alpha/b)\n- `b`: y (after alpha/a)\n'
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'line 3: a ring: alpha/a, alpha/b wait on each other' && test \$(echo \"\$0\" | grep -c 'a ring') = 1" "$out"
+msg="after: a ring through a phase's (after …) is refused too"
+rbad '## alpha\nScopes:\n- `a`: x (after beta)\n\n## beta\n(after alpha)\nScopes:\n- `b`: y\n'
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'a ring: ' && echo \"\$0\" | grep 'a ring' | grep -q alpha/a" "$out"
+msg="after: a wait on nothing the roadmap has is refused by line"
+rbad '## alpha\nScopes:\n- `a`: x (after alpha/nope)\n'
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'line 3: alpha/a waits on alpha/nope, which the roadmap has no phase or scope for'" "$out"
+msg="after: a scope naming itself is refused by line, and so is one naming its own phase"
+rbad '## alpha\nScopes:\n- `a`: x (after alpha/a)\n- `b`: y (after alpha)\n'
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'line 3: alpha/a waits on alpha/a, itself' && echo \"\$0\" | grep -q 'line 4: alpha/b waits on alpha, its own phase'" "$out"
+msg="after: jig roadmap reports a ring the trunk already holds"
+printf '## alpha\nScopes:\n- `a`: x (after alpha/b)\n- `b`: y (after alpha/a)\n' > .jig/roadmap.md && git add -A && git -c core.hooksPath=/dev/null commit -qm ring
+expect_pass sh -c "$J roadmap | grep -q 'a ring: alpha/a, alpha/b'"
 }
 
 # ---------------------------------------------------------------- project and product
