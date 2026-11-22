@@ -44,12 +44,12 @@ Before anything is built:
    it writes: `AGENTS.md`, a skill, a script, or a section of `.jig/process.md`.
 5. Read the pages `jig reading-list <those files>` prints. A page describes
    the code; where it disagrees, the code on trunk is reality and the page is stale. For each
-   roadmap item it lists under a page (an `## Up next` item or a scope), say in the spec which
-   it is: **adopt** (this task builds it; its content goes into the page's body, and an Up
-   next item leaves the roadmap when the job merges), **depart** (the task goes another way,
-   and why), or **leave** (out of scope). Work parked mid-build is an Up next item, naming its
-   pages, and named work with no phase yet a `## No phase` item, each added on the owner's
-   word as a roadmap change (`/jig:stage`), never written on a page. The spec is where project
+   roadmap item it lists under a page (a `## No phase` item or a scope), say in the spec which
+   it is: **adopt** (this task builds it; its content goes into the page's body, and the spec
+   takes it with its `Scope:` line, `No phase/<id>` for an item, so it reads done when the job
+   lands), **depart** (the task goes another way, and why), or **leave** (out of scope). Work
+   with no phase yet, parked mid-build (naming its pages) or not started, is a `## No phase`
+   item, added on the owner's word as a roadmap change (`/jig:stage`), never written on a page. The spec is where project
    meets product: of each decision entry and page change it plans, ask is this about the product, about when and in what order we build it, or about how the
    repository is worked? What is the project stays in the spec or the roadmap, and how the repo is
    worked goes to its home by the test in `.jig/RULES.md` (Homes), never a page; the pages and entries it writes describe the
