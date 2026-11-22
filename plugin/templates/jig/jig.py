@@ -14502,9 +14502,10 @@ def unblocking_step(phases: list[dict], blocked: list[dict], taken: list[str], s
             todo += [(x, why) for x in p["waits"]] + [(s["id"], why) for s in p["scopes"]]
         elif ref in of:
             p, s = of[ref]
-            if s["state"] != "open" or s["id"] in taken:
+            if s["state"] == "done":
                 continue
-            if not s["waits"]:
+            # A taken scope is under way and never offered, but what it waits on still blocks it.
+            if s["state"] == "open" and s["id"] not in taken and not s["waits"]:
                 return scope_item(p, s, f"; {why} waits on it")
             todo += [(x, why) for x in s["waits"]]
     return None
@@ -14545,6 +14546,10 @@ def rig_state(root: Path, board: "Board") -> dict:
         if i["kind"] != "next-step":
             by_name.setdefault(i["id"], i)
             by_name.setdefault(Path(i["id"]).stem, i)
+    # A spec or staged file taking a blocked scope waits on that scope's refs, as `Build after`
+    # waits: starting it would be starting blocked work.
+    blocked_by = {s["id"]: s["waits"] for p in roadmap_state(Snapshot(board.trunk)) or []
+                  for s in p["scopes"] if s["state"] != "done" and s["waits"]}
     # A spec that opened as a job under another name is still the one an item builds after.
     job_of = {n: n for n in board.jobs}
     for n, j in sorted(board.jobs.items()):
@@ -14553,7 +14558,8 @@ def rig_state(root: Path, board: "Board") -> dict:
     for i in items:
         i["deps"] = sorted({by_name[n]["path"] for n in i["after"] if n in by_name and by_name[n] is not i})
         i["waits_on"] = sorted({f"job {job_of[n]}" for n in i["after"] if n in job_of and n not in by_name}
-                               | set(i.pop("covered", [])) | set(i.pop("blocked", [])))
+                               | set(i.pop("covered", [])) | set(i.pop("blocked", []))
+                               | {r for sc in i["scopes"] for r in blocked_by.get(sc, [])})
     # A dependency cycle never opens on its own: it waits on the owner to break it.
     deps = {i["path"]: i["deps"] for i in items}
     cycles: set[tuple[str, ...]] = set()

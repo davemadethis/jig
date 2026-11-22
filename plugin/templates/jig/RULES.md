@@ -986,10 +986,13 @@ The product is the repo, so there is one roadmap and no product level in it.
   takes by its `Scope:` line and that isn't blocked. An Up next item passed over is listed as
   waiting on what names its pages, and each blocked open scope of the current phase as waiting
   on its refs, under rig's Waiting on: it waits on work, not on an answer. A current phase
-  whose every open scope is blocked offers no step of its own: rig offers instead the first
-  open, unblocked scope no one takes that they wait on, directly or through a chain, so work
-  starts as soon as it isn't blocked, as a phase's own wait makes the phase it names current. `jig rig` (Workflow) proposes it to the
-  owner and never writes the roadmap.
+  whose every open scope no spec takes is blocked offers no step of its own: rig offers
+  instead the first open, unblocked scope no one takes that they wait on, directly or through
+  a chain (a taken scope's waits included), so work starts as soon as it isn't blocked, as a
+  phase's own wait makes the phase it names current. A waiting spec or staged file whose
+  `Scope:` names a blocked scope waits on that scope's refs, as a `Build after` waits, and
+  never starts. `jig rig` (Workflow) proposes the step to the owner and never writes the
+  roadmap.
 
 ## Decision log
 
