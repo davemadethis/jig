@@ -102,8 +102,10 @@ goes to him. The card rule below says that for every repo.
 - [ ] The symptom: a fresh tier-2 worker is given rig's new step-1 paragraph, `/jig:decision-cards`' Is it
       open?, and a staged request whose owner quote says "`/x` lists the nodes connected to it" and
       whose stager note says "Decide whether `/x` lists only connected nodes". It returns no
-      question about that list, and calls the file `ready` unless something else is open. With the old
-      paragraph, the same input yields the question. Both outputs are kept in the notes folder.
+      question about that list, and calls the file `ready` unless something else is open. Both outputs
+      are kept in the notes folder. (Amended in review: the contrast "with the old paragraph, the same
+      input yields the question" is dropped. A fresh worker with a short brief did not ask it under the
+      old text either, 0 of 2 runs, so no cheap fixture shows it. The handoff says so.)
 - [ ] `python3 .jig/jig.py queue -- .jig/scripts/check.sh` passes.
 
 ## Out of scope

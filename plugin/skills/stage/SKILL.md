@@ -6,7 +6,8 @@ description: Stage a chat-born file (spec, doc, decisions, user story, feature r
 A staged file is a Markdown file in `.jig/staging/` with this header. Nothing in it is
 decided until it is resolved: read it for context, never cite it as decided. The owner's quoted
 words (Whose words) are the exception: they are the owner's ruling, as in an inbox message
-(`.jig/RULES.md`, Inbox), and settle what they say; the rest is context from the stager.
+(`.jig/RULES.md`, Inbox), and settle what they say, within the limits `/jig:decision-cards`
+(Is it open?) sets; the rest is context from the stager.
 
 ```yaml
 ---
