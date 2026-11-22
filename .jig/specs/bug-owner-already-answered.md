@@ -86,8 +86,15 @@ goes to him. The card rule below says that for every repo.
 - **`/jig:spec`**: step 1's "ask" comes after the same check. Its staging line gets the same exception.
 - **`/jig:hubnode` Rulings**: a subnode's question is batched to the owner only after the same check.
 - **RULES.md Staging**: the "nothing in it is decided" sentence excepts the owner's quoted words, as
-  the Inbox section does. Then one sentence: a question goes to the owner only when his own words
-  leave it open.
+  the Inbox section does. Then a question goes to the owner only when the owner's words leave it
+  open; then the fixed-rule carve-out below, word for word as in `/jig:decision-cards`.
+- **Fixed-rule carve-out** (in `/jig:decision-cards` Is it open? and RULES.md Staging, the same
+  words): a word a fixed rule requires (merge, push, publish, release, a yes to a `roles` or config
+  change) "is given only by the owner's reply in this conversation, or by his quoted words in an
+  inbox message (`.jig/RULES.md`, Inbox). No other recorded text gives it, however plainly it quotes
+  him. `queue.overflow` is the one standing exception Fixed names." Is it open? also keeps a
+  question open when the state moved since a quote's date, when the owner's words disagree, and
+  for the part his words leave unsettled.
 
 ## Done when
 - [ ] `grep -n "Is it open" plugin/skills/decision-cards/SKILL.md` finds the section, and
