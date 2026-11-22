@@ -3232,19 +3232,16 @@ def proposed_added(trunk: str, commit: str) -> list[dict]:
             if e["status"].startswith("Proposed") and before.get(e["id"]) != e["block"]]
 
 
-def merged_copies(branch: str, trunk: str, path: str) -> list[str]:
-    """PATH as merging BRANCH into TRUNK leaves it: the side that changed it since their merge
-    base, the branch's when neither did. When both did, both copies, since the merge is theirs
-    to resolve. A scope re-pointed on trunk, or added there after the job opened, counts; one
-    the branch re-pointed away from doesn't."""
-    base = git("merge-base", branch, trunk)
-    b, t = git("show", f"{branch}:{path}"), git("show", f"{trunk}:{path}")
-    m = git("show", f"{base}:{path}") if base else ""
-    if b == m:
-        return [t]
-    if t == m:
-        return [b]
-    return [b, t]
+def merged_spec(rev: str, trunk: str, path: str) -> str:
+    """PATH as merging REV into TRUNK leaves it, by git's own merge of the two, written as a
+    tree and never checked out: a scope re-pointed on trunk, or added there after the job
+    opened, counts, and one the branch re-pointed away from doesn't, whatever else either side
+    changed. A merge git can't make is refused later by the gate's own merge; meanwhile REV's
+    copy is read."""
+    p = subprocess.run(["git", "merge-tree", "--write-tree", "--no-messages", rev, trunk],
+                       capture_output=True, text=True)
+    tree = p.stdout.split("\n", 1)[0].strip()
+    return git("show", f"{tree if p.returncode == 0 and tree else rev}:{path}")
 
 
 def cmd_gate(root: Path, args) -> int:
@@ -3280,16 +3277,20 @@ def cmd_gate(root: Path, args) -> int:
         # such spec would leave built work open, offered again.
         named_spec = re.search(r"^Spec: (\S+)", body, re.M)
         specs = job_specs(branch, name, trunk) | ({named_spec.group(1)} if named_spec else set())
-        took = {sc for f in specs for text in merged_copies(branch, trunk, f) for sc in spec_scopes(text)} \
+        at = re.search(r"^Commit: (\w+)", body, re.M)
+        took = {sc for f in specs for sc in spec_scopes(merged_spec(at.group(1) if at else branch, trunk, f))} \
             | set(scopes_in(note, body))
+        on_trunk = roadmap_scopes(at_rev(trunk, ROADMAP))
         for l in sec.group(1).splitlines():
             u = ITEM_LINE.match(l.strip())
             if u and l not in open_lines and (why := item_answer(u.group(5))):
                 open_lines.append(f"{l.strip()}   <- {why}")
             elif u and l not in open_lines and u.group(1) == NO_PHASE and u.group(2) not in took \
                     and u.group(5).strip().lower().startswith("built"):
-                open_lines.append(f"{l.strip()}   <- built, but no spec of this job takes {u.group(2)}: "
-                                  f"add `Scope: {u.group(2)}` to the spec, so the item reads done")
+                open_lines.append(f"{l.strip()}   <- built, but " + (
+                    f"no spec of this job takes {u.group(2)}: add `Scope: {u.group(2)}` to the spec, so "
+                    "the item reads done" if u.group(2) in on_trunk else
+                    f"{u.group(2)} is gone from {trunk}'s roadmap: `jig sync`, then hand off again"))
         for l in sec.group(1).splitlines():
             if l not in open_lines and (why := pair_problem(l)):
                 open_lines.append(f"{l.strip()}   <- {why}")

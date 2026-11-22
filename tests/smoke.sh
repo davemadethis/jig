@@ -5254,6 +5254,12 @@ git add -A && git commit -qm plan && $J open G --spec .jig/specs/g.md --owns 'sr
   && pcfold && sed -i.bak 's/ — built \/ untouched \/ departed: smoke/ — built: it works/' .jig/handoffs/G-*.md && rm .jig/handoffs/*.bak && git add -A && git commit -qm "note G" ) >/dev/null 2>&1
 msg="one list: a spec the branch re-points away from an item no longer takes it: built on it is refused, as the merge would leave it open"
 gate_ok G; expect_pass sh -c "test $? != 0 && echo \"\$0\" | grep -q 'no spec of this job takes No phase/p' && ! echo \"\$0\" | grep -q 'takes No phase/q'" "$out"
+printf '\nMore intent.\n' >> .jig/specs/g.md && git commit -qam "g: more on trunk"
+msg="one list: with trunk editing the spec elsewhere too, the merge still takes only q: built on p is refused"
+gate_ok G; expect_pass sh -c "test $? != 0 && echo \"\$0\" | grep -q 'no spec of this job takes No phase/p' && ! echo \"\$0\" | grep -q 'takes No phase/q'" "$out"
+sed -i.bak 's/`p`: offline/`p2`: offline/' .jig/roadmap.md && sed -i.bak 's|^Scope: No phase/p$|Scope: No phase/p2|' .jig/specs/g.md && rm .jig/roadmap.md.bak .jig/specs/g.md.bak && git commit -qam "p is p2"
+msg="one list: an item trunk renamed since the handoff is refused as gone from trunk, with jig sync as the way on"
+gate_ok G; expect_pass sh -c "test $? != 0 && echo \"\$0\" | grep -q 'No phase/p is gone from main.s roadmap: .jig sync., then hand off again' && ! echo \"\$0\" | grep -q 'add .Scope: No phase/p.'" "$out"
 msg="no phase: the review, spec and RULES texts send work with no phase, parked or not, to ## No phase"
 expect_pass sh -c "for f in '$P/../skills/review/SKILL.md' '$P/../skills/spec/SKILL.md' '$P/jig/RULES.md'; do grep -q 'No phase' \"\$f\" || exit 1; done"
 
