@@ -139,7 +139,10 @@ The commit hook refuses an entry without a reason, and any that weakens a fixed 
 ## Rulings
 
 A subnode messages you when it writes a `Proposed` entry or meets a question only the owner
-can answer. Batch those to the owner while the job builds (`/jig:decision-cards`), and send each ruling back before
+can answer. Check each against the owner's own words first, as
+`/jig:decision-cards` (Is it open?) says: one they answer goes back to the subnode with those
+words, not to the owner.
+Batch the rest to the owner while the job builds (`/jig:decision-cards`), and send each ruling back before
 the job's review. Mark no job ready while its own `Proposed` entry has no ruling, unless the
 owner said to gate it as proposed; `jig gate` warns of each one.
 

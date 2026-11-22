@@ -7,6 +7,18 @@ A decision card puts the owner's pending decisions in one place, the same way ev
 turns the owner's picks into one reply. The card only fills the reply; the owner's sent reply
 is the answer.
 
+## Is it open?
+
+A block is a decision the owner's own words leave open. Before writing one, search them: the
+quoted words (`The owner, <date>: "…"`) and `## Owner's answers` of a staged file, a spec's
+Intent and its `Source:` quote, `.jig/decisions.md`, and the owner's rulings in this
+conversation. A question they answer gets no block: act on it, and record it with the owner's
+words. A finding they decide is a fix, not a question: it misses the spec (`/jig:review`). If
+the recommended option restates the owner's words, the question is already answered.
+
+Each block's context line says what leaves it open: the owner's sentence that does, quoted,
+or "the owner's words say nothing on this".
+
 ## The card
 
 - **One block per decision.** A line naming what it's about, a line of context, then the

@@ -1206,7 +1206,9 @@ the change began, each claimed by one entry. One added later does.
 
 `.jig/staging/` is where a chat drops a file meant for a repo: a spec, a doc, decision entries, a
 user story, a feature request, a roadmap change, a metarepo's pin-bump request. It is never committed, and nothing in it is decided — read it
-for context, never cite it. Each file's header names its `target` (a repo name, or `this`), `kind`, `change`
+for context, never cite it — but for the owner's own words, quoted as `The owner, <date>: "<words>"`:
+as in an inbox message (Inbox), those are the owner's ruling, and the rest is context from the
+stager. A question goes to the owner only when the owner's own words leave it open. Each file's header names its `target` (a repo name, or `this`), `kind`, `change`
 (`new` or `update`), `destination` inside the target, and `source`. A destination is a bare
 path, with no space and no `:`, `,` or `;`: a spec, doc or decisions file whose destination
 carries anything else (`.jig/decisions.md, on branch x`, `see docs/x.md`) is refused, never
