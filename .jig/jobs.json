@@ -17,5 +17,16 @@
       "plugin/skills/retro/SKILL.md"
     ],
     "reserved": {}
+  },
+  "bug-docstring-escape": {
+    "spec": ".jig/specs/bug-docstring-escape.md",
+    "state": "claimed",
+    "after": [],
+    "owns": [],
+    "shares": [
+      "plugin/templates/jig/jig.py",
+      ".jig/scripts/check.sh"
+    ],
+    "reserved": {}
   }
 }
