@@ -22,9 +22,9 @@ the subnode. A finding they decide is a fix, not a question: it misses the spec
 already answered. But the question stays open when:
 
 - **A fixed rule needs the owner's word.** Merge, push, publish, release, or a yes to a
-  change of `roles` or config is given only by the owner's reply in this conversation, or by
-  his quoted words in an inbox message (`.jig/RULES.md`, Inbox). No other recorded text gives
-  it, however plainly it quotes him. `queue.overflow` is the one standing exception Fixed names.
+  change of `roles` or config is given only by the owner's reply in the hubnode's
+  conversation. No recorded text gives it, an inbox message's quote included, however plainly
+  it quotes him. `queue.overflow` is the one standing exception Fixed names.
 - **The state moved.** A quote answers the state it was written against. If what it decides
   has changed since its date, ask again, and say what changed.
 - **The words disagree.** Two of the owner's sentences, or a quote and an accepted entry, that
