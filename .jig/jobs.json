@@ -41,7 +41,9 @@
       "plugin/skills/stage/SKILL.md",
       "plugin/skills/spec/SKILL.md",
       "plugin/skills/hubnode/SKILL.md",
-      "plugin/templates/jig/RULES.md"
+      "plugin/templates/jig/RULES.md",
+      "plugin/skills/release/SKILL.md",
+      "plugin/templates/jig/jig.py"
     ],
     "reserved": {}
   }
