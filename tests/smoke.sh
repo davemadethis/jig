@@ -5187,18 +5187,48 @@ expect_pass test "$(rnext)" = "beta/b1:open"
 ranew 3
 printf '# Roadmap\n\n## alpha\nScopes:\n- `a`: one (after alpha/c)\n- `b`: two (after alpha/c)\n- `c`: three (after beta)\n\n## beta\nScopes:\n- `z`: later\n' > .jig/roadmap.md
 git add -A && git commit -qm blocked
-msg="after: every open scope of the current phase blocked: no roadmap next step, each listed"
+msg="after: every open scope of the current phase blocked: none offered, each listed, and the scope they wait on through a chain is offered"
 out=$($J rig 2>&1)
-expect_pass sh -c "test '$(rnext)' = 'alpha/a:blocked alpha/b:blocked alpha/c:blocked' \
+expect_pass sh -c "test '$(rnext)' = 'alpha/a:blocked alpha/b:blocked alpha/c:blocked beta/z:open' \
   && echo \"\$0\" | sed -n '/^Waiting on:/,/^\$/p' | grep -q 'next    alpha/c  waits on beta' \
-  && ! echo \"\$0\" | sed -n '/^Waiting on you:/,/^\$/p' | grep -q 'next '" "$out"
+  && echo \"\$0\" | sed -n '/^Waiting on you:/,/^\$/p' | grep -q 'next    beta/z (phase beta; alpha/c waits on it): later' \
+  && ! echo \"\$0\" | sed -n '/^Waiting on you:/,/^\$/p' | grep -q 'next    alpha/'" "$out"
+rspec z beta/z && git add -A && git commit -qm z
+msg="after: with the waited-on scope taken, rig offers no next step and lists each blocked scope"
+expect_pass test "$(rnext)" = "alpha/a:blocked alpha/b:blocked alpha/c:blocked"
+ranew 4
+printf '# Roadmap\n\n## alpha\nScopes:\n- `a`: x (after beta/b)\n\n## beta\nScopes:\n- `b`: y\n' > .jig/roadmap.md && git add -A && git commit -qm e3
+msg="after: a scope waiting on a later phase's open scope gets that scope offered, as a phase wait would"
+expect_pass test "$(rnext)" = "alpha/a:blocked beta/b:open"
+ranew 5
+printf '# Roadmap\n\n## beta\nWhat beta needs:\n- a working host\n(after alpha)\n\nScopes:\n- `b`: y\n\n## alpha\nScopes:\n- `a`: x\n' > .jig/roadmap.md && git add -A && git commit -qm e5
+msg="after: a phase (after …) after a list in its note is read, not dropped: rig offers alpha/a, not beta/b"
+expect_pass sh -c "test '$(rnext)' = 'alpha/a:open' && $J roadmap | grep -qx 'beta  next'"
+printf '# Roadmap\n\n## beta\nExit when:\n- [ ] ships\n(after alpha)\nScopes:\n- `b`: y\n\n## alpha\nScopes:\n- `a`: x\n' > .jig/roadmap.md && git add -A && git commit -qm boxes
+msg="after: a phase (after …) among its Exit when boxes is read too"
+expect_pass test "$(rnext)" = "alpha/a:open"
 rbad() { printf "$1" > .jig/roadmap.md && git add -A; out=$(git commit -qm bad 2>&1); rc=$?; git reset -q --hard; }
 msg="after: a ring is refused on trunk, named once with both members"
 rbad '## alpha\nScopes:\n- `a`: x (after alpha/b)\n- `b`: y (after alpha/a)\n'
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'line 3: a ring: alpha/a, alpha/b wait on each other' && test \$(echo \"\$0\" | grep -c 'a ring') = 1" "$out"
-msg="after: a ring through a phase's (after …) is refused too"
+msg="after: a ring through a phase's (after …) is refused too, at the first line writing one of its waits"
 rbad '## alpha\nScopes:\n- `a`: x (after beta)\n\n## beta\n(after alpha)\nScopes:\n- `b`: y\n'
-expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'a ring: ' && echo \"\$0\" | grep 'a ring' | grep -q alpha/a" "$out"
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'line 3: a ring: alpha, alpha/a, beta, beta/b wait on each other'" "$out"
+msg="after: a ring of inherited waits alone is reported at the phase's (after …) line"
+rbad '## alpha\n(after beta)\nScopes:\n- `a`: x\n\n## beta\n(after alpha)\nScopes:\n- `b`: y\n'
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'line 2: a ring: '" "$out"
+msg="after: (after) with nothing inside is refused by line"
+rbad '## alpha\nScopes:\n- `a`: x (after)\n'
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'line 3: scope alpha/a has (after …) naming nothing'" "$out"
+msg="after: a chain of 1500 waits commits: the ring check is no recursion"
+python3 - > .jig/roadmap.md <<'PY'
+n = 1500
+print('## alpha\nScopes:')
+for i in range(n):
+    print(f'- `s{i}`: x' + (f' (after alpha/s{i + 1})' if i + 1 < n else ''))
+PY
+expect_pass sh -c "git add -A && git commit -qm chain && $J roadmap >/dev/null"
+git reset -q --hard HEAD~1
 msg="after: a wait on nothing the roadmap has is refused by line"
 rbad '## alpha\nScopes:\n- `a`: x (after alpha/nope)\n'
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'line 3: alpha/a waits on alpha/nope, which the roadmap has no phase or scope for'" "$out"

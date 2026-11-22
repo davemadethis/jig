@@ -920,8 +920,9 @@ The product is the repo, so there is one roadmap and no product level in it.
   or a line under `Scopes:` that isn't a scope is refused by the hook, by line, and reported
   by `jig roadmap`. A scope may end with `(touches docs/<page>.md, …)`, the pages it will change.
 - **Dependencies**: a scope may name what it waits on, `(after <ref>, …)`, after its text and
-  before any `(touches …)`; a phase may, with a line `(after <ref>, …)` of its own in its note,
-  which applies to each of its scopes. A ref is `<phase>/<scope>` or `<phase>` in the same
+  before any `(touches …)`; a phase may, with a line `(after <ref>, …)` of its own anywhere
+  outside its `Scopes:` (its note, after a list, among its boxes), which applies to each of
+  its scopes. A ref is `<phase>/<scope>` or `<phase>` in the same
   roadmap. A wait written as prose is no wait: jig reads only this form. On trunk, when the
   roadmap changes, the hook refuses, by line, a ref naming nothing the roadmap has, a ref to
   itself (a scope naming its own phase too), and a ring, named once with all its members;
@@ -985,7 +986,9 @@ The product is the repo, so there is one roadmap and no product level in it.
   takes by its `Scope:` line and that isn't blocked. An Up next item passed over is listed as
   waiting on what names its pages, and each blocked open scope of the current phase as waiting
   on its refs, under rig's Waiting on: it waits on work, not on an answer. A current phase
-  whose every open scope is blocked offers no step. `jig rig` (Workflow) proposes it to the
+  whose every open scope is blocked offers no step of its own: rig offers instead the first
+  open, unblocked scope no one takes that they wait on, directly or through a chain, so work
+  starts as soon as it isn't blocked, as a phase's own wait makes the phase it names current. `jig rig` (Workflow) proposes it to the
   owner and never writes the roadmap.
 
 ## Decision log

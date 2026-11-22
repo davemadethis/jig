@@ -10081,7 +10081,7 @@ def split_touches(what: str) -> tuple[str, list[str]]:
 # `(after alpha/host, beta)` at the end of a scope, before any `(touches …)` so TOUCHES stays
 # anchored at the line's end: what the scope waits on. A line of its own in a phase's note is
 # the phase's, and applies to each of its scopes. A ref is `<phase>/<scope>` or `<phase>`.
-AFTER = re.compile(r"\s*\(after\s+([^()]*)\)\s*$")
+AFTER = re.compile(r"\s*\(after(?:\s+([^()]*))?\)\s*$")
 
 
 def split_after(what: str) -> tuple[str, list[str] | None]:
@@ -10095,8 +10095,8 @@ def split_after(what: str) -> tuple[str, list[str] | None]:
     return (head[:a.start()].rstrip() + tail), refs_of(a.group(1))
 
 
-def refs_of(text: str) -> list[str]:
-    return [r.strip().strip("`").strip() for r in text.split(",") if r.strip().strip("`").strip()]
+def refs_of(text: str | None) -> list[str]:
+    return [r.strip().strip("`").strip() for r in (text or "").split(",") if r.strip().strip("`").strip()]
 
 
 def parse_up_next(text: str, problems: list[str] | None = None) -> list[dict]:
@@ -10229,17 +10229,21 @@ def parse_roadmap(text: str, problems: list[str] | None = None) -> list[dict]:
             part = ""
         elif skip or not phases:
             continue
+        elif part != "scopes" and (a := AFTER.fullmatch(line.strip())):
+            # The phase's wait, read wherever it sits outside Scopes:, so a wait written after a
+            # list in the note or among the boxes is never dropped and offered as free work.
+            if in_note:
+                phases[-1]["note"].append(line)
+            if phases[-1]["after_line"]:
+                problems.append(f"line {n}: phase {phases[-1]['name']} has a second (after …) "
+                                f"line: one line names all it waits on")
+            phases[-1]["after"], phases[-1]["after_line"] = refs_of(a.group(1)), n
+            if not phases[-1]["after"]:
+                problems.append(f"line {n}: phase {phases[-1]['name']} has (after …) naming nothing")
         elif not part and re.match(r"\s*[-*+] ", line):
             phases[-1]["noting"] = False
         elif not part and phases[-1]["noting"] and not re.fullmatch(r"(?i)(exit when|scopes):", line.strip()):
             phases[-1]["note"].append(line)
-            if a := AFTER.fullmatch(line.strip()):
-                if phases[-1]["after_line"]:
-                    problems.append(f"line {n}: phase {phases[-1]['name']} has a second (after …) "
-                                    f"line: one line names all it waits on")
-                phases[-1]["after"], phases[-1]["after_line"] = refs_of(a.group(1)), n
-                if not phases[-1]["after"]:
-                    problems.append(f"line {n}: phase {phases[-1]['name']} has (after …) naming nothing")
         elif re.fullmatch(r"(?i)exit when:", line.strip()):
             part, phases[-1]["headed"] = "exit", True
         elif re.fullmatch(r"(?i)scopes:", line.strip()):
@@ -10290,7 +10294,8 @@ def ref_problems(phases: list[dict]) -> list[str]:
     for p in phases:
         waits = [(p["name"], p["after"], p["after_line"])] if p["after_line"] else []
         waits += [(sid, refs, n) for sid, (refs, n) in p["after_of"].items()]
-        lines[p["name"]] = p["after_line"] or p["line"]
+        if p["after_line"]:
+            lines[p["name"]] = p["after_line"]
         # A phase is done when its scopes are, so it waits on each of them.
         edges[p["name"]] = [sid for sid, _ in p["scopes"]]
         for who, refs, n in waits:
@@ -10313,44 +10318,53 @@ def ref_problems(phases: list[dict]) -> list[str]:
                                "own scopes, which then waits on itself")
                 elif (r in scopes or r in names) and r != p["name"]:
                     edges.setdefault(sid, []).append(r)
+                    lines.setdefault(sid, p["after_line"])
     for ring in rings(edges):
-        first = min(ring, key=lambda x: (lines.get(x, 0), x))
-        out.append(f"line {lines.get(first, 0)}: a ring: {', '.join(sorted(ring))} wait on each "
+        # Every ring holds a wait, so it is reported at the first line that writes one.
+        first = min((x for x in ring if x in lines), key=lambda x: (lines[x], x))
+        out.append(f"line {lines[first]}: a ring: {', '.join(sorted(ring))} wait on each "
                    "other, so none can start: drop one (after …)")
     return out
 
 
 def rings(edges: dict[str, list[str]]) -> list[set[str]]:
-    """Each strongly connected set of more than one node in EDGES (Tarjan's): a ring, once."""
+    """Each strongly connected set of more than one node in EDGES (Tarjan's): a ring, once.
+    Iterative, so a long chain of waits can't exhaust the stack and crash the hook."""
     index: dict[str, int] = {}
     low: dict[str, int] = {}
     stack: list[str] = []
     on: set[str] = set()
     out: list[set[str]] = []
-
-    def visit(v: str) -> None:
-        index[v] = low[v] = len(index)
-        stack.append(v)
-        on.add(v)
-        for w in edges.get(v, []):
-            if w not in index:
-                visit(w)
-                low[v] = min(low[v], low[w])
-            elif w in on:
-                low[v] = min(low[v], index[w])
-        if low[v] == index[v]:
-            comp = set()
-            while True:
-                w = stack.pop()
-                on.discard(w)
-                comp.add(w)
-                if w == v:
-                    break
-            if len(comp) > 1:
-                out.append(comp)
-    for v in sorted(edges):
-        if v not in index:
-            visit(v)
+    for root in sorted(edges):
+        if root in index:
+            continue
+        work = [(root, 0)]
+        while work:
+            v, i = work.pop()
+            if i == 0:
+                index[v] = low[v] = len(index)
+                stack.append(v)
+                on.add(v)
+            nexts = edges.get(v, [])
+            if i > 0:
+                low[v] = min(low[v], low[nexts[i - 1]])
+            while i < len(nexts) and (nexts[i] in index):
+                if nexts[i] in on:
+                    low[v] = min(low[v], index[nexts[i]])
+                i += 1
+            if i < len(nexts):
+                work += [(v, i + 1), (nexts[i], 0)]
+                continue
+            if low[v] == index[v]:
+                comp = set()
+                while True:
+                    w = stack.pop()
+                    on.discard(w)
+                    comp.add(w)
+                    if w == v:
+                        break
+                if len(comp) > 1:
+                    out.append(comp)
     return out
 
 
@@ -14447,23 +14461,53 @@ def rig_next_step(board: "Board", taken: list[str], covering: list[tuple[str, li
             continue
         step = item
         break
+    phases = roadmap_state(snap) or []
+    scope_item = lambda p, s, why="": {
+        "kind": "next-step", "id": s["id"], "path": f"{ROADMAP}#{s['id']}",
+        "content": f"{p['name']}\0{s['id']}\0{s['what']}", "what": s["what"],
+        "from": f"phase {p['name']}{why}", "touches": [], "after": [], "kept": [], "scopes": []}
     # Every blocked open scope of a current phase is listed, waiting on its refs, so blocked
     # work is in the picture (R1) while the step goes to the first scope that can start.
-    for p in roadmap_state(snap) or []:
+    blocked = []
+    for p in phases:
         if p["state"] != "current":
             continue
         for s in p["scopes"]:
             if s["state"] != "open" or s["id"] in taken or (step and not s["waits"]):
                 continue
-            item = {"kind": "next-step", "id": s["id"], "path": f"{ROADMAP}#{s['id']}",
-                    "content": f"{p['name']}\0{s['id']}\0{s['what']}", "what": s["what"],
-                    "from": f"phase {p['name']}", "touches": [], "after": [], "kept": [], "scopes": []}
             if s["waits"]:
-                item["blocked"] = s["waits"]
-                out.append(item)
+                blocked.append(dict(scope_item(p, s), blocked=s["waits"]))
             else:
-                step = item
-    return out + ([step] if step else [])
+                step = scope_item(p, s)
+    if not step and blocked:
+        step = unblocking_step(phases, blocked, taken, scope_item)
+    return out + blocked + ([step] if step else [])
+
+
+def unblocking_step(phases: list[dict], blocked: list[dict], taken: list[str], scope_item) -> dict | None:
+    """When the current phase offers nothing because its open scopes are blocked, the first open,
+    unblocked scope no one takes that they wait on, directly or through a chain: work gets done
+    as soon as it isn't blocked (R1), as a phase's own wait makes the phase it names current."""
+    of = {s["id"]: (p, s) for p in phases for s in p["scopes"]}
+    named = {p["name"]: p for p in phases}
+    seen: set[str] = set()
+    todo = [(r, b["id"]) for b in blocked for r in b["blocked"]]
+    while todo:
+        ref, why = todo.pop(0)
+        if ref in seen:
+            continue
+        seen.add(ref)
+        if ref in named:
+            p = named[ref]
+            todo += [(x, why) for x in p["waits"]] + [(s["id"], why) for s in p["scopes"]]
+        elif ref in of:
+            p, s = of[ref]
+            if s["state"] != "open" or s["id"] in taken:
+                continue
+            if not s["waits"]:
+                return scope_item(p, s, f"; {why} waits on it")
+            todo += [(x, why) for x in s["waits"]]
+    return None
 
 
 def reach_of(start: str, deps: dict[str, list[str]]) -> set[str]:

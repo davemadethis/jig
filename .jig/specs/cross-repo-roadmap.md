@@ -80,7 +80,8 @@ is Parts B to D, and their "item 13" (one list per product) is Part B with item 
 4. `jig rig`'s next step skips a blocked open scope. Each blocked open scope in a current
    phase is listed under "Waiting on:" as `next    <id>  waits on <ref>, …`, which brings blocked
    items to the owner's attention (R1). If every open scope in a phase is blocked, that phase
-   offers no next step.
+   offers no next step; rig offers instead the first open, unblocked, untaken scope they wait
+   on, directly or through a chain (the hubnode, from the review of 626a69a).
 
 **Part B: one list for work with no phase** (any roadmap; item 13 of the end state, built first
 so products in Part C get it for free)
@@ -176,7 +177,7 @@ Part A, in a stand-alone repo:
 - [ ] (fix fires) `## alpha` with `pairing: … (after alpha/host) (touches docs/x.md)` then `host`: `jig rig` offers `alpha/host`, and lists `next    alpha/pairing  waits on alpha/host` under "Waiting on:", not as the next step. `jig roadmap` shows pairing `open` with `after alpha/host`.
 - [ ] (unblocked) Once a spec taking `alpha/host` is complete on trunk, `jig rig` offers `alpha/pairing`.
 - [ ] (phase) `## beta` whose note has `(after alpha)` and whose scopes are open, with `alpha` not done: no beta scope is offered or counted as current work. Once alpha is done, beta's first scope is offered.
-- [ ] (all blocked) A current phase whose every open scope is blocked: rig offers no roadmap next step and lists each blocked scope.
+- [ ] (all blocked) A current phase whose every open scope is blocked: rig offers no next step from that phase and lists each blocked scope. When a scope they wait on, directly or through a chain, is open, unblocked and untaken, rig offers it (R1: "Work gets done as soon as its not blocked"), as a phase's own `(after …)` makes the phase it names current.
 - [ ] (ring) `a (after alpha/b)` and `b (after alpha/a)`: the trunk commit is refused, naming the ring once with `alpha/a` and `alpha/b`.
 - [ ] (a wait on nothing) `(after alpha/nope)` is refused by line, and so is a scope naming itself.
 - [ ] (no regression) `python3 .jig/jig.py queue -- bash tests/smoke.sh roadmap rig` passes.
