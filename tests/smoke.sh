@@ -513,8 +513,8 @@ assert all(j.squeeze(l) in j.RETIRED for l in gone), gone"
   msg="update $name: hooks read trunk's .jig/jig.py and none was kept as .local; .git/jig/enabled, no .git/aidev, no old ignore line"
   expect_pass sh -c "grep -q 'git show main:.jig/jig.py' .git/hooks/pre-commit && ! ls .git/hooks/*.local && test -f .git/jig/enabled && test ! -e .git/aidev && ! grep -q worktrees .gitignore"
 
-  msg="update $name: nothing tracked is left in jig/, .aidev/, specs/ or ledgers/; the config is stamped 10, with release.sh, publish.sh and an empty decision log added"
-  expect_pass sh -c "test -z \"\$(git ls-files jig .aidev specs ledgers .jig/lanes.json)\" && ! grep -q payload .jig/config.json && grep -q '\"version\": 10' .jig/config.json && git ls-files --error-unmatch .jig/scripts/release.sh .jig/scripts/publish.sh .jig/decisions.md"
+  msg="update $name: nothing tracked is left in jig/, .aidev/, specs/ or ledgers/; the config is stamped 11, with release.sh, publish.sh and an empty decision log added"
+  expect_pass sh -c "test -z \"\$(git ls-files jig .aidev specs ledgers .jig/lanes.json)\" && ! grep -q payload .jig/config.json && grep -q '\"version\": 11' .jig/config.json && git ls-files --error-unmatch .jig/scripts/release.sh .jig/scripts/publish.sh .jig/decisions.md"
 
   msg="update $name: publish.sh is added from the template, TODO line included, and staged"
   expect_pass sh -c "git diff --cached --name-status | grep -q '^A.\.jig/scripts/publish.sh$' && grep -q '^# TODO: publish steps\.' .jig/scripts/publish.sh && test -x .jig/scripts/publish.sh"
@@ -740,7 +740,7 @@ for line in subprocess.check_output(['git', 'diff', '--cached', '-M', '--name-st
       expect_pass sh -c "python3 -c \"import json; b = json.load(open('.jig/config.json')); assert b['trunk'] == 'main' and 'lanes' not in b and 'seen' not in b and 'main' not in b and 'next' not in b['reserve']['section'], b\" && test ! -e .claude/claude-lane && git diff --cached -M --name-status | grep -q '^R100.*old-2026-01-01.md'";;
     dot-jig-v7)
       msg="update $gen: the one-file board splits: config.json without jobs or log, an empty jobs.json, no lanes.json"
-      expect_pass sh -c "python3 -c \"import json; c = json.load(open('.jig/config.json')); assert c['version'] == 10 and not {'lanes', 'log'} & set(c) and json.load(open('.jig/jobs.json')) == {}, c\" && test ! -e .jig/lanes.json && echo \"\$0\" | grep -q 'board: lanes.old (merged)' && echo \"\$0\" | grep -q 'board: log'" "$out";;
+      expect_pass sh -c "python3 -c \"import json; c = json.load(open('.jig/config.json')); assert c['version'] == 11 and not {'lanes', 'log'} & set(c) and json.load(open('.jig/jobs.json')) == {}, c\" && test ! -e .jig/lanes.json && echo \"\$0\" | grep -q 'board: lanes.old (merged)' && echo \"\$0\" | grep -q 'board: log'" "$out";;
   esac
 
   msg="update $gen: a second update is up to date"
@@ -776,7 +776,7 @@ msg="init: config.json holds the settings, no jobs and no log; jobs.json is empt
 expect_pass python3 -c "
 import json; c = json.load(open('.jig/config.json')); j = json.load(open('.jig/jobs.json'))
 assert sorted(c) == sorted(['version', 'name', 'trunk', 'common', 'append_files', 'reserve', 'docmap', 'not_docs', 'release', 'reference_files']), c
-assert c['version'] == 10 and j == {}, (c, j)"
+assert c['version'] == 11 and j == {}, (c, j)"
 python3 - <<'EOF'
 import json; c = json.load(open('.jig/config.json'))
 c['reserve'] = {'section': {'pattern': r'^## (\d+) ', 'files': ['docs/**']}, 'loose': {}}
@@ -5206,6 +5206,10 @@ $UP --apply >/dev/null 2>&1
 expect_pass sh -c "echo \"\$0\" | grep -q 'fold .jig/roadmap.md.s ## Up next into ## No phase' && ! grep -q '## Up next' .jig/roadmap.md && grep -q '^- .p.: parked' .jig/roadmap.md && git commit -qm 'jig update: fold'" "$out"
 msg="migration: the fold rewrote ROADMAP.md with it, so jig roadmap finds the view current"
 expect_pass sh -c "! $J roadmap | grep -q stale && grep -q '\*\*p\*\*' ROADMAP.md"
+git -C "$R" show 485c13e:plugin/templates/jig/jig.py > "$T/jig-485c13e.py"
+msg="migration: an older plugin's update refuses the folded repo, so it can't reinstall the old checker"
+out=$(python3 "$T/jig-485c13e.py" update --apply 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'this jig writes 10' && grep -q '^STAMP = 11' .jig/jig.py && git diff --quiet" "$out"
 
 # The one list's waits: a spec on a blocked item, and a scope waiting on a page-less item.
 pcnew "$T/rl20" && mkdir -p docs && printf '# X\n\nX is.\n' > docs/x.md && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
@@ -5218,6 +5222,13 @@ msg="one list: a scope waiting on a page-less item gets that item offered, as wh
 expect_pass sh -c "test \"\$($J rig --json | python3 -c \"import json,sys; d=json.load(sys.stdin); print(' '.join(x['id'] + ':' + x['state'] for x in d['items'] if x['kind'] == 'next-step'))\")\" = 'No phase/q:open alpha/s:blocked' \
   && $J rig | grep -q 'next    No phase/q (No phase; alpha/s waits on it): later'"
 
+pcnew "$T/rl22" && mkdir -p docs && printf '# X\n\nX is.\n' > docs/x.md && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
+printf '# Roadmap\n\n## alpha\nScopes:\n- `s`: x (after No phase/p)\n\n## No phase\n- `p`: parked (touches docs/x.md)\n' > .jig/roadmap.md
+mkdir -p .jig/specs && printf '# W\n\nSource: smoke\n\n## Intent\nx\n\n## Touches\n- `docs/x.md`\n' > .jig/specs/w.md && git add -A && git commit -qm covered
+msg="one list: an item a waiting spec's Touches covers is never offered, through the walk either"
+expect_pass sh -c "test \"\$($J rig --json | python3 -c \"import json,sys; d=json.load(sys.stdin); print(' '.join(x['id'] + ':' + x['state'] for x in d['items'] if x['kind'] == 'next-step'))\")\" = 'No phase/p:taken alpha/s:blocked' \
+  && ! $J rig | sed -n '/^Waiting on you:/,/^\$/p' | grep -q 'next    No phase/p'"
+
 # A built answer on a list item no spec takes would leave built work open: the gate says so.
 pcnew "$T/gb" && mkdir -p docs src && printf '# X\n\nX is.\n' > docs/x.md && printf 'x = 1\n' > src/x.py
 git add -A && git commit -qm init && $J init >/dev/null && board "b['docmap'] = {'docs/x.md': ['src/**']}" && git add -A && git commit -qm board
@@ -5227,6 +5238,10 @@ git add -A && git commit -qm plan && $J open G --spec .jig/specs/g.md --owns 'sr
   && pcfold && sed -i.bak 's/ — built \/ untouched \/ departed: smoke/ — built: it works offline/' .jig/handoffs/G-*.md && rm .jig/handoffs/*.bak && git add -A && git commit -qm "note G" ) >/dev/null 2>&1
 msg="one list: the gate refuses built on a list item no spec of the job takes, saying to add its Scope: line"
 gate_ok G; expect_pass sh -c "test $? != 0 && echo \"\$0\" | grep -q 'built, but no spec of this job takes No phase/p: add .Scope: No phase/p.'" "$out"
+sed -i.bak 's/^Source: smoke$/Source: smoke\nScope: No phase\/p/' .jig/specs/g.md && rm .jig/specs/g.md.bak && git commit -qam "scope on trunk"
+msg="one list: a Scope: line added on trunk after the job opened counts: the built answer passes"
+gate_ok G; expect_pass sh -c "! echo \"\$0\" | grep -q 'no spec of this job takes'" "$out"
+git revert --no-edit -q HEAD >/dev/null 2>&1
 ( cd .git/jig/worktrees/G && sed -i.bak 's/^Source: smoke$/Source: smoke\nScope: No phase\/p/' .jig/specs/g.md && rm .jig/specs/g.md.bak && git commit -qam scope ) >/dev/null 2>&1
 msg="one list: with the spec taking it, the built answer passes the gate"
 gate_ok G; rc=$?; expect_pass sh -c "! echo \"\$0\" | grep -q 'no spec of this job takes'" "$out"

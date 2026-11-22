@@ -37,9 +37,12 @@ DEFERRED = f"{DIR}/ledgers/DEFERRED.md"
 # A merged job has no state: its entry is gone, deleted in its merge commit.
 STATES = ["claimed", "building", "ready", "gated", "parked"]
 # The layout this copy of jig writes into the config's "version". Any change that adds a
-# LAYOUT row, a config default or an update STEP bumps it. Nothing branches on it except
-# update's refusal to take a newer repo back to an older jig.
-STAMP = 10
+# LAYOUT row, a config default or an update STEP bumps it. Update branches on it twice: it
+# refuses to take a newer repo back to an older jig, and it folds `## Up next` only once trunk's
+# committed checker is ONE_LIST or newer (knows_one_list).
+STAMP = 11
+# The first STAMP whose checker reads the one list, `## No phase` items naming pages included.
+ONE_LIST = 11
 BOARD_DEFAULTS = {
     "version": STAMP,
     "name": "",            # init and update fill it with the folder name; staging's targets match it
@@ -3262,7 +3265,9 @@ def cmd_gate(root: Path, args) -> int:
         # such spec would leave built work open, offered again.
         named_spec = re.search(r"^Spec: (\S+)", body, re.M)
         specs = job_specs(branch, name, trunk) | ({named_spec.group(1)} if named_spec else set())
-        took = {sc for f in specs for sc in spec_scopes(git("show", f"{branch}:{f}"))} | set(scopes_in(note, body))
+        # Trunk's copy counts too: a scope re-pointed there, or added after the job opened.
+        took = {sc for f in specs for rev in (branch, trunk) for sc in spec_scopes(git("show", f"{rev}:{f}"))} \
+            | set(scopes_in(note, body))
         for l in sec.group(1).splitlines():
             u = ITEM_LINE.match(l.strip())
             if u and l not in open_lines and (why := item_answer(u.group(5))):
@@ -11443,12 +11448,20 @@ def up_next_heading(text: str) -> bool:
     return False
 
 
+def trunk_stamp(root: Path) -> int | None:
+    """The STAMP of trunk's committed jig.py, the copy the hook runs; None when trunk has none."""
+    text = git("show", f"{Board.trunk_name(root)}:{DIR}/jig.py", cwd=str(root))
+    if not text:
+        return None
+    m = re.search(r"^STAMP = (\d+)", text, re.M)
+    return int(m.group(1)) if m else 0
+
+
 def knows_one_list(root: Path) -> bool:
-    """Whether trunk's committed jig.py, the copy the hook runs, reads the one list. An older
-    copy refuses a page-naming `## No phase` item, so the fold waits for the commit that
-    installs this one: the next `jig update --apply` folds, and this checker judges it."""
-    trunk = Board.trunk_name(root)
-    return "def list_phase(" in git("show", f"{trunk}:{DIR}/jig.py", cwd=str(root))
+    """Whether trunk's committed checker reads the one list. An older one refuses a page-naming
+    `## No phase` item, so the fold waits for the commit that installs this one: the next
+    `jig update --apply` folds, and this checker judges it."""
+    return (trunk_stamp(root) or 0) >= ONE_LIST
 
 
 def fold_up_next(text: str) -> str:
@@ -11492,9 +11505,11 @@ STEPS: list = [
     (f"fold {ROADMAP}'s ## {UP_NEXT} into ## {NO_PHASE}, ids and text kept: one list for work with "
      f"no phase, its items taken by a spec's `Scope: {NO_PHASE}/<id>`; the hook then refuses ## {UP_NEXT}",
      lambda root, after: has_up_next(root) and knows_one_list(root), fold_roadmap),
-    (f"{ROADMAP}'s ## {UP_NEXT} waits to fold into ## {NO_PHASE}: the checker on trunk is older and "
-     f"would refuse the folded list. Commit this update, which installs the checker that reads it, "
-     f"then run `jig update --apply` again to fold",
+    (lambda root: f"{ROADMAP}'s ## {UP_NEXT} waits to fold into ## {NO_PHASE}: "
+     + ("trunk has no committed checker yet" if trunk_stamp(root) is None else
+        "the checker on trunk is older and would refuse the folded list")
+     + ". Commit this update, which installs the checker that reads it, then run "
+     "`jig update --apply` again to fold",
      lambda root, after: has_up_next(root) and not knows_one_list(root), lambda root, here: None),
     (f"add {STAGING}/ (its .gitignore), where chats drop files for this repo",
      lambda root, after: f"{STAGING}/.gitignore" not in after
@@ -14531,7 +14546,9 @@ def rig_next_step(board: "Board", taken: list[str], covering: list[tuple[str, li
             continue
         if not step:
             step = item
-    walked, blocked = roadmap_step(phases, taken, items)
+    # A list item passed over, its pages named or it blocked, is under way or waiting: the walk
+    # never offers it as what unblocks a scope.
+    walked, blocked = roadmap_step(phases, taken + [i["id"] for i in out], items)
     step = step or walked
     return out + blocked + ([step] if step else [])
 
