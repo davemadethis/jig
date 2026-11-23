@@ -5769,6 +5769,52 @@ msg="phase types: the metarepo's own phases are one product: alpha after Demos i
 printf '\n## Demos\nScopes:\n- `d`: x\n\n## alpha\nScopes:\n- `a`: x\n' >> .jig/roadmap.md
 git add -A; out=$(git commit -qm 'GLOSSARY: own phases out of order' 2>&1); rc=$?; git reset -q --hard
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'phase alpha (Prototype) comes after Demos (Production)' && ! echo \"\$0\" | grep -q 'Familiar App alpha (Prototype) comes'" "$out"
+
+# Filters: jig roadmap narrows its listing and the view; problems and the exit code never change.
+printf '# Roadmap\n\n## Walyt alpha\nScopes:\n- `w1`: x\n- `w2`: x (after Walyt alpha/w1)\n\n## Familiar App alpha\nScopes:\n- `f1`: x\n\n## Familiar App Pilot A\nScopes:\n- `f2`: x\n\n## Walyt Launch\nScopes:\n- `w3`: x\n\n## Familiar App No phase\n- `idea`: x\n' > .jig/roadmap.md
+git add -A && git commit -qm 'GLOSSARY: two products planned'
+mkdir -p .jig/specs && printf '# s1\n\nSource: smoke\nScope: Walyt alpha/w1, Walyt Launch/w3\n\n## Intent\nx\n' > .jig/specs/s1.md && plant "spec s1"
+msg="filters: --product Walyt --phase alpha prints Walyt alpha and its scopes only"
+out=$($J roadmap --product Walyt --phase alpha 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -qx 'Walyt alpha  Prototype, current' && echo \"\$0\" | grep -q '^  Walyt alpha/w2 ' && ! echo \"\$0\" | grep -q 'Familiar App' && ! echo \"\$0\" | grep -q 'Walyt Launch' && ! echo \"\$0\" | grep -qx 'No phase'" "$out"
+msg="filters: --phase alpha prints both products' alphas, and --phase 'Walyt alpha' the one heading"
+out=$($J roadmap --phase alpha 2>&1); out2=$($J roadmap --phase 'walyt ALPHA' 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -qx 'Walyt alpha  Prototype, current' && echo \"\$0\" | grep -qx 'Familiar App alpha  Prototype, current' && ! echo \"\$0\" | grep -q 'Pilot A' && echo \"\$1\" | grep -qx 'Walyt alpha  Prototype, current' && ! echo \"\$1\" | grep -q 'Familiar App'" "$out" "$out2"
+msg="filters: --type pilot prints only Familiar App Pilot A, and no list"
+out=$($J roadmap --type pilot 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -qx 'Familiar App Pilot A  Pilot, next' && test \$(echo \"\$0\" | grep -cE '^[A-Z].*  (Prototype|Pilot|Production), ') = 1 && ! echo \"\$0\" | grep -q 'No phase'" "$out"
+msg="filters: --state open drops every taken scope, and every phase left empty"
+out=$($J roadmap --state open 2>&1)
+expect_pass sh -c "! echo \"\$0\" | grep -q 'Walyt alpha/w1 ' && ! echo \"\$0\" | grep -q 'Walyt Launch' && echo \"\$0\" | grep -q '^  Walyt alpha/w2 ' && echo \"\$0\" | grep -q '^  Familiar App No phase/idea '" "$out"
+msg="filters: --state blocked prints only open scopes with an unmet after"
+out=$($J roadmap --state blocked 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -q '^  Walyt alpha/w2 .*after Walyt alpha/w1' && test \$(echo \"\$0\" | grep -c '^  ') = 1 && ! echo \"\$0\" | grep -q 'Familiar App'" "$out"
+msg="filters: --owner pb prints only Familiar App's phases and its No phase list"
+out=$($J roadmap --owner PB 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -qx 'Familiar App alpha  Prototype, current' && echo \"\$0\" | grep -qx 'Familiar App Pilot A  Pilot, next' && echo \"\$0\" | grep -q '^  Familiar App No phase/idea ' && ! echo \"\$0\" | grep -q 'Walyt'" "$out"
+msg="filters: --owner meta prints none of the products' phases, owned by pa and pb"
+out=$($J roadmap --owner meta 2>&1)
+expect_pass sh -c "! echo \"\$0\" | grep -q 'Walyt\|Familiar App'" "$out"
+msg="filters: --product Walty is refused, naming Walyt and Familiar App"
+out=$($J roadmap --product Walty 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'walty' && echo \"\$0\" | grep -q 'Familiar App, Walyt'" "$out"
+msg="filters: an unknown --type or --owner is refused, naming the known ones"
+out=$($J roadmap --type beta 2>&1); rc=$?; out2=$($J roadmap --owner pc 2>&1); rc2=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'prototype, pilot, production' && test $rc2 != 0 && echo \"\$1\" | grep -q 'meta, pa, pb'" "$out" "$out2"
+msg="filters: --view --product Walyt prints Walyt's phases as Markdown, and ROADMAP.md is unchanged"
+before=$(cat ROADMAP.md 2>/dev/null | shasum)
+out=$($J roadmap --view --product Walyt 2>/dev/null)
+expect_pass sh -c "echo \"\$0\" | grep -qx '## Walyt alpha (Prototype, current)' && echo \"\$0\" | grep -qx '## Walyt Launch (Production, next)' && ! echo \"\$0\" | grep -q 'Familiar App' && test \"\$(cat ROADMAP.md 2>/dev/null | shasum)\" = '$before' && test -z \"\$(git status --porcelain)\"" "$out"
+msg="filters: --write with a filter is refused: ROADMAP.md is always the whole roadmap"
+expect_refuse $J roadmap --write --product Walyt
+msg="filters: a dead touch under Familiar App still prints with --product Walyt, and it exits 1"
+python3 -c "f='.jig/roadmap.md'; t=open(f).read(); open(f,'w').write(t.replace('- \`f2\`: x', '- \`f2\`: x (touches docs/nope.md)'))" && plant "dead touch"
+out=$($J roadmap --product Walyt 2>&1); rc=$?
+expect_pass sh -c "test $rc = 1 && echo \"\$0\" | grep -q 'touches docs/nope.md' && echo \"\$0\" | grep -qx 'Walyt alpha  Prototype, current' && ! echo \"\$0\" | grep -q '^Familiar App'" "$out"
+msg="filters: in a stand-alone repo, --type prototype prints alpha only"
+cd "$PT" && printf '# Roadmap\n\n## alpha\nScopes:\n- `a`: x\n\n## Pilot A\nScopes:\n- `p`: x\n\n## Launch\nScopes:\n- `l`: x\n' > .jig/roadmap.md && plant "three phases"
+out=$($J roadmap --type prototype 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -qx 'alpha  Prototype, current' && ! echo \"\$0\" | grep -q 'Pilot A' && ! echo \"\$0\" | grep -q 'Launch'" "$out"
 }
 
 sec_boundary() {

@@ -109,7 +109,8 @@ task tracker anyone ticks.
 
 A stage of a roadmap, in order, with an exit checklist. A phase has no dates. It isn't a
 sprint. Its type comes from its name: Prototype (`alpha`, `beta`, …), Pilot (`Pilot A`, …) or
-Production (any other name), in that order within a product.
+Production (any other name), in that order within a product. `jig roadmap --product <product>
+--phase <phase>` shows one phase of one product.
 
 ## Scope
 

@@ -943,6 +943,19 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
   in the same update. `jig roadmap` prints each phase's type beside
   its state, and the view shows it in the phase line and each phase's heading
   (`## alpha (Prototype, current)`).
+- **Filters**: `jig roadmap` takes `--product`, `--phase`, `--type`, `--state` and `--owner`,
+  each repeatable and case folded; values of one flag are or'd, different flags and'ed.
+  Product, phase, type and owner choose phases: `--phase alpha` is every product's alpha,
+  `--phase "Widget alpha"` that one heading. `--owner` is the repo a product's `Owner:` names; a
+  metarepo's own phases and its `this repo` products are the metarepo's, and in a stand-alone
+  repo everything is the repo's. `--state` (`open`, `taken`, `done`, `blocked`, `unknown`)
+  chooses scopes within them, and a phase left with no scope isn't printed. A No phase item
+  matches product, owner and state; `--phase "No phase"` chooses the lists, and `--type`
+  leaves them out. A filter hides rows, never a problem: the problems print in full and the
+  exit code is unchanged. A product, owner or type naming nothing jig knows is refused, naming
+  the known values. `jig roadmap --view [filters]` prints the view's Markdown for what they
+  choose to the terminal; `--write` refuses a filter, since `ROADMAP.md` is always the whole
+  roadmap.
 - **No phase**, the one reserved section that isn't a phase, and the one list for work with
   no phase, in no order, on the owner's word: work parked mid-build and work not started, one
   place for both. Each item reads `` - `<id>`: <what it is> ``, unindented, optionally ending

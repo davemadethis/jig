@@ -11097,10 +11097,80 @@ def scope_cell(s: dict) -> str:
     return cell.replace("|", "\\|")
 
 
+# `jig roadmap`'s filters, each repeatable: values of one flag are or'd, different flags and'ed.
+# One table, so a new filter (a label, say) is one row here and one test in roadmap_filter.
+ROADMAP_FILTERS = {
+    "product": "a product's term, as its glossary section names it",
+    "phase": "a phase's name, with or without its product (`alpha`, `Widget alpha`), or `No phase`",
+    "type": "prototype, pilot or production",
+    "state": "open, taken, done, blocked (open and waiting) or unknown",
+    "owner": "the repo that owns the work: a product's Owner:, or this repo for its own phases",
+}
+FILTER_STATES = ("open", "taken", "done", "blocked", "unknown")
+
+
+def roadmap_filters(args) -> dict[str, set[str]]:
+    """The filters ARGS sets, each flag's values case folded; {} for none."""
+    return {k: {v.casefold() for v in vals} for k in ROADMAP_FILTERS if (vals := getattr(args, k, None))}
+
+
+def roadmap_filter(phases: list[dict], items: list[dict], filt: dict[str, set[str]],
+                   owners: dict[str, str], me: str) -> tuple[list[dict], list[dict]]:
+    """(phases, items) FILT chooses. Product, phase, type and owner choose phases; state chooses
+    scopes within them, and a phase it leaves with no scope goes. A list item matches product,
+    owner and state; `No phase` among the phases chooses the lists, and a type leaves them out.
+    ME is the repo the roadmap's own sections and `this repo` products belong to. A value
+    naming nothing jig knows dies, naming the known ones, so a typo never reads as an empty
+    roadmap."""
+    owner_of = lambda pr: owners[pr] if pr and owners.get(pr, THIS_REPO) != THIS_REPO else me
+    known = {
+        "product": sorted(owners),
+        "type": [t.casefold() for t in PHASE_TYPES],
+        "state": list(FILTER_STATES),
+        "owner": sorted({me} | {owner_of(pr) for pr in owners}),
+    }
+    for k, vals in filt.items():
+        if k in known and (bad := sorted(vals - {x.casefold() for x in known[k]})):
+            die(f"--{k} {', '.join(bad)}: {'no such ' + k if known[k] else 'this roadmap has no ' + k + 's'}"
+                + (f"; known: {', '.join(known[k])}" if known[k] else ""))
+
+    def chosen(k: str, value: str) -> bool:
+        return k not in filt or value.casefold() in filt[k]
+
+    def scope_in(s: dict) -> bool:
+        if "state" not in filt:
+            return True
+        states = {s["state"]} | ({"blocked"} if s["state"] == "open" and s.get("waits") else set())
+        return bool(states & filt["state"])
+
+    def common(product: str) -> bool:
+        return chosen("product", product) and chosen("owner", owner_of(product))
+
+    out = []
+    for p in phases:
+        own = p["name"][len(p["product"]):].strip() if p["product"] else p["name"]
+        if not common(p["product"]) or not chosen("type", p["type"]):
+            continue
+        if "phase" in filt and not ({p["name"].casefold(), own.casefold()} & filt["phase"]):
+            continue
+        scopes = [s for s in p["scopes"] if scope_in(s)]
+        if "state" in filt and not scopes:
+            continue
+        out.append(dict(p, scopes=scopes))
+    # A list item is in no phase: `--phase "No phase"`, or its product's list by name, chooses it.
+    kept = [i for i in items if "type" not in filt and common(i["product"]) and scope_in(i)
+            and ("phase" not in filt or {NO_PHASE.casefold(), i["id"].rsplit("/", 1)[0].casefold()} & filt["phase"])]
+    return out, kept
+
+
 def cmd_roadmap(root: Path, args) -> int:
     board = Board.load(root, working_tree=True)
     trunk = board.trunk
     fam = family(root, trunk)
+    filt = roadmap_filters(args)
+    if args.write and (filt or args.view):
+        die(f"--write takes no filter: {ROADMAP_VIEW} is always the whole roadmap; "
+            "`jig roadmap --view <filters>` prints a part of it")
     if args.write:
         if fam.reads_meta:
             die(f"the roadmap is {fam.meta_name}'s: its view is written there")
@@ -11123,8 +11193,13 @@ def cmd_roadmap(root: Path, args) -> int:
         return 0
     phases, items = full
     text = fam.text if fam.reads_meta else snap.show(ROADMAP)
+    me = fam.meta_name if fam.reads_meta else \
+        (load_meta(trunk) or {}).get("name") or board.data.get("name") or main_root().name
+    shown, shown_items = roadmap_filter(phases, items, filt, fam.owners, me)
+    # The view goes to stdout alone, so it can be piped; the problems still print, to stderr.
+    say = (lambda *a: print(*a, file=sys.stderr)) if args.view else print
     if fam.reads_meta:
-        print(f"{ROADMAP} is {fam.meta_name}'s, read from its trunk")
+        say(f"{ROADMAP} is {fam.meta_name}'s, read from its trunk")
     problems: list[str] = []
     parsed = parse_roadmap(text, problems)
     problems += ref_problems(parsed, parse_no_phase(text, problems))
@@ -11135,14 +11210,17 @@ def cmd_roadmap(root: Path, args) -> int:
     problems += [f"product {pr}: its Owner: names {o}, which `jig repos` doesn't know"
                  for pr, o in fam.unknown_owners()]
     for x in problems:
-        print(f"{ROADMAP} {x}")
+        say(f"{ROADMAP} {x}")
     for name in fam.unreachable:
-        print(f"{name} can't be reached here (`jig repos`): its products' scopes read unknown")
+        say(f"{name} can't be reached here (`jig repos`): its products' scopes read unknown")
     if fam.kind == "meta":
         for who, ref in unconfirmed(text, fam.owners):
-            print(f"unconfirmed: {who} waits on {ref}, whose section doesn't say (needed by {who}): "
-                  "the owner rules on it; it blocks nothing")
-    for p in phases:
+            say(f"unconfirmed: {who} waits on {ref}, whose section doesn't say (needed by {who}): "
+                "the owner rules on it; it blocks nothing")
+    if args.view:
+        print(render_roadmap(shown, shown_items), end="")
+        return 1 if problems else 0
+    for p in shown:
         print(f"{p['name']}  {p['type']}, {p['state']}"
               + ("  (empty: no scopes and no exit boxes)" if p["empty"] else ""))
         for n in p["note"]:
@@ -11153,9 +11231,9 @@ def cmd_roadmap(root: Path, args) -> int:
             specs = ", ".join(f"{f} ({'complete' if ok else 'in progress'})" for f, ok in s["specs"])
             after = f"after {', '.join(s['waits'])}" if s["state"] == "open" and s["waits"] else ""
             print(f"  {s['id']:<24} {s['state']:<6} {'  '.join(x for x in (after, specs) if x)}".rstrip())
-    if items:
+    if shown_items:
         print(NO_PHASE)
-        for s in items:
+        for s in shown_items:
             specs = ", ".join(f"{f} ({'complete' if ok else 'in progress'})" for f, ok in s["specs"])
             after = f"after {', '.join(s['waits'])}" if s["state"] == "open" and s["waits"] else ""
             pages = f"(touches {', '.join(s['touches'])})" if s["touches"] else ""
@@ -15642,6 +15720,10 @@ def main(argv: list[str] | None = None) -> int:
                    help="this chunk doesn't finish its spec: the roadmap keeps it taken")
     rm = sub.add_parser("roadmap", help="the roadmap's phases and scopes, and their states on trunk")
     rm.add_argument("--write", action="store_true", help=f"regenerate {ROADMAP_VIEW} in the trunk checkout")
+    rm.add_argument("--view", action="store_true",
+                    help=f"print {ROADMAP_VIEW}'s Markdown for what the filters choose, to the terminal")
+    for k, what in ROADMAP_FILTERS.items():
+        rm.add_argument(f"--{k}", action="append", default=[], metavar=k.upper(), help=f"only {what}; repeatable")
     rl = sub.add_parser("reading-list", help="what to read before touching these files")
     rl.add_argument("paths", nargs="+", metavar="path")
     rl.add_argument("--claims", action="store_true",
