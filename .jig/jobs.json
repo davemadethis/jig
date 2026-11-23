@@ -18,24 +18,6 @@
     ],
     "reserved": {}
   },
-  "bug-owner-already-answered": {
-    "spec": ".jig/specs/bug-owner-already-answered.md",
-    "state": "gated",
-    "after": [],
-    "owns": [],
-    "shares": [
-      "plugin/skills/decision-cards/SKILL.md",
-      "plugin/skills/rig/SKILL.md",
-      "plugin/skills/stage/SKILL.md",
-      "plugin/skills/spec/SKILL.md",
-      "plugin/skills/hubnode/SKILL.md",
-      "plugin/templates/jig/RULES.md",
-      "plugin/skills/release/SKILL.md",
-      "plugin/templates/jig/jig.py"
-    ],
-    "reserved": {},
-    "check": "batch"
-  },
   "bug-ci-runner-smoke": {
     "spec": ".jig/specs/bug-ci-runner-smoke.md",
     "state": "claimed",

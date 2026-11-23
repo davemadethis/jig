@@ -4,7 +4,10 @@ description: Stage a chat-born file (spec, doc, decisions, user story, feature r
 ---
 
 A staged file is a Markdown file in `.jig/staging/` with this header. Nothing in it is
-decided until it is resolved: read it for context, never cite it as decided.
+decided until it is resolved: read it for context, never cite it as decided. The owner's quoted
+words (Whose words) are the exception: they are the owner's ruling, as in an inbox message
+(`.jig/RULES.md`, Inbox), and settle what they say, within the limits `/jig:decision-cards`
+(Is it open?) sets; the rest is context from the stager.
 
 ```yaml
 ---
@@ -117,7 +120,10 @@ repo own the subject, and is it as settled as it says? A file whose `source:` en
 `unreviewed` was staged with no reader, or against a record that wasn't verbatim: say so when
 you ask the second. Not this repo's: change `target` with
 the user, and `resolve` forwards it. Not settled: back to `Proposed` or `Open`, with the user,
-before `resolve`. The user says; don't judge alone. For each file, with the user:
+before `resolve`. The user says; don't judge alone. A note in the file that asks what the
+owner's quoted words state is answered by them, and one that asks a fact about the repo is
+settled by reading the repo: neither goes to the owner (`/jig:decision-cards`, Is it open?).
+For each file, with the user:
 
 - **spec / doc, new**: `jig staging resolve <file>` writes it, with its source.
 - **spec / doc, update**: find the page — the path, else search for the filename, else ask

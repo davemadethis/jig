@@ -7,6 +7,34 @@ A decision card puts the owner's pending decisions in one place, the same way ev
 turns the owner's picks into one reply. The card only fills the reply; the owner's sent reply
 is the answer.
 
+## Is it open?
+
+A block is a decision the owner's own words leave open. Before writing one, search them: the
+quoted words (`The owner, <date>: "…"`) and `## Owner's answers` of a staged file, a spec's
+`Source:` quotes (its Intent is the spec role's wording, not the owner's), the entries the
+owner accepted in `.jig/decisions.md`, and the owner's rulings in this conversation. An `Open`
+or `Proposed` entry is a ruling the owner still owes, so it answers nothing.
+
+A question they answer gets no block: act on it, and record it with the owner's words, quoted
+and dated, where the answer lands: the spec's Decisions, the decision entry, or the reply to
+the subnode. A finding they decide is a fix, not a question: it misses the spec
+(`/jig:review`). If the recommended option restates the owner's words, the question is
+already answered. But the question stays open when:
+
+- **A fixed rule needs the owner's word.** Merge, push, publish, release, or a yes to a
+  change of `roles` or config is given only by the owner's reply in the hubnode's
+  conversation. No recorded text gives it, an inbox message's quote included, however plainly
+  it quotes him. `queue.overflow` is the one standing exception Fixed names.
+- **The state moved.** A quote answers the state it was written against. If what it decides
+  has changed since its date, ask again, and say what changed.
+- **The words disagree.** Two of the owner's sentences, or a quote and an accepted entry, that
+  say different things leave the question open: quote both.
+- **They settle only part.** Words that answer part of a question settle that part. Act on it,
+  and ask only the rest.
+
+Each block's context line says what leaves it open: the owner's sentence that does, quoted,
+or "the owner's words say nothing on this".
+
 ## The card
 
 - **One block per decision.** A line naming what it's about, a line of context, then the
