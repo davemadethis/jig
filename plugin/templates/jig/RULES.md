@@ -819,7 +819,10 @@ waits on the owner's answers counts every question: each open or unjudged staged
 items, or keep some apart) and each dependency cycle, a ring once; `--json` prints it as
 data, each group with, per member, the Touches it shares with the rest and whether all of them
 are append files (`append_only`): a member that meets its group only in the log is the one most
-likely kept apart. A staged decisions file's Touches are its entries' `Touches:` lines, less a
+likely kept apart. In a family, after Waiting on you, rig prints one line when the family
+report (Metarepo and pararepos) holds a stale staged file, a stale or empty proposal, an entry
+or a pair: `Family: <n> stale staged, <m> stale or empty proposals, <k> entries touch labelled
+work, <j> pairs of names: jig family`. It counts in neither number: a report, not a question. A staged decisions file's Touches are its entries' `Touches:` lines, less a
 pointer into another repo, plus `.jig/decisions.md`, so it meets the spec written from it by
 the same rule. A staged file a spec in the tree or an open job's spec carries, by its exact
 mark, is **taken**: it waits on that spec or job, in no group, and counts nowhere. A spec in
@@ -1621,6 +1624,23 @@ this repo's name, since named bare it is about every repo. A decision may cite t
 after it is exact. The line asks: the hubnode puts it to the owner with what the decision says,
 and adds the path only if the decision describes something this repo can change there.
 
+**The family report.** `jig family`, in a metarepo or any of its pararepos, prints the same
+report from either, read through the metarepo's checkout and each pararepo `jig repos`
+reaches; one it can't reach is named and skipped. It writes nothing and exits 0. Four
+sections, each `nothing` when empty: **Staged**, every file in each member's `.jig/staging/`
+with its repo, `target`, `kind` and age in days (its file's modification time: staging is never
+committed), `stale` past 7 days; **Proposals**, every `propose/` branch in the metarepo not
+merged into its trunk, or with nothing written on it, with its age (its opening commit's date;
+for an older branch, its first commit past trunk), `empty`, `stale` past 7 days, and the
+pararepo specs citing it (`meta: <meta> proposal <branch>`) or `cited by no spec`; **Entries
+touching labelled work**, each entry in the metarepo's log under `## Open` or `## Unreleased`
+whose `Touches:` names `docs/glossary.md § <term>` for a term labelling a scope or item not done
+(Roadmap, Labels), with those scopes and their owning repos: a pending ruling each should read
+before its next pin; **Two names**, two glossary terms equal once folded as labels are, and two
+scope or item ids under different products (the metarepo's own sections count as one) equal
+once folded, or one the other with whole hyphen-words added at its start or end. Listed for the
+owner, never refused. `jig rig` points at it (Workflow).
+
 **Citing the metarepo.** A pararepo cites the metarepo the way the metarepo points to it:
 `<meta>/<path>` (or `<meta>:<path>`), with `§ <section>` for a heading, matched as above. On
 every run, `jig sync` and the release name each citation in this repo's tracked files, specs and
@@ -1750,6 +1770,7 @@ jig workflow                the older command: the roles under the old step name
 jig handoff [--spec path] [--partial]   write the note for HEAD; --partial: it doesn't finish the spec
 jig roadmap [--write]       the roadmap's states on trunk; --write regenerates ROADMAP.md
 jig roadmap --label <term>  only the scopes and items carrying that label, across every product
+jig family                  a family's staged files, unmerged proposals, entries touching labelled work, two names
 jig gate <name>             hubnode: verify, set up the scratch checkout, print its check
 jig propose <spec> <slug>   pararepo: open a proposal branch on the metarepo
 jig propose <spec> <slug> --pointers  the same, recorded as pointer rewrites worked ahead of

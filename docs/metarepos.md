@@ -67,6 +67,15 @@ A pararepo with a [roadmap](glossary.md#roadmap) of its own can move it into the
 The metarepo's glossary names the product, and the pararepo proposes its [phases](glossary.md#phase). After that,
 the metarepo holds the one roadmap for every product it lists.
 
+## The family report
+
+`python3 .jig/jig.py family`, run in the metarepo or any of its pararepos, prints the same
+report from either: every file waiting in each repo's staging folder, with its age; every
+`propose/` branch the metarepo hasn't merged, with its age, whether anything is written on it,
+and the specs citing it; each pending decision entry touching a term that labels work not done;
+and names that may be one thing under two. A file or a proposal older than a week is marked
+stale. It writes nothing. `rig` prints one line pointing at it when there's something to see.
+
 ## Design sessions
 
 A [rigger](glossary.md#rigger) is a design session for one product repo, kept outside it. It

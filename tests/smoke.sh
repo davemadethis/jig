@@ -5141,6 +5141,84 @@ out=$(git commit -qm "GLOSSARY: mesh" 2>&1); rc=$?; git reset -q --hard
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'labels walyt-mesh, which docs/glossary.md has no term for'" "$out"
 }
 
+# ---------------------------------------------------------------- family report
+sec_family_report() {
+export JIG_CONFIG="$T/repos.json"
+rnew() { mkdir -p "$T/$1" && cd "$T/$1" && git init -q -b main && git config user.email t@t && git config user.name t \
+  && cp -r "$P/jig" .jig && cp "$P/AGENTS.md" "$P/CLAUDE.md" .; }
+RM="$T/meta"; rnew meta && git add -A && git commit -qm init && $J init --meta --name meta >/dev/null && git add -A && git commit -qm meta-init && $J release $(mf) >/dev/null
+printf '\n## Walyt\n\nThe wallet app.\n\nOwner: `pa`.\n\n## Familiar App\n\nThe companion app.\n\nOwner: `pb`.\n\n## Teleport\n\nMoving a session.\n\nOwner: `pb`.\n' >> docs/glossary.md
+python3 -c "import json; f='.jig/meta.json'; d=json.load(open(f)); d['pararepos']=['pa','pb']; json.dump(d, open(f,'w'), indent=2)"
+git add -A && git -c core.hooksPath=/dev/null commit -qm "glossary and pararepos"
+for r in pa pb; do
+  rnew $r && mkdir -p docs && printf '# P\n\nP is.\n' > docs/p.md && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
+  $J init --para meta --location "$RM" >/dev/null 2>&1 && git add -A && git commit -qm para-init
+  python3 .jig/jig.py repos add para "$T/$r" --name $r >/dev/null
+done
+RA="$T/pa"; RB="$T/pb"
+cd "$RM"
+msg="family report: with nothing stale or flagged, rig prints no Family: line, and jig family nothing in each section"
+expect_pass sh -c "! $J rig | grep -q '^Family:' && test \$($J family | grep -cx '  nothing') = 4"
+printf '# Roadmap\n\n## Walyt alpha\nScopes:\n- `pairing`: pairing (labels teleport)\n- `teleport`: the move\n\n## Familiar App alpha\nScopes:\n- `teleport-clipboard`: the clipboard\n\n## Demos\nScopes:\n- `d`: a demo\n' > .jig/roadmap.md
+git add -A && git commit -qm "GLOSSARY: roadmap"
+nums=$($J rig | sed -n 1p)
+msg="family report: with nothing stale or flagged but the scope pair, rig in meta prints the Family: line for that pair alone"
+expect_pass sh -c "$J rig | grep -qx 'Family: 0 stale staged, 0 stale or empty proposals, 0 entries touch labelled work, 1 pairs of names: jig family'"
+msg="family report: two scope ids under different products, one the other with words added, are a pair; teleport and pairing aren't"
+out=$($J family)
+expect_pass sh -c "echo \"\$0\" | sed -n '/^Two names:/,\$p' | grep -qx '  Walyt alpha/teleport and Familiar App alpha/teleport-clipboard' && ! echo \"\$0\" | grep -q 'pairing and'" "$out"
+mkdir -p "$RA/.jig/staging" .jig/staging
+printf -- '---\nstaged: true\ntarget: meta\nkind: doc\nchange: update\ndestination: docs/glossary.md\nsource: chat\nstatus: staged\n---\nx\n' > "$RA/.jig/staging/old.md"
+touch -t "$(python3 -c 'import time; print(time.strftime("%Y%m%d%H%M", time.localtime(time.time() - 10*86400)))')" "$RA/.jig/staging/old.md"
+printf -- '---\nstaged: true\ntarget: this\nkind: spec\nchange: new\ndestination: .jig/specs/n.md\nsource: chat\nstatus: staged\n---\nx\n' > .jig/staging/new.md
+msg="family report: a 10-day-old staged file in pa and a fresh one in meta are listed with repo, target, kind and age, only the first stale"
+out=$($J family)
+expect_pass sh -c "echo \"\$0\" | grep -qx '  pa  .jig/staging/old.md  target meta  kind doc  10d  stale' && echo \"\$0\" | grep -qx '  meta  .jig/staging/new.md  target this  kind spec  0d'" "$out"
+msg="family report: the same command in pb prints the same lines"
+expect_pass test "$(cd "$RB" && $J family)" = "$out"
+msg="family report: it exits 0 and writes nothing"
+before=$(cd "$RM" && git status --porcelain; cd "$RA" && git status --porcelain)
+expect_pass sh -c "$J family >/dev/null && test \"\$(cd '$RM' && git status --porcelain; cd '$RA' && git status --porcelain)\" = \"\$0\"" "$before"
+rm .jig/staging/new.md "$RA/.jig/staging/old.md"
+cd "$RA" && mkdir -p .jig/ledgers && cp "$P/ledgers/BUFFER.md" .jig/ledgers/BUFFER.md
+printf '| B1 | meta/docs/glossary.md § Teleport | z | owner, 2026-11-23 | Open |\n' >> .jig/ledgers/BUFFER.md && git add -A && git commit -qm "buffer: B1"
+GIT_COMMITTER_DATE="$(python3 -c 'import time; print(int(time.time() - 9*86400))') +0000" $J propose --buffer z >/dev/null 2>&1 && git add -A && git commit -qm "specs: z"
+git -C "$RM" branch propose/pb-old main
+cd "$RM"
+msg="family report: pa's fresh proposal, opened 9 days back, is empty, stale and cited by pa's spec; a hand-made one is empty and cited by no spec"
+out=$($J family)
+expect_pass sh -c "echo \"\$0\" | grep -qx '  propose/pa-z  9d  empty  stale  cited by pa:.jig/specs/z.md' && echo \"\$0\" | grep -qE '^  propose/pb-old  [0-9]+d  empty  cited by no spec\$'" "$out"
+msg="family report: rig counts both proposals, and its two numbers are what they are without the line"
+expect_pass sh -c "$J rig | grep -qx 'Family: 0 stale staged, 2 stale or empty proposals, 0 entries touch labelled work, 1 pairs of names: jig family' && test \"\$($J rig | sed -n 1p)\" = \"\$0\"" "$nums"
+git branch -q -D propose/pb-old
+msg="family report: once meta merges a written propose/pa-z, it isn't listed"
+git -c core.hooksPath=/dev/null worktree add -q "$T/mz" propose/pa-z && (cd "$T/mz" && printf '\nWritten.\n' >> docs/glossary.md && git -c core.hooksPath=/dev/null commit -qam "GLOSSARY: z") && git worktree remove "$T/mz"
+git -c core.hooksPath=/dev/null merge -q --no-ff --no-edit propose/pa-z
+expect_pass sh -c "! $J family | grep -q 'propose/pa-z'"
+python3 - <<'PY'
+p='.jig/decisions.md'; s=open(p).read()
+s=s.replace('## Open\n', '## Open\n\n### D-?tp Teleport keeps the session\nProposed (owner, 2026-11-23).\nTouches: docs/glossary.md § Teleport\n\nIt keeps it.\n', 1)
+open(p,'w').write(s)
+PY
+git add -A && git -c core.hooksPath=/dev/null commit -qm "D-?tp"
+msg="family report: an Open entry touching the Teleport term lists Walyt alpha/pairing and pa"
+expect_pass sh -c "$J family | sed -n '/^Entries/,/^Two/p' | grep -q 'Teleport keeps the session  (docs/glossary.md § Teleport): Walyt alpha/pairing (pa)'"
+msg="family report: once pairing is done, the entry isn't listed"
+cd "$RA" && mkdir -p .jig/specs && printf '# pr\n\nSource: smoke\nScope: Walyt alpha/pairing\n\n## Intent\nx\n' > .jig/specs/pr.md && git add -A && git commit -qm pr
+printf 'x\n' > w.txt && git add -A && git commit -qm w && $J reviewed >/dev/null && $J handoff --spec .jig/specs/pr.md >/dev/null 2>&1 && pcfold && git add -A && git commit -qm "note pr" >/dev/null 2>&1
+expect_pass sh -c "cd '$RM' && $J roadmap | grep -qE '^  Walyt alpha/pairing +done' && $J family | sed -n '/^Entries/,/^Two/p' | grep -qx '  nothing'"
+msg="family report: two glossary terms one once folded are a pair"
+cd "$RM" && printf '\n## Walyt pass\n\nA pass.\n\n## walyt-pass\n\nThe same.\n' >> docs/glossary.md && git add -A && git -c core.hooksPath=/dev/null commit -qm "GLOSSARY: pass"
+expect_pass sh -c "$J family | grep -qx '  Walyt pass and walyt-pass'"
+msg="family report: with pb out of the repos file, it names pb and reports the rest"
+cp "$T/repos.json" "$T/repos.full" && python3 -c "import json; f='$T/repos.json'; d=json.load(open(f)); d.pop('pb'); json.dump(d, open(f,'w'))"
+expect_pass sh -c "$J family | grep -q 'pb can.t be reached here' && $J family | grep -q '^Two names:'"
+cp "$T/repos.full" "$T/repos.json"
+msg="family report: in a repo outside a family, it says so and exits 0"
+cd "$T" && pcnew "$T/solo" && git add -A && git commit -qm init && $J init >/dev/null
+expect_pass sh -c "$J family | grep -q 'no family'"
+}
+
 # ---------------------------------------------------------------- labels
 sec_labels() {
 lspec() { mkdir -p .jig/specs && printf '# %s\n\nSource: smoke\nScope: %s\n\n## Intent\nx\n' "$1" "$2" > ".jig/specs/$1.md"; }
@@ -5159,7 +5237,7 @@ expect_pass sh -c "grep -q '\*\*pairing\*\*: pair two devices<br>labels teleport
 git add -A && git commit -qm "roadmap view"
 msg="labels: a label naming no glossary term is refused by line, naming docs/glossary.md"
 sed -i.bak 's/(labels Teleport)/(labels telport)/' .jig/roadmap.md && rm .jig/roadmap.md.bak
-expect_pass lrefused "GLOSSARY: typo" 'line 5: scope alpha/host labels telport, which docs/glossary.md has no term for'
+expect_pass lrefused "GLOSSARY: typo" 'line 6: scope alpha/host labels telport, which docs/glossary.md has no term for'
 msg="labels: (labels) naming nothing is refused"
 sed -i.bak 's/(labels Teleport)/(labels)/' .jig/roadmap.md && rm .jig/roadmap.md.bak
 expect_pass lrefused "GLOSSARY: empty" 'scope alpha/host has (labels) naming nothing'
@@ -10015,7 +10093,7 @@ msg="queue config: the overflow key with the owner's words commits"
 expect_pass setq '{"width": "all", "overflow": {"to": "github", "reason": "the owner: keep the standing yes"}}'
 }
 
-UNITS="rules merge_derived update board_split worktree_setup metarepo,staging pararepo release r6_takes,r6_ints merge_after_sync repos workflow init_old_board ledger_rows hardware update_per_file pararepo_commands entry_globs report_fixes sync_buffer buffer_answered pointers removals feedback slash_names homes structure meta_docs agents_lines page_contract roadmap labels family boundary decisions supersede touches,touches_terms sweep staging_batches merge_log findings glossary headings check_levels role_line consolidate cheaper_rounds next svg update_roles holders rig rig_batch close versioning pin_bump moves claims inbox rigger queue"
+UNITS="rules merge_derived update board_split worktree_setup metarepo,staging pararepo release r6_takes,r6_ints merge_after_sync repos workflow init_old_board ledger_rows hardware update_per_file pararepo_commands entry_globs report_fixes sync_buffer buffer_answered pointers removals feedback slash_names homes structure meta_docs agents_lines page_contract roadmap labels family family_report boundary decisions supersede touches,touches_terms sweep staging_batches merge_log findings glossary headings check_levels role_line consolidate cheaper_rounds next svg update_roles holders rig rig_batch close versioning pin_bump moves claims inbox rigger queue"
 
 if [ "${1:-}" = --list ]; then echo $UNITS | tr ' ,' '\n\n'; exit 0; fi
 if [ "${1:-}" = --unit ]; then        # --unit <run folder> <unit>: one unit, its output to a file

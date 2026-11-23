@@ -11244,6 +11244,160 @@ def roadmap_by_label(fam: "Family", phases: list[dict], items: list[dict], label
     return 0
 
 
+# ----------------------------------------------------------------- family report
+
+# Past a week, a staged file or a proposal nobody has acted on is stale (the pararepos' inputs:
+# "staged items over a week old"). The age is printed whatever it is, so nothing needs setting.
+STALE_DAYS = 7
+
+
+def family_members(root: Path, trunk: str) -> tuple[str, Path | None, list[tuple[str, Path]], list[str]] | None:
+    """(metarepo's name, its checkout, every member reached as (name, trunk checkout), the
+    names not reached) for this repo's family, read the same from the metarepo or any
+    pararepo; None outside a family."""
+    meta, para = load_meta(trunk), load_para(trunk)
+    if meta is not None:
+        name, loc, paras = meta.get("name") or root.name, root, list(meta.get("pararepos") or [])
+    elif para is not None:
+        name, loc = para.get("meta", ""), meta_checkout(root, para)
+        if loc is None:
+            return name, None, [], [name]
+        try:
+            paras = list(json.loads(trunk_show(loc, META) or "{}").get("pararepos") or [])
+        except ValueError:
+            paras = []
+    else:
+        return None
+    members, gone = [(name, loc)], []
+    for n in paras:
+        at = repo_path(n)
+        if at is None or not at.is_dir():
+            gone.append(n)
+        else:
+            members.append((n, root if at.resolve() == root.resolve() else at))
+    return name, loc, members, gone
+
+
+def age_days(when: float) -> int:
+    return max(0, int((time.time() - when) // 86400))
+
+
+def name_pairs(names: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """(a, b) for each two of NAMES, (group, name), in different groups whose names are one
+    once label_fold folds them, or where one is the other with whole hyphen-words added at
+    its start or end (`teleport`, `teleport-clipboard`): maybe one thing under two names."""
+    out = []
+    for i, (ga, a) in enumerate(names):
+        for gb, b in names[i + 1:]:
+            if ga == gb:
+                continue
+            fa, fb = label_fold(a.rsplit("/", 1)[-1]), label_fold(b.rsplit("/", 1)[-1])
+            short, long_ = sorted((fa, fb), key=len)
+            if fa == fb or long_.startswith(short + "-") or long_.endswith("-" + short):
+                out.append((a, b))
+    return out
+
+
+def family_report(root: Path, trunk: str) -> dict | None:
+    """What the family has let sit, read from every member reached: staged files with their
+    ages, the metarepo's unmerged `propose/` branches with theirs, pending decision entries
+    touching labelled work not done, and two names for one thing. None outside a family. It
+    writes nothing: a report, never a refusal."""
+    fam_of = family_members(root, trunk)
+    if fam_of is None:
+        return None
+    meta_name, meta_loc, members, gone = fam_of
+    out = {"meta": meta_name, "unreachable": gone, "staged": [], "proposals": [], "entries": [], "pairs": []}
+    for name, loc in members:
+        for f in staged_files(loc):
+            head, _, _ = read_staged(f)
+            age = age_days(f.stat().st_mtime)
+            out["staged"].append({"repo": name, "file": f.name, "target": head.get("target", ""),
+                                  "kind": head.get("kind", ""), "age": age, "stale": age > STALE_DAYS})
+    if meta_loc is None:
+        return out
+    mtrunk = Board.trunk_name(meta_loc)
+    cites: dict[str, list[str]] = {}
+    for name, loc in members[1:]:
+        for f in sorted((loc / SPECS).glob("*.md")) if (loc / SPECS).is_dir() else []:
+            for m in PROPOSAL.finditer(f.read_text(errors="replace")):
+                if m.group("branch") and m.group("meta") == meta_name:
+                    cites.setdefault(m.group("branch"), []).append(f"{name}:{SPECS}/{f.name}")
+    for b in git("for-each-ref", "--format=%(refname:short)", "refs/heads/propose/", cwd=str(meta_loc)).split():
+        empty = proposal_empty(meta_loc, b, mtrunk)
+        merged = not git("rev-list", "-1", f"{mtrunk}..{b}", cwd=str(meta_loc))
+        if merged and not empty:
+            continue
+        # Its opening commit's date: the first commit past trunk, or the tip of one on trunk's line.
+        first = (git("rev-list", "--reverse", f"{mtrunk}..{b}", cwd=str(meta_loc)).split() or [b])[0]
+        age = age_days(int(git("log", "-1", "--format=%ct", first, cwd=str(meta_loc)) or time.time()))
+        out["proposals"].append({"branch": b, "age": age, "empty": empty, "stale": age > STALE_DAYS,
+                                 "cited": cites.get(b, [])})
+    gloss = trunk_show(meta_loc, GLOSSARY) or ""
+    terms, owners = glossary_terms(gloss), term_owners(gloss)
+    # The states are the family's, read as every roadmap reader reads them; a pararepo keeping
+    # a roadmap of its own plans from no labelled scope of the metarepo's.
+    fam = family(root, trunk)
+    full = roadmap_full(Snapshot(trunk), fam) if fam.kind != "own" else None
+    work = ([s for p in full[0] for s in p["scopes"]] + full[1]) if full else []
+
+    def repo_of(product: str) -> str:
+        owner = owners.get(product, THIS_REPO)
+        return meta_name if owner == THIS_REPO else owner
+    log = trunk_show(meta_loc, LOG) or ""
+    for e in log_entries(log, log_prefix_of(log)):
+        if e["section"] not in ("Open", "Unreleased"):
+            continue
+        for ptr in entry_touches(e["block"]) or []:
+            page, term = pointer_term(ptr)
+            if page != GLOSSARY or not term:
+                continue
+            want = label_fold(glossary_term_in(term, terms) or term)
+            hit = [(w["id"], repo_of(w["product"])) for w in work
+                   if w["state"] != "done" and want in {label_fold(l) for l in w["labels"]}]
+            if hit:
+                out["entries"].append({"id": e["id"], "title": e["title"], "term": term, "work": hit})
+    # The glossary's own pairs: any two terms one once folded.
+    out["pairs"] = [(a, b) for i, a in enumerate(terms) for b in terms[i + 1:]
+                    if a != b and label_fold(a) == label_fold(b)]
+    text = trunk_show(meta_loc, ROADMAP) or ""
+    ids = [(product_of(p["name"], owners), sid) for p in parse_roadmap(text) for sid, _ in p["scopes"]]
+    ids += [(product_of(i["list"].removesuffix(" " + NO_PHASE) if i["list"] != NO_PHASE else "", owners), i["sid"])
+            for i in parse_no_phase(text)]
+    out["pairs"] += name_pairs(ids)
+    return out
+
+
+def family_counts(rep: dict) -> tuple[int, int, int, int]:
+    """(stale staged files, stale or empty proposals, entries, pairs): what rig's line counts."""
+    return (sum(x["stale"] for x in rep["staged"]), sum(x["stale"] or x["empty"] for x in rep["proposals"]),
+            len(rep["entries"]), len(rep["pairs"]))
+
+
+def cmd_family(root: Path, args) -> int:
+    trunk = Board.trunk_name(root)
+    rep = family_report(root, trunk)
+    if rep is None:
+        print("no family: this repo is neither a metarepo nor a pararepo")
+        return 0
+    for name in rep["unreachable"]:
+        print(f"{name} can't be reached here (`jig repos`): not read")
+    print("Staged:")
+    print("\n".join(f"  {x['repo']}  {STAGING}/{x['file']}  target {x['target']}  kind {x['kind']}  "
+                    f"{x['age']}d" + ("  stale" if x["stale"] else "") for x in rep["staged"]) or "  nothing")
+    print("Proposals:")
+    print("\n".join(f"  {x['branch']}  {x['age']}d" + ("  empty" if x["empty"] else "")
+                    + ("  stale" if x["stale"] else "")
+                    + (f"  cited by {', '.join(x['cited'])}" if x["cited"] else "  cited by no spec")
+                    for x in rep["proposals"]) or "  nothing")
+    print("Entries touching labelled work:")
+    print("\n".join(f"  {x['id']} {x['title']}  ({GLOSSARY} § {x['term']}): "
+                    + ", ".join(f"{sid} ({repo})" for sid, repo in x["work"]) for x in rep["entries"]) or "  nothing")
+    print("Two names:")
+    print("\n".join(f"  {a} and {b}" for a, b in rep["pairs"]) or "  nothing")
+    return 0
+
+
 # The project's files: a page or a decision entry that names one goes stale whenever the plan
 # moves, and is released to pararepos as if it were the product (RULES.md, Documentation).
 # These are never product text, so the hook refuses them, and survey lists them in old text;
@@ -15457,8 +15611,17 @@ def rig_state(root: Path, board: "Board") -> dict:
             "feedback": sum(i["kind"] == "feedback" for i in items), "jobs": jobs,
             "unreachable": family(root, board.trunk).unreachable,
             "unconfirmed": unconfirmed_waits(root, board),
+            # A report, not a question: counted in neither number.
+            "family": family_rig_counts(root, board),
             # Closing needs no answer, so finished specs count in neither number.
             "finished": finished_specs(Snapshot(board.trunk), board)}
+
+
+def family_rig_counts(root: Path, board: "Board") -> list[int]:
+    """family_counts for rig's `Family:` line; empty outside a family or with nothing to show."""
+    rep = family_report(root, board.trunk)
+    counts = list(family_counts(rep)) if rep is not None else []
+    return counts if any(counts) else []
 
 
 def unconfirmed_waits(root: Path, board: "Board") -> list[list[str]]:
@@ -15510,6 +15673,10 @@ def rig_text(state: dict) -> str:
             for w, r in state.get("unconfirmed", [])]
     if not asks and not asked and not state["cycles"] and not state.get("unconfirmed"):
         out.append("  nothing")
+    if state.get("family"):
+        a, b, c, d = state["family"]
+        out.append(f"Family: {a} stale staged, {b} stale or empty proposals, {c} entries touch "
+                   f"labelled work, {d} pairs of names: jig family")
     out.append("\nRunning:")
     out += [f"  {j['name']}: {j['step']} — {j['who']}, {j['session']}" + (f" ({j['why']})" if j["why"] else "")
             for j in state["jobs"]] or ["  no open jobs"]
@@ -15719,6 +15886,8 @@ def main(argv: list[str] | None = None) -> int:
     rm.add_argument("--write", action="store_true", help=f"regenerate {ROADMAP_VIEW} in the trunk checkout")
     rm.add_argument("--label", metavar="TERM",
                     help="only the scopes and items carrying this label, across every product")
+    sub.add_parser("family", help="what a metarepo's family has let sit: staged files, proposals, "
+                                  "entries touching labelled work, two names for one thing")
     rl = sub.add_parser("reading-list", help="what to read before touching these files")
     rl.add_argument("paths", nargs="+", metavar="path")
     rl.add_argument("--claims", action="store_true",
@@ -15798,7 +15967,7 @@ def main(argv: list[str] | None = None) -> int:
         "handoff": cmd_handoff, "gate": cmd_gate, "hook": cmd_hook,
         "workflow": cmd_workflow, "roles": cmd_roles, "flows": cmd_flows, "next": cmd_next,
         "survey": cmd_survey, "reading-list": cmd_reading_list, "update": cmd_update, "repos": cmd_repos, "staging": cmd_staging,
-        "release": cmd_release, "propose": cmd_propose, "roadmap": cmd_roadmap,
+        "release": cmd_release, "propose": cmd_propose, "roadmap": cmd_roadmap, "family": cmd_family,
         "rig": cmd_rig, "inbox": cmd_inbox,
     }[args.cmd]
     return fn(root, args)
