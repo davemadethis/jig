@@ -476,7 +476,10 @@ It lists, too, each page line naming a `.jig/` path (Product and process). It ju
 them. `jig update --apply --sweep` writes the items under `## No phase` in `.jig/roadmap.md`, creating it when
 absent, on trunk (R5), and removes each emptied Undefined section where the pages may change:
 on trunk, or in a metarepo a job's worktree (M4), where it removes only the sections whose
-entries trunk's roadmap holds.
+entries trunk's roadmap holds. In a pararepo with no roadmap of its own whose metarepo holds
+none of its products, or can't be reached, it writes nothing and refuses, saying to propose the
+product to the metarepo first (a glossary term with an `Owner:` line naming the repo), then
+`jig move-in`; the dry run says the same.
 
 ### The findings record
 
@@ -627,6 +630,9 @@ else stops with the files named, and a person resolves it.
    tracked edit, which belongs on the job's branch. `jig update` removes one left behind.
    `jig mark <job> gated` refuses until `jig checked` has recorded the checkout's commit;
    `jig mark <job> gated --batch` leaves the check to the batch (Workflow).
+   After the check lines the gate prints `Closes with the spec at merge:`, the spec's `Later:`
+   ids, each with its roadmap text, and every `## Out of scope` line: the owner's last look at
+   what the merge deletes with the spec. A spec with neither prints no such block.
    The hooks set that checkout up with `.jig/scripts/setup.sh`, when it is added and again
    after its merge of trunk, so the checks run in an environment built from the job's own
    manifests.
@@ -660,8 +666,9 @@ else stops with the files named, and a person resolves it.
    and nothing is removed. A merge finished by hand after conflicts removes nothing.
    A merge also leaves nothing of the job in flight: in the merge commit it removes the job's
    spec, once the notes this job filed complete it and no other open job names it, and each
-   `Bug-for: <job>` spec, and writes each removed spec's `Scope:` line on its completing note,
-   in the note's header after its `Spec:` line, which the roadmap then reads, and beside it each
+   `Bug-for: <job>` spec, and writes each removed spec's `Scope:` and `Later:` lines on its
+   completing note, in the note's header after its `Spec:` line, which the roadmap and rig then
+   read, printing `left for later by <spec>: <ids>`, and beside them each
    `Source: … (staged as …)` line the spec carried, which `resolve` then reads (Staging). In a
    pararepo a spec naming a metarepo proposal or pointers branch stays: `jig sync` follows the
    branch through it. A conflicted merge closes at `jig merge --number`, its last step before
@@ -840,7 +847,8 @@ waits on the owner, to drop or keep. A model's open/ready call, its questions an
 `.git/jig/rig.json` (never committed) with a key of the item's content and the board, and
 replayed while both are unchanged: `jig rig --store-put <path>` stores one (a JSON object on
 stdin), `--store-get <path>` prints one that still holds, and `--fresh` forgets them all. It
-never writes the roadmap, and touches staging only through `--close`'s resolves. It is called
+never edits the roadmap, only writes its empty structure where trunk has none (Roadmap), and
+touches staging only through `--close`'s resolves. It is called
 by name only: `jig next` is unchanged.
 It also lists the **finished** specs, which count in neither number: each complete spec (a
 landed handoff note that isn't partial names it) that no open job names, and each `Bug-for:`
@@ -851,6 +859,10 @@ clean tree, removes them in one commit, `close finished specs: <names>`, each on
 on its note as a merge writes it, and rewrites `ROADMAP.md`; then, closing anything or not,
 it runs `jig staging resolve` on each built staged file, printing resolve's line. Anywhere else
 it refuses and writes nothing.
+Under **Left for later** it lists each id a landed note's `Later:` line names that trunk's
+roadmap still has, open and taken by no spec, as `<id>  left by <job>: <text>` (`later` in
+`--json`), until a spec takes it or the owner's roadmap change drops it. It counts as no
+question and is never the next step: the owner already placed it.
 
 ### Two levels of check
 
@@ -912,7 +924,17 @@ command at each step.
 
 ## Roadmap
 
-Optional: a repo with no `.jig/roadmap.md` has no roadmap, and nothing here applies to it.
+Every stand-alone repo and metarepo keeps one, its structure there even when it holds nothing:
+`# Roadmap`, a comment giving the form, and an empty `## No phase`, with `ROADMAP.md`, its view.
+`jig init` writes it, `jig update --apply` adds it where it's missing, and `jig roadmap`, rig,
+reading-list, survey, staging, the gate and the merge write it when trunk has none: in the
+trunk checkout on trunk with nothing staged they commit it alone, `roadmap: the empty structure
+jig init writes` (`ROADMAP:` leading in a metarepo, M6); anywhere else they write nothing and say where it is written. A root
+`ROADMAP.md` that is the repo's own holds it back until its content is moved into
+`.jig/roadmap.md` (`jig update` lists it). On trunk the hook refuses a commit removing it, and
+with none on trunk it refuses a spec's `Scope:` or `Later:` line, naming `jig roadmap`. jig
+writes none in a pararepo, which plans from its metarepo's (Products, below): `jig init --para`
+removes the empty structure a plain init wrote, and the sweep there writes none.
 A repo is for one software product, and the hardware that runs it may be defined there, its
 pages segmented within `docs/` as the hardware skill's board pages are; so a stand-alone repo
 keeps one roadmap with no product level in it. A metarepo and its pararepos plan from one
@@ -992,6 +1014,16 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
   its scopes on its completing note's `Scope:` line, which counts as the spec's: the hook
   refuses a trunk commit dropping a scope a note still takes, naming the note, until its line is
   re-pointed in that commit, and the view links the spec's name to the note.
+- **Work left for later** is never prose that closes with the spec. A spec names it on a `Later:`
+  line under `Source:`, beside `Scope:`, e.g. `Later: No phase/labels, alpha/export`: roadmap
+  ids, a No phase item or a scope, each already on trunk's roadmap. Only a roadmap change on
+  the owner's yes puts one there, so each deferral is a line he approves. `Later:` takes
+  nothing: the id's state is unchanged, so an item left for later stays open. The hook checks
+  its ids wherever it checks `Scope:` ids, with the same refusal, the drop guard included.
+  `jig gate` prints them, with the spec's `## Out of scope` lines, as what closes with the
+  spec; the merge carries the line to the note's header; and rig lists each id still open
+  under Left for later (Workflow). An `## Out of scope` line is work nothing will do, or work
+  another named spec, job or repo does.
 - **A spec is complete** when a handoff note naming it (`Spec:`) is on trunk and the commit it
   names is in trunk's history, merged or handed off solo on trunk. `jig handoff --partial` is a
   chunk that doesn't finish its spec: its note records `Partial: yes` and completes nothing.
@@ -1034,9 +1066,9 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
   as it says what it waits on. A cross-product `(after …)` the waited-on scope or phase doesn't
   confirm so is listed by `jig roadmap` in the metarepo and under rig's Waiting on you, for the
   owner to rule on. It blocks no commit and no step: the wait itself still blocks as any does.
-- **The hook refuses** a spec whose `Scope:` names a scope or `No phase/<id>` trunk's roadmap doesn't have (on
+- **The hook refuses** a spec whose `Scope:` or `Later:` names a scope or `No phase/<id>` trunk's roadmap doesn't have (on
   trunk, the commit's own roadmap), and on trunk a roadmap change that drops or renames a scope
-  a spec still takes, naming the spec: re-point it in the same commit.
+  a spec still takes or leaves for later, naming the spec: re-point it in the same commit.
 - **The next step** is one step ahead, as if staging and the waiting specs were cleared: the
   first open, unblocked item of No phase that names pages, none of which an open job's,
   waiting spec's or staged file's Touches names (by the page itself: a glob or a folder
@@ -1704,7 +1736,7 @@ jig reserve <job> <K>       hubnode: give an open job the next number of counter
 jig consolidate             hubnode: groups of waiting specs whose Touches overlap, to answer before opening
 jig rig [--json] [--fresh]  the repo's picture: what can start, what waits on what and on the owner, the open jobs
 jig rig --store-put|--store-get <path>   store, or print, a model's judgment of one item
-jig rig --close              hubnode, on trunk: remove the finished specs in one commit, their scopes kept on their notes
+jig rig --close              hubnode, on trunk: remove the finished specs in one commit, their Scope: and Later: kept on their notes
 jig share <job> <path>…     hubnode: add paths to an open job's shares
 jig reading-list <paths>    what to read before touching these files, and the pages above
 jig install-hooks           rewrite the hooks
@@ -1730,7 +1762,7 @@ jig flows                   each workflow's steps, who does each, and its sessio
 jig next [<job>]            a job's next step, the node or role that does it, and continue or new session
 jig workflow                the older command: the roles under the old step names, then the flows
 jig handoff [--spec path] [--partial]   write the note for HEAD; --partial: it doesn't finish the spec
-jig roadmap [--write]       the roadmap's states on trunk; --write regenerates ROADMAP.md
+jig roadmap [--write]       the roadmap's states on trunk, writing a missing one in the trunk checkout; --write regenerates ROADMAP.md
 jig gate <name>             hubnode: verify, set up the scratch checkout, print its check
 jig propose <spec> <slug>   pararepo: open a proposal branch on the metarepo
 jig propose <spec> <slug> --pointers  the same, recorded as pointer rewrites worked ahead of

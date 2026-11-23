@@ -882,10 +882,12 @@ def cmd_init(root: Path, args) -> int:
         rc = cmd_install_hooks(root, args)
     # A metarepo or pararepo is a repo with one more file, so it is made by the same init.
     if getattr(args, "meta", False):
-        return cmd_meta_init(root, args)
-    if getattr(args, "para", None) is not None:
+        rc = cmd_meta_init(root, args)
+    elif getattr(args, "para", None) is not None:
         args.meta = args.para
-        return cmd_para_init(root, args)
+        rc = cmd_para_init(root, args)
+    # After those, so a pararepo's para.json is there to say it plans from its metarepo's.
+    ensure_roadmap(root, init=True)
     return rc
 
 
@@ -1971,6 +1973,8 @@ def cmd_merge(root: Path, args) -> int:
     os.chdir(root)        # its git paths (the notes, the entry, derived files) are the whole repo's
     board = Board.load(root, working_tree=True)
     trunk, name = board.trunk, args.name
+    if not args.number:
+        ensure_roadmap(root, trunk)
     if args.number:
         # The conflicted merge's last step before its commit: the ids it brings in get numbers.
         if not git("rev-parse", "-q", "--verify", "MERGE_HEAD"):
@@ -2831,6 +2835,8 @@ def foldin_lines(root: Path, board: Board, branch: str) -> str:
 
 def cmd_handoff(root: Path, args) -> int:
     board = Board.load(root)
+    # A job's worktree: it says where the roadmap is written, and writes nothing.
+    ensure_roadmap(root, board.trunk, write=False)
     branch = git("branch", "--show-current")
     name, job = board.job_for_branch(branch)
     if not name:
@@ -3153,6 +3159,7 @@ def cmd_reading_list(root: Path, args) -> int:
     if args.claims:
         return print_claims(root, args.paths)
     board = Board.load(root)
+    ensure_roadmap(root, board.trunk)
     want, unowned = [], []
     for pattern in args.paths:
         hits = [f for f in tracked(root) if matches(f, [pattern])] or [pattern]
@@ -3281,6 +3288,7 @@ def cmd_gate(root: Path, args) -> int:
     """Hubnode-side verification. Prints what to run; refuses what it can decide."""
     board = Board.load(root, working_tree=True)
     trunk = board.trunk
+    ensure_roadmap(root, trunk)
     name = args.name or git("branch", "--show-current") or trunk
     job = board.jobs.get(name)
     if args.name and job is None:
@@ -3432,6 +3440,14 @@ def cmd_gate(root: Path, args) -> int:
     print(f"  (cd {scratch} && python3 {DIR}/jig.py checked --tier {step['tier']} "
           f"--effort {step['effort']} --seconds <s>)")
     print()
+    closing = closes_with(trunk, git("show", f"{commit}:{(job or {}).get('spec') or ''}")
+                          if (job or {}).get("spec") else "")
+    if closing:
+        # The merge deletes the spec: this is the owner's last look at what goes with it.
+        print("Closes with the spec at merge:")
+        for l in closing:
+            print(f"  {l}")
+        print()
     if job is not None:
         print(f"Then: jig mark {name} gated, which removes {scratch}, and on the owner's word: "
               f"jig merge {name}")
@@ -3441,6 +3457,22 @@ def cmd_gate(root: Path, args) -> int:
               f"state to mark):\n  git worktree remove --force {scratch}")
     return 0
 
+
+
+def closes_with(trunk: str, spec: str) -> list[str]:
+    """What the merge closes along with SPEC: each id its `Later:` line leaves, with its roadmap
+    text (rig keeps listing it), and every `## Out of scope` line (gone with the spec)."""
+    if not spec:
+        return []
+    texts = {}
+    full = roadmap_full(Snapshot(trunk), family(main_root(), trunk))
+    if full:
+        texts = {s["id"]: s.get("plain") or s.get("what") or ""
+                 for s in [x for p in full[0] for x in p["scopes"]] + full[1]}
+    out = [f"later         {i}" + (f": {texts[i]}" if texts.get(i) else "") for i in spec_laters(spec)]
+    prose = re.sub(r"<!--.*?-->", "", spec_section(spec, "Out of scope") or "", flags=re.S)
+    out += [f"out of scope  {l.strip()}" for l in prose.splitlines() if l.strip()]
+    return out
 
 
 # --------------------------------------------------------------------- survey
@@ -5094,6 +5126,8 @@ def cmd_survey(root: Path, args) -> int:
         board = Board.load(root).data
     except SystemExit:
         board = {}
+    if board:
+        ensure_roadmap(root)
     not_docs = board.get("not_docs") or []
     report: dict = {"markdown": [], "homeless": [], "oversized": [], "present": {},
                     "src_count": len(src), "not_docs": not_docs,
@@ -7425,7 +7459,10 @@ def proposed_rows(texts: list[str]) -> set[tuple[str, ...]]:
 
 
 def load_para(trunk: str) -> dict | None:
-    raw = git("show", f"{trunk}:{PARA}")
+    return json_or_none(git("show", f"{trunk}:{PARA}"))
+
+
+def json_or_none(raw: str) -> dict | None:
     try:
         return json.loads(raw) if raw else None
     except ValueError:
@@ -9728,6 +9765,7 @@ def cmd_staging_check(args) -> int:
 
 
 def cmd_staging(root: Path, args) -> int:
+    ensure_roadmap(root)
     if args.action not in ("resolve", "drop"):
         # Staged files are never committed, so a detached worktree (a spec or bug session's)
         # lists the primary checkout's, as resolve and drop already read them.
@@ -10051,8 +10089,8 @@ def forward(root: Path, path: Path, head: dict) -> int:
 
 # -------------------------------------------------------------------- roadmap
 
-# The roadmap is optional: a repo without ROADMAP has no roadmap, and nothing below runs for it.
-# Phases and scopes are the owner's decisions; their states are derived from specs and the
+# Every stand-alone repo and metarepo keeps a roadmap, its structure there even when empty, so
+# work left for later always has a home; a pararepo plans from its metarepo's. Phases and scopes are the owner's decisions; their states are derived from specs and the
 # handoffs that landed them, so the file never takes a progress edit.
 ROADMAP = f"{DIR}/roadmap.md"
 ROADMAP_VIEW = "ROADMAP.md"
@@ -10528,6 +10566,26 @@ def spec_scopes(text: str) -> list[str]:
     return [s.strip().strip("`") for s in m.group(1).split(",") if s.strip()] if m else []
 
 
+def spec_laters(text: str) -> list[str]:
+    """The roadmap ids a spec's `Later:` line leaves for later work, in its order. Taking
+    nothing, it changes no id's state: an item left for later stays open."""
+    m = re.search(r"^Later:[ \t]*(.*)$", text, re.M)
+    return [s.strip().strip("`") for s in m.group(1).split(",") if s.strip()] if m else []
+
+
+def laters_in(path: str, text: str) -> list[str]:
+    return spec_laters(note_head(text) if path.startswith(HANDOFFS) else text)
+
+
+def cited(path: str, text: str, bad) -> str:
+    """What PATH's `Scope:` and `Later:` lines name that BAD holds, as a refusal says it:
+    "takes a, b", "leaves c for later", or both; "" when none."""
+    took = [s for s in scopes_in(path, text) if bad(s)]
+    left = [s for s in laters_in(path, text) if bad(s)]
+    return " and ".join(x for x in (f"takes {', '.join(took)}" if took else "",
+                                     f"leaves {', '.join(left)} for later" if left else "") if x)
+
+
 def takes_scopes(path: str) -> bool:
     """A spec, or a handoff note, which keeps the scopes of a spec that has closed."""
     return is_spec(path) or path.startswith(HANDOFFS) and path.endswith(".md")
@@ -10644,8 +10702,10 @@ def close_specs(finished: list[dict], snap: Snapshot) -> list[str]:
         if note:
             body = read_raw(root / note)
             head = note_head(body)
-            scope = re.search(r"^Scope:[ \t]*.*$", text, re.M)
-            add = ([scope.group(0)] if scope and not re.search(r"^Scope:", head, re.M) else []) \
+            # Later: is carried as Scope: is: what the spec left for later outlives it on the note,
+            # where rig lists each id until a spec takes it or the owner drops it.
+            add = [m.group(0) for key in ("Scope:", "Later:")
+                   if (m := re.search(rf"^{key}[ \t]*.*$", text, re.M)) and not re.search(rf"^{key}", head, re.M)] \
                 + [l for l in MARK_LINE.findall(text) if l not in head.splitlines()]
             if add:
                 body = re.sub(r"^(Spec: .*\n)", lambda m: m.group(1) + "".join(f"{l}\n" for l in add),
@@ -10655,6 +10715,8 @@ def close_specs(finished: list[dict], snap: Snapshot) -> list[str]:
         # -f: mid-merge the spec is staged from the job, as a new file.
         git("rm", "-q", "-f", "--", f, check=True, cwd=str(root))
         out.append(f"closed {f}")
+        if later := spec_laters(text):
+            out.append(f"left for later by {f}: {', '.join(later)}")
     return out
 
 
@@ -10835,7 +10897,7 @@ class Family:
 
     def section_of(self, repo: str) -> str:
         """The product a pararepo REPO owns in this metarepo's roadmap, when that repo plans
-        from it (keeps no roadmap of its own); "" otherwise."""
+        from it (has no roadmap of its own); "" otherwise."""
         loc = repo_path(repo)
         if self.kind != "meta" or loc is None or not loc.is_dir() or trunk_show(loc, ROADMAP):
             return ""
@@ -11059,9 +11121,103 @@ def scope_cell(s: dict) -> str:
     return cell.replace("|", "\\|")
 
 
+# What `jig init` writes, `jig update` adds and a command finding none commits: the form in a
+# comment above `## No phase`, since under it the hook refuses any line that isn't an item.
+ROADMAP_SEED = f"""# Roadmap
+
+<!-- The owner's plan, changed on trunk only and on the owner's word ({DIR}/RULES.md, Roadmap).
+Phases are level-two headings, in order, each with an `Exit when:` checklist, a `Scopes:` list
+of backticked scope names with what each is, or both. Work with no phase is an item under
+No phase below, a backticked id and what it is. A spec takes an id on its `Scope:` line, and
+names one it leaves for later work on its `Later:` line. -->
+
+## {NO_PHASE}
+"""
+SEED_SUBJECT = "roadmap: the empty structure jig init writes"
+
+
+def roadmap_withheld(here: Path, trunk: str = "") -> str:
+    """Why no roadmap is written here, or "": a pararepo plans from its metarepo's, and a
+    root ROADMAP.md that is the repo's own would become jig's generated view beside one."""
+    if (here / PARA).is_file() or trunk and load_para(trunk) is not None:
+        return "para"
+    if (here / ROADMAP_VIEW).is_file() or trunk and at_rev(trunk, ROADMAP_VIEW):
+        return (f"{ROADMAP_VIEW} is the repo's own, and with {ROADMAP} it would be jig's generated "
+                f"view: move what it holds into {ROADMAP} first (`jig update` lists it)")
+    return ""
+
+
+def empty_roadmap(text: str) -> bool:
+    """A roadmap holding no phase and no item: the seed, or one emptied since."""
+    return not parse_roadmap(text) and not parse_no_phase(text) and not up_next_heading(text)
+
+
+def write_seed(here: Path) -> None:
+    (here / ROADMAP).parent.mkdir(parents=True, exist_ok=True)
+    (here / ROADMAP).write_text(ROADMAP_SEED)
+    # The seed holds no phase and no item, so this is what `jig roadmap --write` renders for it.
+    (here / ROADMAP_VIEW).write_text(render_roadmap([], []))
+
+
+def ensure_roadmap(root: Path, trunk: str = "", *, init: bool = False, write: bool = True) -> None:
+    """The roadmap's empty structure where a stand-alone repo or metarepo has none. INIT: in
+    ROOT's files, left uncommitted like the rest of init. Otherwise trunk's: committed alone
+    in the trunk checkout on trunk with nothing staged (R5, and `merge` and `rig --close`
+    refuse a dirty tree), and anywhere else, or without WRITE, one line saying where it is
+    written. Lines go to stderr, so `--json` stays parseable."""
+    if init:
+        if (root / PARA).is_file() and (root / ROADMAP).is_file() and empty_roadmap(read_raw(root / ROADMAP)):
+            # A plain init before `init --para` wrote the seed: a pararepo plans from its
+            # metarepo's, and an empty structure holds nothing to move in.
+            for f in (ROADMAP, ROADMAP_VIEW):
+                if git("ls-files", "--", f, cwd=str(root)):
+                    git("rm", "-q", "-f", "--", f, check=True, cwd=str(root))
+                else:
+                    (root / f).unlink(missing_ok=True)
+            print(f"removed {ROADMAP} and {ROADMAP_VIEW}, the empty structure: a pararepo plans from "
+                  "its metarepo's roadmap")
+            return
+        why = "" if (root / ROADMAP).exists() else roadmap_withheld(root)
+        if (root / ROADMAP).exists() or why == "para":
+            return
+        if why:
+            print(f"{ROADMAP} not written: {why}")
+            return
+        write_seed(root)
+        print(f"wrote {ROADMAP}, the roadmap's empty structure, and {ROADMAP_VIEW}, its view")
+        return
+    main = main_root()
+    trunk = trunk or Board.trunk_name(main)
+    if at_rev(trunk, ROADMAP):
+        return
+    why = roadmap_withheld(main, trunk)
+    if why == "para":
+        return
+    if why:
+        print(f"jig: {trunk} has no {ROADMAP}: {why}", file=sys.stderr)
+        return
+    here = write and git("branch", "--show-current") == trunk and is_main_worktree(root) \
+        and not (main / ROADMAP).exists() and not git("diff", "--cached", "--name-only")
+    if not here:
+        print(f"jig: {trunk} has no {ROADMAP}: `jig roadmap` in the {trunk} checkout writes it",
+              file=sys.stderr)
+        return
+    write_seed(main)
+    git("add", "--", ROADMAP, ROADMAP_VIEW, check=True, cwd=str(main))
+    # A metarepo's subjects lead with an id (M6), so its seed commit leads with ROADMAP.
+    subject = f"ROADMAP: {SEED_SUBJECT.split(': ', 1)[1]}" if (main / META).is_file() else SEED_SUBJECT
+    if subprocess.run(["git", "commit", "-q", "-m", subject], cwd=str(main)).returncode:
+        print(f"jig: {ROADMAP} is written and staged but not committed: fix what the hook refused, "
+              "then `git commit`", file=sys.stderr)
+        return
+    _FAMILIES.clear()
+    print(f"jig: committed {ROADMAP} and {ROADMAP_VIEW} on {trunk}: {subject}", file=sys.stderr)
+
+
 def cmd_roadmap(root: Path, args) -> int:
     board = Board.load(root, working_tree=True)
     trunk = board.trunk
+    ensure_roadmap(root, trunk)
     fam = family(root, trunk)
     if args.write:
         if fam.reads_meta:
@@ -11071,7 +11227,7 @@ def cmd_roadmap(root: Path, args) -> int:
         snap = Snapshot(where="files")
         phases = roadmap_state(snap, fam)
         if phases is None:
-            die(f"no {ROADMAP}: this repo keeps no roadmap")
+            die(f"nothing written: {ROADMAP} isn't on {trunk} yet (above)")
         (main_root() / ROADMAP_VIEW).write_text(roadmap_view(snap, phases, fam))
         print(f"wrote {ROADMAP_VIEW}; commit it on {trunk}")
         return 0
@@ -11081,7 +11237,7 @@ def cmd_roadmap(root: Path, args) -> int:
         return 0
     full = roadmap_full(snap, fam)
     if full is None:
-        print(f"no roadmap: {trunk} has no {ROADMAP}")
+        # ensure_roadmap said above why trunk has none yet, and where it is written.
         return 0
     phases, items = full
     text = fam.text if fam.reads_meta else snap.show(ROADMAP)
@@ -11481,6 +11637,9 @@ def proposed_branch(branch: str, trunk: str) -> bool:
 def moving_in(para: dict, staged: bool) -> list[str]:
     """The pararepo's commit removing its own roadmap, once its phases and lists are the
     metarepo's: every `Scope:` line it keeps names the metarepo's ids, read on its trunk."""
+    if empty_roadmap(at_rev(Board.trunk_name(main_root()), ROADMAP)):
+        # The empty structure an init wrote before `init --para`: nothing in it moves in.
+        return []
     loc = meta_checkout(main_root(), para)
     if loc is None:
         print(f"jig: warning: {para.get('meta', 'the metarepo')} isn't reachable here (`jig repos`), so "
@@ -11500,8 +11659,8 @@ def moving_in(para: dict, staged: bool) -> list[str]:
     known = roadmap_scopes(text)
     out = []
     for f in git("-c", "core.quotePath=false", "ls-files", "--", SPECS, HANDOFFS).splitlines():
-        if takes_scopes(f) and (bad := [sc for sc in scopes_in(f, in_index(f, staged)) if sc not in known]):
-            out.append(f"{f} takes {', '.join(bad)}, which {para['meta']}'s {ROADMAP} on its trunk doesn't "
+        if takes_scopes(f) and (what := cited(f, in_index(f, staged), lambda sc: sc not in known)):
+            out.append(f"{f} {what}, which {para['meta']}'s {ROADMAP} on its trunk doesn't "
                        f"have: this commit removes {ROADMAP}, so re-point it to {para['meta']}'s ids here")
     return out
 
@@ -11522,9 +11681,15 @@ def roadmap_rules(board: "Board", branch: str, staged: bool, paths: list[str],
         return [f"{ROADMAP}: this repo plans from {fam.meta_name}'s roadmap, which holds its products "
                 f"({', '.join(p for p in fam.products_in() if fam.ours(p))}): change them there, by a "
                 f"{BUFFER} row and `jig propose`, never in a roadmap of its own"]
-    para = load_para(trunk) if on_trunk and old and not in_index(ROADMAP, staged) else None
+    removed = on_trunk and old and not in_index(ROADMAP, staged)
+    para = (load_para(trunk) or json_or_none(in_index(PARA, staged))) if removed else None
     if para is not None:
         return moving_in(para, staged)
+    if removed:
+        # A pararepo's removal is moving in, judged above; anywhere else work left for later
+        # would have no home again.
+        return [f"{ROADMAP}: this commit removes it, but every stand-alone repo and metarepo keeps a "
+                f"roadmap ({DIR}/RULES.md, Roadmap): change it, don't remove it"]
     if load_meta(trunk) is not None and proposed_branch(branch, trunk) and ROADMAP in paths:
         # A pararepo's proposal: its merge is judged on trunk; what it says is checked here too.
         text = in_index(ROADMAP, staged)
@@ -11534,21 +11699,25 @@ def roadmap_rules(board: "Board", branch: str, staged: bool, paths: list[str],
         return [f"{ROADMAP} {x}" for x in problems]
     if fam.reads_meta and not old and not adds:
         # The roadmap is the metarepo's, read live from its trunk: no release carries it.
-        takers = [f for f in paths if takes_scopes(f) and scopes_in(f, in_index(f, staged))]
+        takers = [f for f in paths if takes_scopes(f) and cited(f, in_index(f, staged), lambda s: True)]
         if fam.meta_loc is None:
             if takers:
                 print(f"jig: warning: {fam.meta_name or 'the metarepo'} isn't reachable here (`jig repos`), "
-                      f"so the Scope: lines in {', '.join(takers)} pass unchecked", file=sys.stderr)
+                      f"so the Scope: and Later: lines in {', '.join(takers)} pass unchecked", file=sys.stderr)
             return []
         known = roadmap_scopes(fam.text)
         for f in takers:
-            if bad := [s for s in scopes_in(f, in_index(f, staged)) if s not in known]:
-                out.append(f"{f} takes {', '.join(bad)}, which {fam.meta_name}'s {ROADMAP} on its trunk "
+            if what := cited(f, in_index(f, staged), lambda s: s not in known):
+                out.append(f"{f} {what}, which {fam.meta_name}'s {ROADMAP} on its trunk "
                            "doesn't have: a scope is <phase>/<scope> or <list>/<id> from it")
         return out
     text = in_index(ROADMAP, staged) if on_trunk else old
     if not text and not old:
-        return []
+        # Every stand-alone repo and metarepo keeps a roadmap, so an id named before trunk has
+        # one names nothing: it would read as placed while no list holds it.
+        return [f"{f} {what}, but {trunk} has no {ROADMAP}: `jig roadmap` in the {trunk} checkout "
+                "writes it, then name ids from it"
+                for f in paths if takes_scopes(f) and (what := cited(f, in_index(f, staged), lambda s: True))]
     known = roadmap_scopes(text)
     if on_trunk and ROADMAP in paths:
         problems: list[str] = []
@@ -11561,23 +11730,33 @@ def roadmap_rules(board: "Board", branch: str, staged: bool, paths: list[str],
         built = {s["id"] for s in roadmap_list(Snapshot(trunk), fam) if s["state"] == "done"}
         dropped = roadmap_scopes(old) - known - built
         for f in git("-c", "core.quotePath=false", "ls-files", "--", SPECS, HANDOFFS).splitlines():
-            if takes_scopes(f) and (gone := [s for s in scopes_in(f, in_index(f, staged)) if s in dropped]):
-                named.add(f)
-                out.append(f"{ROADMAP} drops {', '.join(gone)}, which {f} still takes: re-point "
-                           f"the Scope: line in {f} in this commit")
+            if not takes_scopes(f):
+                continue
+            body = in_index(f, staged)
+            for line, verb, ids in (("Scope:", "takes", scopes_in(f, body)),
+                                    ("Later:", "leaves for later", laters_in(f, body))):
+                if gone := [s for s in ids if s in dropped]:
+                    named.add(f)
+                    out.append(f"{ROADMAP} drops {', '.join(gone)}, which {f} still {verb}: re-point "
+                               f"the {line} line in {f} in this commit")
         # A pararepo planning from this roadmap takes its scopes in its own specs and notes.
         for label, sn in fam.others:
             for f in sn.ls(SPECS) + sn.ls(HANDOFFS):
-                if takes_scopes(f) and (gone := [s for s in scopes_in(f, sn.show(f)) if s in dropped]):
-                    out.append(f"{ROADMAP} drops {', '.join(gone)}, which {label}:{f} still takes: "
-                               f"{label} re-points its Scope: line first")
+                if not takes_scopes(f):
+                    continue
+                body = sn.show(f)
+                for line, verb, ids in (("Scope:", "takes", scopes_in(f, body)),
+                                        ("Later:", "leaves for later", laters_in(f, body))):
+                    if gone := [s for s in ids if s in dropped]:
+                        out.append(f"{ROADMAP} drops {', '.join(gone)}, which {label}:{f} still {verb}: "
+                                   f"{label} re-points its {line} line first")
         for name in fam.unreachable:
             print(f"jig: warning: {name} isn't reachable here (`jig repos`): a scope its specs take "
                   "may be dropped unseen", file=sys.stderr)
     for f in paths:
-        if takes_scopes(f) and f not in named and (bad := [s for s in scopes_in(f, in_index(f, staged))
-                                                           if s not in known]):
-            out.append(f"{f} takes {', '.join(bad)}, which {ROADMAP} on {trunk} doesn't have: "
+        if takes_scopes(f) and f not in named and (what := cited(f, in_index(f, staged),
+                                                                 lambda s: s not in known)):
+            out.append(f"{f} {what}, which {ROADMAP} on {trunk} doesn't have: "
                        "a scope is <phase>/<scope> or <list>/<id> from it")
     return out
 
@@ -12079,6 +12258,12 @@ STEPS: list = [
     (f"add {LOG}, the decision log: no CHANGELOG.md or register here to merge into it",
      lambda root, after: LOG not in after and not (root / LOG).exists() and not log_sources(root),
      lambda root, here: ((root / LOG).write_text(LOG_SEED), git("add", "--", LOG))),
+    # What a new init writes: a pararepo plans from its metarepo's, and a hand-written
+    # ROADMAP.md is listed under the files to review until its content is moved in.
+    (f"add {ROADMAP}, the roadmap's empty structure, and {ROADMAP_VIEW}, its view",
+     lambda root, after: not {ROADMAP, ROADMAP_VIEW, PARA} & set(after)
+     and not any((root / f).exists() for f in (ROADMAP, ROADMAP_VIEW, PARA)),
+     lambda root, here: (write_seed(root), git("add", "--", ROADMAP, ROADMAP_VIEW, check=True))),
 ]
 
 
@@ -14639,11 +14824,26 @@ def cmd_sweep(root: Path, apply: bool) -> int:
     job = (f"open a job for the pages on {trunk} (`jig open project-sweep --shares "
            f"{' '.join(dict.fromkeys(s['page'] for s in movable))}`), and run `jig update --apply --sweep` in its "
            "worktree: it removes the sections whose entries the roadmap holds")
+    fam = family(root, trunk)
+    # A pararepo plans from its metarepo's roadmap, so jig writes none here: its products are
+    # proposed there first, then moved in. One keeping a roadmap of its own isn't reads_meta.
+    homeless = bool(new) and not moved and fam.reads_meta
+    homeless_why = (f"this pararepo has no roadmap of its own, and "
+                    + (f"{fam.meta_name}'s holds none of its products" if fam.meta_loc is not None
+                       else f"{fam.meta_name or 'its metarepo'} can't be reached here (`jig repos`)")
+                    + f": propose the product to {fam.meta_name or 'the metarepo'} first, a glossary term "
+                    "with an `Owner:` line naming this repo, then `jig move-in`; then sweep again. "
+                    "Nothing is written here")
+    if not apply and homeless:
+        print(f"\nDry run: nothing changed. {homeless_why}.")
+        return 0
     if not apply:
         print("\nDry run: nothing changed. On the owner's yes: jig update --apply --sweep"
               + (f" on {trunk}" if new and not on_trunk_now else "")
               + ("" if pages_here else f"; then, in a metarepo, the pages are a job's (M4): {job}"))
         return 0
+    if homeless:
+        die(homeless_why, 2)
     if git("status", "--porcelain", "--untracked-files=no"):
         die("commit or stash tracked changes first: the sweep edits pages by name", 2)
     if new and moved:
@@ -14655,16 +14855,12 @@ def cmd_sweep(root: Path, apply: bool) -> int:
     if new and not on_trunk_now:
         die(f"{ROADMAP} is edited on {trunk} only (R5): run `jig update --apply --sweep` there "
             "first; it writes the items, then this run removes the sections", 2)
-    fam = family(root, trunk)
-    if new and fam.reads_meta:
-        print(f"note: {fam.meta_name}'s glossary names no product of this repo yet, so the items go to "
-              f"a {ROADMAP} of its own here; once it does, they move up by a proposal (moving in)")
     written = []
     if new:
         if not roadmap and (root / ROADMAP_VIEW).is_file():
             die(f"{ROADMAP_VIEW} is the repo's own, and with {ROADMAP} it would be jig's generated "
                 f"view: move what it holds into {ROADMAP} first (`jig update` lists it)", 2)
-        text = roadmap or "# Roadmap\n"
+        text = roadmap or ROADMAP_SEED
         write_raw(root / ROADMAP, with_list(text, [i["line"] for i in new]))
         written.append(ROADMAP)
     if pages_here:
@@ -15334,8 +15530,32 @@ def rig_state(root: Path, board: "Board") -> dict:
             "feedback": sum(i["kind"] == "feedback" for i in items), "jobs": jobs,
             "unreachable": family(root, board.trunk).unreachable,
             "unconfirmed": unconfirmed_waits(root, board),
+            "later": left_for_later(root, board),
             # Closing needs no answer, so finished specs count in neither number.
             "finished": finished_specs(Snapshot(board.trunk), board)}
+
+
+def left_for_later(root: Path, board: "Board") -> list[dict]:
+    """Each id a landed note's `Later:` line names that trunk's roadmap still has open, taken by
+    no spec: work a merged job left, which the owner placed, shown until a spec takes it or he
+    drops it. Not a question and never the next step: an item naming no pages is never offered."""
+    snap = Snapshot(board.trunk)
+    full = roadmap_full(snap, family(root, board.trunk))
+    if not full:
+        return []
+    by_id = {s["id"]: s for s in [x for p in full[0] for x in p["scopes"]] + full[1]}
+    out, seen = [], set()
+    for n in sorted(snap.ls(HANDOFFS)):
+        body = snap.show(n)
+        job = re.search(r"^# Handoff: (\S+)", body, re.M)
+        for i in laters_in(n, body):
+            s = by_id.get(i)
+            if s is None or s["state"] != "open" or i in seen:
+                continue
+            seen.add(i)
+            out.append({"id": i, "job": job.group(1) if job else Path(n).stem, "note": n,
+                        "what": s.get("plain") or s.get("what") or ""})
+    return out
 
 
 def unconfirmed_waits(root: Path, board: "Board") -> list[list[str]]:
@@ -15387,6 +15607,10 @@ def rig_text(state: dict) -> str:
             for w, r in state.get("unconfirmed", [])]
     if not asks and not asked and not state["cycles"] and not state.get("unconfirmed"):
         out.append("  nothing")
+    if state.get("later"):
+        out.append("\nLeft for later:")
+        out += [f"  {x['id']}  left by {x['job']}" + (f": {x['what']}" if x["what"] else "")
+                for x in state["later"]]
     out.append("\nRunning:")
     out += [f"  {j['name']}: {j['step']} — {j['who']}, {j['session']}" + (f" ({j['why']})" if j["why"] else "")
             for j in state["jobs"]] or ["  no open jobs"]
@@ -15452,9 +15676,11 @@ def close_resolves(root: Path) -> int:
 
 def cmd_rig(root: Path, args) -> int:
     """The repo's picture: what can start, what waits on what, what waits on the owner, and the
-    running jobs. It reads and never writes the roadmap; its one file is the store, and it writes
-    staging only to drop what `--close` closes."""
+    running jobs. It never edits the roadmap, only writes its empty structure where trunk has
+    none (ensure_roadmap); its one file is the store, and it writes staging only to drop what
+    `--close` closes."""
     board = Board.load(root)
+    ensure_roadmap(root, board.trunk)
     if args.close:
         return rig_close(root, board)
     if args.fresh:

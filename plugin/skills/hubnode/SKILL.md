@@ -229,8 +229,11 @@ tell that job to sync before its next handoff. A merge that stops on conflicts: 
 `git add` them, then `jig merge --number` (it also runs `setup.sh` and `derive.sh`), then
 `git commit`.
 
+Before the merge question, the merge card carries the gate's `Closes with the spec at merge:`
+lines: each `Later:` id with its text, and each `## Out of scope` line, which the merge deletes.
 A clean merge also removes the job's spec and its `Bug-for:` specs in the merge commit, each
-spec's `Scope:` and staged marks kept on its note; it prints each. It deletes nothing in
+spec's `Scope:`, `Later:` and staged marks kept on its note; it prints each, and `left for later
+by <spec>: <ids>`. It deletes nothing in
 staging: `/jig:rig`'s `jig rig --close` resolves the requests, stories and reports the job
 built. A staged decisions file it carried (or any carried file resolve would write) stays,
 `noted` with the job's note: read that job's
@@ -300,7 +303,10 @@ is a roadmap change like any other: show the diff, and merge on the owner's yes.
 each cross-product wait no section confirms with `(needed by …)`: put it to the owner.
 
 Work with no phase yet, parked mid-build (naming the pages it will touch) or not started, is
-an item under `## No phase` in `.jig/roadmap.md`, proposed the same way. A roadmap change asks
+an item under `## No phase` in `.jig/roadmap.md`, proposed the same way. Work a spec leaves for
+later is one too: its `Later:` id must be on trunk's roadmap before the spec commits, so put
+each as its own roadmap change, one line per item, never inside another question. The owner's
+yes to the line is the yes to the deferral. A roadmap change asks
 for no decision entry and no change line. A built item stays, read done from the spec that
 took it, until a roadmap change of the owner's removes it.
 
