@@ -2078,7 +2078,9 @@ def cmd_merge(root: Path, args) -> int:
     roadmap = main_root() / ROADMAP
     if roadmap.is_file():
         text = read_raw(roadmap)
-        kept = retarget_touches(text, page_moves("HEAD"))
+        fam = family()
+        kept = retarget_touches(text, page_moves("HEAD"),
+                                lambda h: fam.ours(product_of(h.removesuffix(" " + NO_PHASE), fam.owners)))
         if kept != text:
             write_raw(roadmap, kept)
             git("add", "--", ROADMAP, check=True)
@@ -10145,19 +10147,28 @@ def split_waits(what: str) -> tuple[str, list[str] | None, list[str] | None]:
     text, where its readers look; None for one not written. Peeled in a loop, so no order of
     the three can hide a wait as plain text; one written twice is read whole, refs and pages
     joined, and repeated_waits names it for the hook to refuse."""
-    head, after, needed, touches = what, None, None, None
+    head, after, needed, touches, lists = what, None, None, None, 0
     while True:
         if t := TOUCHES.search(head):
             touches, head = (t.group(1) if touches is None else f"{t.group(1)}, {touches}"), head[:t.start()]
+            lists += 1
         elif a := AFTER.search(head):
             after, head = refs_of(a.group(1)) + (after or []), head[:a.start()]
         elif n := NEEDED.search(head):
             needed, head = refs_of(n.group(1)) + (needed or []), head[:n.start()]
         else:
             break
-    if after is None and needed is None:
+    # Unchanged unless something was split off or joined: one `(touches …)` stays as written.
+    if after is None and needed is None and lists < 2:
         return what, None, None
     return head.rstrip() + (f" (touches {touches})" if touches is not None else ""), after, needed
+
+
+def phase_waits(line: str) -> tuple[list[str] | None, list[str] | None] | None:
+    """(after refs, needed-by refs) when LINE is nothing but `(after …)` and `(needed by …)`, in
+    either order, as a phase writes its own: None for any other line, which is note prose."""
+    head, after, needed = split_waits(line.strip())
+    return (after, needed) if not head.strip() and (after is not None or needed is not None) else None
 
 
 def repeated_waits(what: str) -> list[str]:
@@ -10263,8 +10274,10 @@ def page_moves(rev: str) -> dict[str, str]:
             if a.startswith("docs/") and b.startswith("docs/") and not same_page(a, b)}
 
 
-def retarget_touches(text: str, moves: dict[str, str]) -> str:
-    """TEXT with each `(touches …)` page MOVES renames written at its new path."""
+def retarget_touches(text: str, moves: dict[str, str], keep=lambda heading: True) -> str:
+    """TEXT with each `(touches …)` page MOVES renames written at its new path, in the sections
+    whose heading KEEP accepts: a section another repo owns names that repo's pages, which this
+    repo's move never renames."""
     if not moves:
         return text
 
@@ -10273,8 +10286,13 @@ def retarget_touches(text: str, moves: dict[str, str]) -> str:
         new = [next((to for old, to in moves.items() if same_page(p.strip("`"), old)), p) for p in pages]
         return m.group(0).replace(m.group(1), ", ".join(new)) if new != pages else m.group(0)
     # Anywhere in the line: an `(after …)` or `(needed by …)` may follow it (split_waits).
-    return "".join(TOUCHES_ANY.sub(fix, line.rstrip("\n")) + ("\n" if line.endswith("\n") else "")
-                   for line in text.splitlines(keepends=True))
+    out, heading = [], ""
+    for line in text.splitlines(keepends=True):
+        if m := re.match(r"##\s+(.+?)\s*$", line):
+            heading = m.group(1)
+        body = line.rstrip("\n")
+        out.append((TOUCHES_ANY.sub(fix, body) if keep(heading) else body) + ("\n" if line.endswith("\n") else ""))
+    return "".join(out)
 
 
 def parse_roadmap(text: str, problems: list[str] | None = None) -> list[dict]:
@@ -10315,21 +10333,28 @@ def parse_roadmap(text: str, problems: list[str] | None = None) -> list[dict]:
             part = ""
         elif skip or not phases:
             continue
-        elif part != "scopes" and (nb := NEEDED.fullmatch(line.strip())):
+        elif part != "scopes" and (w := phase_waits(line)):
+            # The phase's waits, read wherever they sit outside Scopes:, `(after …)` and
+            # `(needed by …)` on one line or two, so none is ever dropped as note prose and its
+            # scopes offered as free work.
+            after, needed = w
+            name = phases[-1]["name"]
             if in_note:
                 phases[-1]["note"].append(line)
-            phases[-1]["needed"] = refs_of(nb.group(1))
-        elif part != "scopes" and (a := AFTER.fullmatch(line.strip())):
-            # The phase's wait, read wherever it sits outside Scopes:, so a wait written after a
-            # list in the note or among the boxes is never dropped and offered as free work.
-            if in_note:
-                phases[-1]["note"].append(line)
-            if phases[-1]["after_line"]:
-                problems.append(f"line {n}: phase {phases[-1]['name']} has a second (after …) "
-                                f"line: one line names all it waits on")
-            phases[-1]["after"], phases[-1]["after_line"] = refs_of(a.group(1)), n
-            if not phases[-1]["after"]:
-                problems.append(f"line {n}: phase {phases[-1]['name']} has (after …) naming nothing")
+            for kind in repeated_waits(line.strip()):
+                problems.append(f"line {n}: phase {name} has a second ({kind} …): one names all it holds")
+            if after is not None:
+                if phases[-1]["after_line"]:
+                    problems.append(f"line {n}: phase {name} has a second (after …) line: one line names "
+                                    "all it waits on")
+                phases[-1]["after"], phases[-1]["after_line"] = after, n
+                if not after:
+                    problems.append(f"line {n}: phase {name} has (after …) naming nothing")
+            if needed is not None:
+                if phases[-1].get("needed_line"):
+                    problems.append(f"line {n}: phase {name} has a second (needed by …) line: one line "
+                                    "names all that waits on it")
+                phases[-1]["needed"], phases[-1]["needed_line"] = needed, n
         elif not part and re.match(r"\s*[-*+] ", line):
             phases[-1]["noting"] = False
         elif not part and phases[-1]["noting"] and not re.fullmatch(r"(?i)(exit when|scopes):", line.strip()):

@@ -5110,6 +5110,18 @@ fland propose/pb-needed "GLOSSARY: host is needed by pairing" "s = s.replace('- 
 cd "$FM"
 msg="family D: once pb's proposal confirms it, merged, it isn't listed"
 expect_pass sh -c "! $J roadmap | grep -q 'unconfirmed: Walyt alpha/pairing' && ! $J rig | grep -q 'unconfirmed Walyt alpha/pairing'"
+# A page meta renames is re-pointed in its own sections only: a product's touches are its owner's.
+cd "$FA" && printf '# O\n\nO is.\n' > docs/overview.md && git add -A && git commit -qm overview
+cd "$FM" && printf '# O\n\nO is.\n' > docs/overview.md && plant "meta overview"
+python3 -c "p='.jig/roadmap.md'; s=open(p).read(); s=s.replace('- \`d\`: a demo', '- \`d\`: a demo\n- \`ov\`: overview (touches docs/overview.md)', 1).replace('- \`pairing\`', '- \`ov\`: its overview (touches docs/overview.md)\n- \`pairing\`', 1); open(p,'w').write(s)"
+git add -A && git commit -qm "GLOSSARY: ov"
+$J open R --owns 'docs/**' >/dev/null && git add -A && git commit -qm "GLOSSARY: open R"
+( cd .git/jig/worktrees/R && git mv docs/overview.md docs/intro.md && git commit -qm "GLOSSARY: overview is intro" \
+  && $J reviewed >/dev/null && $J handoff >/dev/null 2>&1 && pcfold && git add -A && git commit -qm "GLOSSARY: note R" ) >/dev/null 2>&1
+gated R; out=$($J merge R 2>&1); rc=$?
+msg="family D: meta's merge renaming its own page re-points its Demos scope, and leaves the Walyt scope's touch, pa's page"
+expect_pass sh -c "test $rc = 0 && grep -q '^- .ov.: overview (touches docs/intro.md)' .jig/roadmap.md && grep -q '^- .ov.: its overview (touches docs/overview.md)' .jig/roadmap.md" "$out"
+[ $rc = 0 ] || echo "$out" | tail -5
 }
 
 # ---------------------------------------------------------------- roadmap
@@ -5679,6 +5691,15 @@ for kind in 'after alpha/b:after alpha/c:after' 'touches docs/x.md:touches docs/
   rbad "## alpha\nScopes:\n- \`a\`: x ($one) ($two)\n- \`b\`: y\n- \`c\`: z\n"
   expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'line 3: scope alpha/a has a second ($name …)'" "$out"
 done
+msg="after: a phase with a second (needed by …) line is refused by line"
+rbad '## alpha\n(needed by b/x)\n(needed by b/y)\nScopes:\n- `a`: x\n'
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'line 3: phase alpha has a second (needed by …) line'" "$out"
+msg="after: a No phase item writing (after …) twice is refused by line"
+rbad '## alpha\nScopes:\n- `a`: x\n- `b`: y\n\n## No phase\n- `p`: z (after alpha/a) (after alpha/b)\n'
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'line 7: No phase item p has a second (after …)'" "$out"
+msg="after: a phase line holding (after …) and (needed by …) together is read, not kept as note prose"
+printf '# Roadmap\n\n## beta\n(after alpha) (needed by gamma)\nScopes:\n- `b`: y\n\n## alpha\nScopes:\n- `a`: x\n\n## gamma\nScopes:\n- `g`: z\n' > .jig/roadmap.md && git add -A && git commit -qm combined
+expect_pass sh -c "test '$(rnext)' = 'alpha/a:open beta/b:blocked' && $J roadmap | grep -qx 'beta  next'"
 msg="after: a page a job moves is re-pointed in a (touches …) an (after …) follows, and the merge commits"
 printf '# Roadmap\n\n## alpha\nScopes:\n- `a`: x (touches docs/x.md) (after alpha/b)\n- `b`: y\n' > .jig/roadmap.md && git add -A && git commit -qm moves
 $J open J --owns 'docs/**' >/dev/null && git add -A && git commit -qm "open J"
