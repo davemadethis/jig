@@ -52,5 +52,20 @@
       "tests/smoke.sh"
     ],
     "reserved": {}
+  },
+  "phase-types": {
+    "spec": ".jig/specs/phase-types.md",
+    "state": "claimed",
+    "after": [],
+    "owns": [],
+    "shares": [
+      "docs/commands.md",
+      "docs/glossary.md",
+      "docs/records.md",
+      "plugin/templates/jig/RULES.md",
+      "plugin/templates/jig/jig.py",
+      "tests/smoke.sh"
+    ],
+    "reserved": {}
   }
 }
