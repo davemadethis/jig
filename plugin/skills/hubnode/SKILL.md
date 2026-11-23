@@ -292,6 +292,13 @@ and commit both with the staged file's `Source: … (staged as <file>)` line in 
 A scope a spec still takes is re-pointed in that commit: the hook names the specs. Then
 `jig staging resolve <file>`, which looks for that line in a trunk commit to the roadmap.
 
+In a pararepo that plans from its metarepo's roadmap (no `.jig/roadmap.md` of its own), a change
+to its products' sections is never made here or on the metarepo's trunk: write a `BUFFER.md`
+row and run `jig propose --buffer`, write the change on the `propose/` branch it makes, and it
+merges in the metarepo at the next sync the owner calls. In a metarepo, merging such a branch
+is a roadmap change like any other: show the diff, and merge on the owner's yes. Rig there lists
+each cross-product wait no section confirms with `(needed by …)`: put it to the owner.
+
 Work with no phase yet, parked mid-build (naming the pages it will touch) or not started, is
 an item under `## No phase` in `.jig/roadmap.md`, proposed the same way. A roadmap change asks
 for no decision entry and no change line. A built item stays, read done from the spec that

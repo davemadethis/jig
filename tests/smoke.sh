@@ -5024,6 +5024,70 @@ printf '# Roadmap\n\n## Demos\nScopes:\n- `d`: its own d\n' > .jig/roadmap.md &&
 cd "$FM" && python3 -c "import json; f='.jig/meta.json'; d=json.load(open(f)); d['pararepos'].append('pc'); json.dump(d, open(f,'w'), indent=2)" && plant "pc joins"
 msg="family: pc keeps its own roadmap: its spec on its own Demos/d isn't read as taking meta's Demos/d"
 expect_pass sh -c "$J roadmap | grep -E '^  Demos/d ' | grep -qv 'pc:'"
+# Part D: a pararepo's edit to its section is buffered and reaches meta by its proposal branch.
+fland() {  # fland <branch> <subject> <python edit of .jig/roadmap.md>: meta writes the proposal on its branch, reviews it, merges
+  ( cd "$FM" && git switch -q "$1" && python3 -c "p='.jig/roadmap.md'; s=open(p).read(); $3; open(p,'w').write(s)" \
+    && git add -A && git commit -qm "$2" && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-edit "$1" ); }
+cd "$FA" && mkdir -p .jig/ledgers && cp "$P/ledgers/BUFFER.md" .jig/ledgers/BUFFER.md
+printf '| B1 | meta/.jig/roadmap.md § Walyt alpha: its scopes | the pairing needs a scope z first (docs/p.md) | owner, 2026-11-23 | Open |\n' >> .jig/ledgers/BUFFER.md && git add -A && git commit -qm "buffer: B1"
+$J propose --buffer z >/dev/null 2>&1 && git add -A && git commit -qm "specs: z proposal"
+metahead=$(git -C "$FM" rev-parse main)
+msg="family D: jig propose --buffer from pa makes propose/pa-z in meta, and meta's trunk is unchanged"
+expect_pass sh -c "git -C '$FM' rev-parse -q --verify refs/heads/propose/pa-z >/dev/null && test \"\$(git -C '$FM' rev-parse main)\" = '$metahead'"
+msg="family D: meta's propose/ branch carries the roadmap change, and its commit passes meta's hook"
+out=$(cd "$FM" && git switch -q propose/pa-z && python3 -c "p='.jig/roadmap.md'; s=open(p).read(); s=s.replace('- \`pairing\`', '- \`z\`: the z work\n- \`pairing\`', 1); open(p,'w').write(s)" && git add -A && git commit -qm "GLOSSARY: z" 2>&1 && $J reviewed >/dev/null); rc=$?
+expect_pass sh -c "test $rc = 0 && test \"\$(git -C '$FM' rev-parse main)\" = '$metahead'" "$out"
+(cd "$FM" && git switch -q main)
+msg="family D: before the merge, a spec in pa taking Walyt alpha/z is refused"
+fspec sz 'Walyt alpha/z' && git add -A; out=$(git commit -qm sz 2>&1); rc=$?; git reset -q --hard
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'takes Walyt alpha/z, which meta.s'" "$out"
+( cd "$FM" && git merge -q --no-ff --no-edit propose/pa-z )
+msg="family D: after meta merges the proposal, the spec commits, and pa wrote nothing to meta's trunk itself"
+fspec sz 'Walyt alpha/z' && git add -A && expect_pass git commit -qm sz
+msg="family D: a .jig/roadmap.md change on any other meta branch is still refused (R5)"
+out=$(cd "$FM" && git switch -q -c other && printf '\n## Extra\nScopes:\n- `e`: e\n' >> .jig/roadmap.md && git add -A && git commit -qm "GLOSSARY: e" 2>&1); rc=$?
+(cd "$FM" && git reset -q --hard && git switch -q main)
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'R5 the roadmap is the owner.s'" "$out"
+# Moving in: pd, with a roadmap of its own, proposes its phases, then removes its roadmap.
+fnew pd && mkdir -p docs src && printf '# P\n\nP is.\n' > docs/p.md && printf 'x = 1\n' > src/x.py
+git add -A && git commit -qm init && $J init >/dev/null && board "b['docmap'] = {'docs/p.md': ['src/**']}" && git add -A && git commit -qm board
+$J init --para meta --location "$FM" >/dev/null 2>&1 && git add -A && git commit -qm para-init && python3 .jig/jig.py repos add para "$T/pd" --name pd >/dev/null
+printf '# Roadmap\n\n## alpha\nScopes:\n- `x`: the x\n\n## No phase\n- `u`: parked u (touches docs/p.md)\n- `v`: later v\n' > .jig/roadmap.md && fspec sx alpha/x && git add -A && git commit -qm own && $J roadmap --write >/dev/null && git add -A && git commit -qm view
+FD="$T/pd"
+( cd "$FM" && printf '\n## Delta\n\nThe delta app.\n\nOwner: `pd`.\n' >> docs/glossary.md && python3 -c "import json; f='.jig/meta.json'; d=json.load(open(f)); d['pararepos'].append('pd'); json.dump(d, open(f,'w'), indent=2)" && plant "Delta" )
+mkdir -p .jig/ledgers && cp "$P/ledgers/BUFFER.md" .jig/ledgers/BUFFER.md
+printf '| B1 | meta/.jig/roadmap.md § Delta alpha: none yet | its phases and list, moving in | owner, 2026-11-23 | Open |\n' >> .jig/ledgers/BUFFER.md && git add -A && git commit -qm "buffer: B1"
+$J propose --buffer move-in >/dev/null 2>&1 && git add -A && git commit -qm "specs: move-in"
+fland propose/pd-move-in "GLOSSARY: Delta moves in" "s += '\n## Delta alpha\nScopes:\n- \`x\`: the x\n\n## Delta No phase\n- \`u\`: parked u (touches docs/p.md)\n- \`v\`: later v\n'"
+cd "$FD"
+msg="family D: pd's commit removing its roadmap and view, re-pointing to a scope meta lacks, is refused"
+git rm -q .jig/roadmap.md ROADMAP.md && sed -i.bak 's|^Scope: alpha/x$|Scope: Delta alpha/nope|' .jig/specs/sx.md && rm .jig/specs/sx.md.bak && git add -A
+out=$(git commit -qm "move in" 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'takes Delta alpha/nope, which meta.s .jig/roadmap.md on its trunk'" "$out"
+msg="family D: re-pointed to Delta alpha/x, the moving-in commit passes"
+sed -i.bak 's|^Scope: Delta alpha/nope$|Scope: Delta alpha/x|' .jig/specs/sx.md && rm .jig/specs/sx.md.bak && git add -A
+expect_pass git commit -qm "move in"
+msg="family D: moved in, a spec in pd taking Delta No phase/v commits, and pd's reading-list shows u, read from meta"
+fspec sv 'Delta No phase/v' && git add -A && git commit -qm sv
+expect_pass sh -c "git log -1 --format=%s | grep -qx sv && $J reading-list src/x.py | grep -q 'no phase .Delta No phase/u.: parked u'"
+msg="family D: a new .jig/roadmap.md in pd is refused: its plan is meta's"
+printf '# Roadmap\n\n## beta\nScopes:\n- `b`: b\n' > .jig/roadmap.md && git add -A; out=$(git commit -qm again 2>&1); rc=$?; git reset -q --hard
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'plans from meta.s roadmap, which holds its products (Delta)'" "$out"
+msg="family D: the sweep in pd writes no roadmap of its own, and says to propose"
+printf '# Q\n\nQ is.\n\n## Undefined\n\n- Sync — stops at x; parked 2026-11-01.\n' > docs/q.md && plant "planted q"
+out=$($UP --apply --sweep 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && test ! -e .jig/roadmap.md && echo \"\$0\" | grep -q 'plans from meta.s roadmap: propose these items under ## Delta No phase'" "$out"
+# Unconfirmed cross-product waits are flagged for the owner, never blocking.
+cd "$FM"
+msg="family D: Walyt alpha/pairing's wait on Familiar App alpha/host, unconfirmed, is listed by jig roadmap and rig in meta"
+expect_pass sh -c "$J roadmap | grep -q 'unconfirmed: Walyt alpha/pairing waits on Familiar App alpha/host' && $J rig | sed -n '/^Waiting on you:/,/^\$/p' | grep -q 'unconfirmed Walyt alpha/pairing waits on Familiar App alpha/host'"
+cd "$FB" && mkdir -p .jig/ledgers && cp "$P/ledgers/BUFFER.md" .jig/ledgers/BUFFER.md
+printf '| B1 | meta/.jig/roadmap.md § Familiar App alpha: host | host is needed by the pairing | owner, 2026-11-23 | Open |\n' >> .jig/ledgers/BUFFER.md && git add -A && git commit -qm "buffer: B1"
+$J propose --buffer needed >/dev/null 2>&1 && git add -A && git commit -qm "specs: needed"
+fland propose/pb-needed "GLOSSARY: host is needed by pairing" "s = s.replace('- \`host\`: the host', '- \`host\`: the host (needed by Walyt alpha/pairing)', 1)"
+cd "$FM"
+msg="family D: once pb's proposal confirms it, merged, it isn't listed"
+expect_pass sh -c "! $J roadmap | grep -q 'unconfirmed: Walyt alpha/pairing' && ! $J rig | grep -q 'unconfirmed Walyt alpha/pairing'"
 }
 
 # ---------------------------------------------------------------- roadmap

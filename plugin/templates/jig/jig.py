@@ -573,8 +573,12 @@ def check_rules(root: Path, board: Board, *, staged: bool) -> list[str]:
     # only make merge conflicts: both roadmap files change on trunk alone.
     # ROADMAP.md is jig's only where trunk keeps a roadmap: elsewhere it is the repo's own page.
     for f in (ROADMAP, *([ROADMAP_VIEW] if at_rev(trunk, ROADMAP) else [])):
-        if f in guarded and branch != trunk:
-            out.append(f"R5 the roadmap is the owner's: {f} is edited on {trunk} only")
+        # A pararepo's change to its products' sections reaches a metarepo only by its
+        # `propose/` branch, merged on trunk on the owner's yes: the one other place it may be.
+        if f in guarded and branch != trunk and not (f == ROADMAP and meta is not None
+                                                     and branch.startswith("propose/")):
+            out.append(f"R5 the roadmap is the owner's: {f} is edited on {trunk} only"
+                       + (", or on a pararepo's propose/ branch" if meta is not None and f == ROADMAP else ""))
     out += roadmap_rules(board, branch, staged, paths, guarded)
     out += boundary_rules(trunk, branch, staged, paths, meta, board.data.get("not_docs") or [])
     out += page_form_rules(root, board, trunk, staged, guarded)
@@ -10119,15 +10123,36 @@ def split_touches(what: str) -> tuple[str, list[str]]:
 AFTER = re.compile(r"\s*\(after(?:\s+([^()]*))?\)\s*$")
 
 
+# `(needed by App alpha/pairing)` on a scope, or a line of its own in a phase: the waits on
+# it this section confirms. Another product's `(after …)` it doesn't confirm is flagged for the
+# owner, never blocking (the owner, 2026-11-21: "flag when they dont so the user can rule on it").
+NEEDED = re.compile(r"\s*\(needed by(?:\s+([^()]*))?\)\s*$")
+
+
 def split_after(what: str) -> tuple[str, list[str] | None]:
-    """A scope's text without its `(after …)`, `(touches …)` kept, and the refs it names: None
-    when it names no wait, [] when the parentheses hold nothing."""
+    """A scope's text without its `(after …)` and `(needed by …)`, `(touches …)` kept, and the
+    refs its `(after …)` names: None when it names no wait, [] when the parentheses hold
+    nothing."""
+    body, after, _ = split_waits(what)
+    return body, after
+
+
+def split_waits(what: str) -> tuple[str, list[str] | None, list[str] | None]:
+    """(text, after refs, needed-by refs): the trailing `(after …)` and `(needed by …)`, in
+    either order before any `(touches …)`, split off; None for one not written."""
     m = TOUCHES.search(what)
     head, tail = (what[:m.start()], what[m.start():]) if m else (what, "")
-    a = AFTER.search(head)
-    if not a:
-        return what, None
-    return (head[:a.start()].rstrip() + tail), refs_of(a.group(1))
+    after = needed = None
+    while True:
+        if after is None and (a := AFTER.search(head)):
+            after, head = refs_of(a.group(1)), head[:a.start()]
+        elif needed is None and (n := NEEDED.search(head)):
+            needed, head = refs_of(n.group(1)), head[:n.start()]
+        else:
+            break
+    if after is None and needed is None:
+        return what, None, None
+    return head.rstrip() + tail, after, needed
 
 
 def refs_of(text: str | None) -> list[str]:
@@ -10177,14 +10202,14 @@ def parse_section(text: str, section: str, problems: list[str] | None = None) ->
             problems.append(f"line {n}: not a {at} item (- `<id>`: {shape}, "
                             f"unindented): {line.strip()}")
             continue
-        body, refs = split_after((m.group(2) or "").strip())
+        body, refs, needed = split_waits((m.group(2) or "").strip())
         what, pages = split_touches(body)
         if any(i["sid"] == f"{at}/{m.group(1)}" for i in items):
             problems.append(f"line {n}: {at} item {m.group(1)} appears twice")
         if refs == []:
             problems.append(f"line {n}: {at} item {m.group(1)} has (after …) naming nothing")
         items.append({"id": m.group(1), "sid": f"{at}/{m.group(1)}", "what": what, "text": body,
-                      "touches": pages, "after": refs or [], "line": n, "list": at})
+                      "touches": pages, "after": refs or [], "needed": needed or [], "line": n, "list": at})
     return items
 
 
@@ -10261,10 +10286,15 @@ def parse_roadmap(text: str, problems: list[str] | None = None) -> list[dict]:
             if any(p["name"] == m.group(1) for p in phases):
                 problems.append(f"line {n}: phase {m.group(1)} appears twice")
             phases.append({"name": m.group(1), "exit": [], "scopes": [], "line": n, "headed": False,
-                           "note": [], "noting": True, "after": [], "after_line": 0, "after_of": {}})
+                           "note": [], "noting": True, "after": [], "after_line": 0, "after_of": {},
+                           "needed": [], "needed_of": {}})
             part = ""
         elif skip or not phases:
             continue
+        elif part != "scopes" and (nb := NEEDED.fullmatch(line.strip())):
+            if in_note:
+                phases[-1]["note"].append(line)
+            phases[-1]["needed"] = refs_of(nb.group(1))
         elif part != "scopes" and (a := AFTER.fullmatch(line.strip())):
             # The phase's wait, read wherever it sits outside Scopes:, so a wait written after a
             # list in the note or among the boxes is never dropped and offered as free work.
@@ -10296,11 +10326,13 @@ def parse_roadmap(text: str, problems: list[str] | None = None) -> list[dict]:
             if sid in ids:
                 problems.append(f"line {n}: scope {sid} appears twice")
             ids.add(sid)
-            what, refs = split_after((m.group(2) or "").strip())
+            what, refs, needed = split_waits((m.group(2) or "").strip())
             if refs is not None:
                 phases[-1]["after_of"][sid] = (refs, n)
                 if not refs:
                     problems.append(f"line {n}: scope {sid} has (after …) naming nothing")
+            if needed:
+                phases[-1]["needed_of"][sid] = needed
             phases[-1]["scopes"].append((sid, what))
     for p in phases:
         del p["noting"]
@@ -10361,6 +10393,35 @@ def ref_problems(phases: list[dict], items: list[dict] = ()) -> list[str]:
         first = min((x for x in ring if x in lines), key=lambda x: (lines[x], x))
         out.append(f"line {lines[first]}: a ring: {', '.join(sorted(ring))} wait on each "
                    "other, so none can start: drop one (after …)")
+    return out
+
+
+def unconfirmed(text: str, owners: dict[str, str]) -> list[tuple[str, str]]:
+    """(waiter, ref) for each `(after …)` naming another product's scope or phase whose section
+    doesn't confirm it with `(needed by <waiter>)`, on the scope, its phase, or the phase named:
+    a wait one product's plan makes on another's, for the owner to rule on. It blocks nothing."""
+    phases, items = parse_roadmap(text), parse_no_phase(text)
+    product: dict[str, str] = {}
+    needs: dict[str, list[str]] = {}
+    for p in phases:
+        product[p["name"]] = product_of(p["name"], owners)
+        needs[p["name"]] = p["needed"]
+        for sid, _ in p["scopes"]:
+            product[sid] = product[p["name"]]
+            needs[sid] = p["needed_of"].get(sid, []) + p["needed"]
+    for i in items:
+        product[i["sid"]] = product_of(i["list"].removesuffix(" " + NO_PHASE), owners)
+        needs[i["sid"]] = i["needed"]
+    waits = [(p["name"], r) for p in phases for r in p["after"]]
+    waits += [(sid, r) for p in phases for sid, (refs, _) in p["after_of"].items() for r in refs]
+    waits += [(i["sid"], r) for i in items for r in i["after"]]
+    out = []
+    for who, ref in waits:
+        if ref not in product or not product[ref] or product[ref] == product.get(who):
+            continue
+        phase_of = who.rsplit("/", 1)[0] if "/" in who else who
+        if not ({who, phase_of} & set(needs.get(ref, []))):
+            out.append((who, ref))
     return out
 
 
@@ -10730,6 +10791,12 @@ class Family:
         return next((t for t in sorted(self.owners) if self.owner_loc(t) is not None
                      and self.owner_loc(t).resolve() == loc.resolve()), "")
 
+    def products_in(self) -> list[str]:
+        """The products the roadmap's headings belong to."""
+        heads = [p["name"] for p in parse_roadmap(self.text)] + [i["list"].removesuffix(" " + NO_PHASE)
+                                                                 for i in parse_no_phase(self.text)]
+        return sorted({product_of(h, self.owners) for h in heads} - {""})
+
     def unknown_owners(self) -> list[tuple[str, str]]:
         """(product, owner) for each product heading whose `Owner:` names no repo jig knows."""
         heads = {p["name"] for p in parse_roadmap(self.text)} | {i["list"] for i in parse_no_phase(self.text)}
@@ -10981,6 +11048,10 @@ def cmd_roadmap(root: Path, args) -> int:
         print(f"{ROADMAP} {x}")
     for name in fam.unreachable:
         print(f"{name} can't be reached here (`jig repos`): its products' scopes read unknown")
+    if fam.kind == "meta":
+        for who, ref in unconfirmed(text, fam.owners):
+            print(f"unconfirmed: {who} waits on {ref}, whose section doesn't say (needed by {who}): "
+                  "the owner rules on it; it blocks nothing")
     for p in phases:
         print(f"{p['name']}  {p['state']}"
               + ("  (empty: no scopes and no exit boxes)" if p["empty"] else ""))
@@ -11161,7 +11232,9 @@ def boundary_rules(trunk: str, branch: str, staged: bool, paths: list[str],
         now = set(git("-c", "core.quotePath=false", "ls-files").splitlines())
         before = set(git("-c", "core.quotePath=false", "ls-tree", "-r", "--name-only", "HEAD").splitlines())
         fam = family(main_root(), trunk)
-        broke = dead_touches(in_index(ROADMAP, staged), now, fam) - dead_touches(at_rev("HEAD", ROADMAP), before, fam)
+        # A pararepo's commit writing a roadmap of its own plans from it, not the metarepo's.
+        own = None if fam.reads_meta and in_index(ROADMAP, staged) else fam
+        broke = dead_touches(in_index(ROADMAP, staged), now, own) - dead_touches(at_rev("HEAD", ROADMAP), before, own)
         # A page a metarepo moved down takes its items with it. A pararepo planning from this
         # roadmap takes them in this commit, into its product's section, where its page is the
         # pararepo's; one keeping a roadmap of its own takes them by a staged roadmap change,
@@ -11345,6 +11418,23 @@ def page_form_rules(root: Path, board: "Board", trunk: str, staged: bool, guarde
             if e["named"] and e["path"] not in old]
 
 
+def moving_in(para: dict, staged: bool) -> list[str]:
+    """The pararepo's commit removing its own roadmap, once its phases and lists are the
+    metarepo's: every `Scope:` line it keeps names the metarepo's ids, read on its trunk."""
+    loc = meta_checkout(main_root(), para)
+    if loc is None:
+        print(f"jig: warning: {para.get('meta', 'the metarepo')} isn't reachable here (`jig repos`), so "
+              f"the Scope: lines this commit keeps pass unchecked", file=sys.stderr)
+        return []
+    known = roadmap_scopes(trunk_show(loc, ROADMAP) or "")
+    out = []
+    for f in git("-c", "core.quotePath=false", "ls-files", "--", SPECS, HANDOFFS).splitlines():
+        if takes_scopes(f) and (bad := [sc for sc in scopes_in(f, in_index(f, staged)) if sc not in known]):
+            out.append(f"{f} takes {', '.join(bad)}, which {para['meta']}'s {ROADMAP} on its trunk doesn't "
+                       f"have: this commit removes {ROADMAP}, so re-point it to {para['meta']}'s ids here")
+    return out
+
+
 def roadmap_rules(board: "Board", branch: str, staged: bool, paths: list[str],
                   guarded: list[str]) -> list[str]:
     """Scopes a spec cites must be the roadmap's. On trunk the commit's own roadmap counts, so
@@ -11354,7 +11444,24 @@ def roadmap_rules(board: "Board", branch: str, staged: bool, paths: list[str],
     old = at_rev(trunk, ROADMAP)
     fam = family(main_root(), trunk)
     out, named = [], set()
-    if fam.reads_meta and not old and not (on_trunk and in_index(ROADMAP, staged)):
+    adds = on_trunk and bool(in_index(ROADMAP, staged))
+    if fam.reads_meta and not old and adds and fam.meta_loc is not None \
+            and any(fam.ours(p) for p in fam.products_in()):
+        # Moved in, its plan is the metarepo's: a roadmap here would be a second copy to drift.
+        return [f"{ROADMAP}: this repo plans from {fam.meta_name}'s roadmap, which holds its products "
+                f"({', '.join(p for p in fam.products_in() if fam.ours(p))}): change them there, by a "
+                f"{BUFFER} row and `jig propose`, never in a roadmap of its own"]
+    para = load_para(trunk) if on_trunk and old and not in_index(ROADMAP, staged) else None
+    if para is not None:
+        return moving_in(para, staged)
+    if load_meta(trunk) is not None and branch.startswith("propose/") and ROADMAP in paths:
+        # A pararepo's proposal: its merge is judged on trunk; what it says is checked here too.
+        text = in_index(ROADMAP, staged)
+        problems: list[str] = []
+        parsed = parse_roadmap(text, problems)
+        problems += ref_problems(parsed, parse_no_phase(text, problems))
+        return [f"{ROADMAP} {x}" for x in problems]
+    if fam.reads_meta and not old and not adds:
         # The roadmap is the metarepo's, read live from its trunk: no release carries it.
         takers = [f for f in paths if takes_scopes(f) and scopes_in(f, in_index(f, staged))]
         if fam.meta_loc is None:
@@ -14451,6 +14558,13 @@ def cmd_sweep(root: Path, apply: bool) -> int:
     if new and not on_trunk_now:
         die(f"{ROADMAP} is edited on {trunk} only (R5): run `jig update --apply --sweep` there "
             "first; it writes the items, then this run removes the sections", 2)
+    fam = family(root, trunk)
+    if new and fam.reads_meta:
+        # A roadmap here would be a second copy of the plan, and the hook refuses one.
+        own = [p for p in fam.products_in() if fam.ours(p)]
+        die(f"this repo plans from {fam.meta_name}'s roadmap: propose these items under "
+            f"## {own[0] if own else '<Product>'} {NO_PHASE} there, by a {BUFFER} row and `jig propose`; "
+            f"nothing is written here", 2)
     written = []
     if new:
         if not roadmap and (root / ROADMAP_VIEW).is_file():
@@ -15122,11 +15236,18 @@ def rig_state(root: Path, board: "Board") -> dict:
     asked = [g for g in out_groups if g["overlaps"]]
     return {"items": sorted(items, key=sort_key), "overlaps": [list(p) for p in pairs],
             "cycles": [list(c) for c in sorted(cycles)], "groups": out_groups,
-            "waiting_on_you": len(asks) + len(asked) + len(cycles), "can_start": sum(i["opens"] == "now" for i in start),
+            "waiting_on_you": len(asks) + len(asked) + len(cycles) + len(unconfirmed_waits(root, board)), "can_start": sum(i["opens"] == "now" for i in start),
             "feedback": sum(i["kind"] == "feedback" for i in items), "jobs": jobs,
             "unreachable": family(root, board.trunk).unreachable,
+            "unconfirmed": unconfirmed_waits(root, board),
             # Closing needs no answer, so finished specs count in neither number.
             "finished": finished_specs(Snapshot(board.trunk), board)}
+
+
+def unconfirmed_waits(root: Path, board: "Board") -> list[list[str]]:
+    """In a metarepo, the cross-product waits no section confirms, which wait on the owner."""
+    fam = family(root, board.trunk)
+    return [[w, r] for w, r in unconfirmed(fam.text, fam.owners)] if fam.kind == "meta" else []
 
 
 def rig_text(state: dict) -> str:
@@ -15168,7 +15289,9 @@ def rig_text(state: dict) -> str:
              for g, group in enumerate(state["groups"], 1) if group["overlaps"]]
     out += [f"  group {g}: one job for {k} items, or keep some apart" for g, k in asked]
     out += [f"  cycle   {', '.join(c)}: which goes first" for c in state["cycles"]]
-    if not asks and not asked and not state["cycles"]:
+    out += [f"  unconfirmed {w} waits on {r}, whose section doesn't say (needed by {w}): rule on it"
+            for w, r in state.get("unconfirmed", [])]
+    if not asks and not asked and not state["cycles"] and not state.get("unconfirmed"):
         out.append("  nothing")
     out.append("\nRunning:")
     out += [f"  {j['name']}: {j['step']} — {j['who']}, {j['session']}" + (f" ({j['why']})" if j["why"] else "")

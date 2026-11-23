@@ -1012,7 +1012,28 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
   commit `ROADMAP.md` on trunk like the rest of jig's bookkeeping. Phases and scopes are the
   owner's plan, not work, so they change on trunk only, and a branch regenerating the view would
   only make merge conflicts. A roadmap change asks for no decision entry and no change line:
-  git keeps its history.
+  git keeps its history. One other branch may carry `.jig/roadmap.md`: a metarepo's
+  `propose/` branch, a pararepo's buffered edit (Edits, below), whose merge is a trunk commit
+  on the metarepo owner's yes, where the hook checks it as any trunk change.
+- **Edits.** No hubnode edits another repo's content. A pararepo's changes to its products'
+  sections are buffered and reach the metarepo by the regular sync process, when the owner
+  decides: a `BUFFER.md` row and `jig propose`, the change written on its
+  `propose/<repo>-<slug>` branch in the metarepo, never on its trunk, and merged there at the
+  next sync the owner calls. A pararepo's merge writes nothing to the metarepo's roadmap.
+  Labels, names and new products (the glossary term and its `Owner:` line) are the metarepo's
+  hubnode's.
+- **Moving in**, once per pararepo, by hand, on the owner's yes: the metarepo's glossary names
+  the product with its `Owner:` line; the pararepo proposes its phases as
+  `## <Product> <phase>` and its `## No phase` items as `## <Product> No phase`, and the
+  metarepo merges it; then the pararepo's next commit removes its `.jig/roadmap.md` and
+  `ROADMAP.md`, its `Scope:` lines re-pointed to the metarepo's ids, which the hook checks on the
+  metarepo's trunk. After it, the pararepo's hook refuses a `.jig/roadmap.md` while the
+  metarepo's roadmap holds a product it owns, and `jig update --sweep` writes none there: its
+  `## Undefined` entries are proposed under `## <Product> No phase`.
+- **Unconfirmed waits.** A scope or phase may say what waits on it, `(needed by <ref>, …)`,
+  as it says what it waits on. A cross-product `(after …)` the waited-on scope or phase doesn't
+  confirm so is listed by `jig roadmap` in the metarepo and under rig's Waiting on you, for the
+  owner to rule on. It blocks no commit and no step: the wait itself still blocks as any does.
 - **The hook refuses** a spec whose `Scope:` names a scope or `No phase/<id>` trunk's roadmap doesn't have (on
   trunk, the commit's own roadmap), and on trunk a roadmap change that drops or renames a scope
   a spec still takes, naming the spec: re-point it in the same commit.

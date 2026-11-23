@@ -62,12 +62,15 @@ inline visual, it may; the sections and their contents stay these.
    after, and each overlapping pair the group's `overlaps` names.
 3. **Waiting on:** each item and what it waits for: a job, a spec or a staged file. A taken
    staged file waits on the spec or job that carries it. A blocked scope waits on the scopes
-   or phases its `(after …)` names: work, not an answer.
+   or phases its `(after …)` names: work, not an answer. In a pararepo the roadmap is the
+   metarepo's: only the products this repo owns give it steps, and a line naming a repo rig
+   couldn't reach says so.
 4. **Waiting on you:** the open staged files, each `noted` file with the note that carried it
    (the hubnode's step), each `concluded` feedback report with what
    `/jig:fix` found, the next step whose `state` is `open`, each
-   group with an overlap (one line: one job for its items, or keep some apart) and each
-   dependency cycle (`cycles`).
+   group with an overlap (one line: one job for its items, or keep some apart), each
+   dependency cycle (`cycles`), and in a metarepo each cross-product wait no section confirms
+   (`unconfirmed`): the owner rules on it, and it blocks nothing.
 5. **Running:** each open job with its step, who takes it, and whether it continues a session
    or starts one, as `jig rig` printed it from `jig next`; then each `fixing` feedback report
    with its group and its session.
