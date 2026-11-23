@@ -62,8 +62,8 @@ hubnode adds it with `python3 .jig/jig.py share greeting src/other.py`.
 
 **5. Review.** The hubnode starts a fresh session for `/jig:review`. It sees the diff, the spec
 and the rules, and none of the conversation. The hubnode records the review in the job's
-worktree, with the review role's [tier](docs/glossary.md#tier) and
-[effort](docs/glossary.md#effort) and how many blocking findings it left:
+worktree. The record says the review role's [tier](docs/glossary.md#tier) and
+[effort](docs/glossary.md#effort), and how many blocking findings it left:
 `python3 .jig/jig.py reviewed --tier 2 --effort 2 --blocking 0`.
 
 **6. Hand off.** The work subnode runs `python3 .jig/jig.py handoff`, which writes a note naming
