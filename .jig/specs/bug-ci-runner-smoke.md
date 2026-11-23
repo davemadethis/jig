@@ -151,6 +151,9 @@ This is a correction: smoke builds its own environment instead of inheriting the
 
 ## Decisions
 - The product keeps git's own identity message; no jig.py change (see One layer up).
+- `checked --trace`'s fourth cause was the test's: git 2.56 prints "is the first 'bad' commit", with the
+  term quoted, and the case's sed matched only the unquoted form, so it read no commit. The runner's bisect
+  itself named `merge M` (run 45214696987). The sed now takes either form; jig.py prints no such line.
 
 ## Roles
 spec: tier 2, effort 2

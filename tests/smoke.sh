@@ -7662,7 +7662,8 @@ expect_pass sh -c "echo \"\$0\" | grep -A3 'oldest first' | sed -n '2,4p' | sed 
 msg="checked --trace: the printed first-parent bisect, running only the failing command, names the second merge"
 bis=$(echo "$out" | sed -n 's/^  \(git bisect .*\)$/\1/p' | grep -v reset)
 bisout=$(eval "$bis" 2>&1); git bisect reset >/dev/null 2>&1
-first_bad=$(echo "$bisout" | sed -n 's/^\([0-9a-f]\{40\}\) is the first bad commit$/\1/p')
+# git 2.56 quotes the term ("the first 'bad' commit"); older git doesn't.
+first_bad=$(echo "$bisout" | sed -n "s/^\([0-9a-f]\{40\}\) is the first '\{0,1\}bad'\{0,1\} commit\$/\1/p")
 expect_pass sh -c "git log -1 --format=%s $first_bad | grep -qx 'merge M'"
 # On a failure the log carries what ran and what it said, so a runner's failure names its cause.
 git log -1 --format=%s $first_bad 2>/dev/null | grep -qx 'merge M' || printf '%s\n' "bisect commands:" "$bis" "bisect output:" "$bisout"
