@@ -41,7 +41,7 @@ STATES = ["claimed", "building", "ready", "gated", "parked"]
 # LAYOUT row, a config default or an update STEP bumps it. Update branches on it twice: it
 # refuses to take a newer repo back to an older jig, and it folds `## Up next` only once trunk's
 # committed checker is ONE_LIST or newer (knows_one_list).
-STAMP = 11
+STAMP = 12
 # The first STAMP whose checker reads the one list, `## No phase` items naming pages included.
 ONE_LIST = 11
 BOARD_DEFAULTS = {
@@ -556,6 +556,8 @@ def check_rules(root: Path, board: Board, *, staged: bool) -> list[str]:
     if LOG in guarded:
         out += log_rules(trunk, staged, on_trunk(trunk, branch))
         out += move_rules(trunk, staged, meta)
+    if IDEAS in guarded or (LOG in guarded and in_index(IDEAS, staged)):
+        out += ideas_rules(trunk, staged, on_trunk(trunk, branch))
 
     # R1 the trunk checkout stays on trunk (only when jobs are open: solo, one checkout
     # with a feature branch is normal and nobody else's tree is being moved)
@@ -711,6 +713,9 @@ def check_rules(root: Path, board: Board, *, staged: bool) -> list[str]:
             # Any job may record a decision or a change, whatever its lists say, since M3 asks
             # a metarepo job for its line. It only adds, outside ## Open where an open entry's
             # status changes in place: a rewrite would take what others recorded with it.
+            # Ideas change in place and leave when decided or dropped, so any job may edit them.
+            if p == IDEAS:
+                continue
             if p == LOG:
                 since = since_trunk(trunk)
                 now = in_index(LOG, staged)
@@ -719,8 +724,8 @@ def check_rules(root: Path, board: Board, *, staged: bool) -> list[str]:
                 # A log the branch added and then removed was never trunk's.
                 if not now and not at_rev(since, LOG):
                     continue
-                out.append(f"R3 {LOG}: a job adds to the log, and changes lines in place only "
-                           f"under ## Open")
+                out.append(f"R3 {LOG}: a job adds to the log; what changes in place is an idea, "
+                           f"in {IDEAS}")
                 continue
             # R3 only this job's files, or a file new to the repository. Removing a file is
             # changing it: one trunk has must be declared; one only this job added never was trunk's.
@@ -875,6 +880,9 @@ def cmd_init(root: Path, args) -> int:
     elif not (root / LOG).exists():
         (root / LOG).write_text(LOG_SEED)
         print(f"wrote {LOG}")
+    if not (root / IDEAS).exists():
+        (root / IDEAS).write_text(IDEAS_SEED)
+        print(f"wrote {IDEAS}")
     rc = 0
     if getattr(args, "no_hooks", False):
         print("hooks not installed (--no-hooks). Run `jig install-hooks` to cut over.")
@@ -1264,7 +1272,7 @@ def cmd_open(root: Path, args) -> int:
           f"Spec: {args.spec or '(see board)'}\n"
           f"Owns: {', '.join(owns) or '-'}\nShares: {', '.join(args.shares or []) or '-'}\n"
           f"{merges}Read {DIR}/RULES.md, then `python3 {DIR}/jig.py rules`.\n"
-          f"When you write or change a Proposed entry in {LOG}, or meet a question only the "
+          f"When you write or change a Proposed idea in {IDEAS}, or meet a question only the "
           "owner can answer, message the hubnode then, with the rule sentence and the "
           "alternative you rejected, and keep building.")
     return 0
@@ -2199,9 +2207,9 @@ def clean_up_job(name: str, branch: str) -> None:
 
 
 def append_globs(board: "Board") -> list[str]:
-    """The board's append files, and the decision log in every repo: any job may add to it,
-    so two jobs' entries at one spot are the conflict sync resolves by itself."""
-    return [*board.data.get("append_files", []), LOG]
+    """The board's append files, and the decision log and ideas file in every repo: any job
+    may add to them, so two jobs' entries at one spot are the conflict sync resolves by itself."""
+    return [*board.data.get("append_files", []), LOG, IDEAS]
 
 
 def cmd_rules(root: Path, args) -> int:
@@ -2915,7 +2923,7 @@ def claim_texts(root: Path) -> list[tuple[str, list[str]]]:
     ledgers: jig's own files define the names, and a handoff records what was true then."""
     out = []
     for f in tracked(root):
-        if f.startswith(f"{DIR}/") and not f.startswith((f"{DIR}/specs/", f"{DIR}/ledgers/", LOG, PROCESS)):
+        if f.startswith(f"{DIR}/") and not f.startswith((f"{DIR}/specs/", f"{DIR}/ledgers/", LOG, IDEAS, PROCESS)):
             continue
         p = root / f
         if not p.is_file() or p.stat().st_size > 1 << 20:
@@ -3023,9 +3031,8 @@ def claim_mark(line: str, pat: re.Pattern, home: str) -> str:
 
 
 def claims_of_id(root: Path, want: str, prefix: str) -> tuple[list[str], list[tuple]]:
-    """Notes and (file, line, mark, text, why) hits for decision id WANT."""
-    path = root / LOG
-    text = path.read_text(errors="replace") if path.exists() else ""
+    """Notes and (file, line, mark, text, why) hits for decision id WANT, an entry or an idea."""
+    text = read_entries_text(root)
     entries = log_entries(text, prefix)
     notes = []
     entry = next((e for e in entries if decision_id(e["id"]) == decision_id(want)), None)
@@ -3051,7 +3058,9 @@ def claims_of_id(root: Path, want: str, prefix: str) -> tuple[list[str], list[tu
                      f"{', '.join(ids)} are listed.")
         entry = next((e for e in entries if e["id"] == by), None)
     elif not entry:
-        notes.append(f"no entry {want} in {LOG} or in its history: lines naming it are listed.")
+        notes.append(f"no entry {want} in {LOG} or {IDEAS}, or in their history: lines naming it are listed.")
+    if entry and entry["file"] == IDEAS:
+        notes.append(f"{entry['id']} is an idea, not decided yet: its home is {IDEAS}:{entry['line']}.")
 
     def id_re(i: str) -> str:
         # D-2 and D-002 are one decision, as R6 counts it; whole ids only, D-7 is not D-70.
@@ -3061,14 +3070,15 @@ def claims_of_id(root: Path, want: str, prefix: str) -> tuple[list[str], list[tu
     pat = re.compile("|".join(id_re(i) for i in ids))
     # The entry is the home, its status line naming what it supersedes included.
     lines_in = len(text.splitlines())
-    homes = {n for e in entries if entry and e["id"] == entry["id"]
-             for n in range(e["start"] + 1, (e["end"] if e["end"] is not None else lines_in) + 1)}
+    homes = ({(entry["file"], entry["line"] + k)
+              for k in range((entry["end"] if entry["end"] is not None else lines_in) - entry["start"])}
+             if entry else set())
     hits = []
     for f, lines in claim_texts(root):
         for n, line in enumerate(lines, 1):
             if not pat.search(line):
                 continue
-            mark = "home" if f == LOG and n in homes else claim_mark(line, pat, LOG)
+            mark = "home" if (f, n) in homes else claim_mark(line, pat, entry["file"] if entry else LOG)
             why = "cites it as its source" if re.search(r"(?i)\bsources?\b", line) else ""
             hits.append((f, n, mark, line, why))
     if entry:
@@ -3076,7 +3086,7 @@ def claims_of_id(root: Path, want: str, prefix: str) -> tuple[list[str], list[tu
         mine = touching_entries(text, prefix, SELF, LOG, names)
         me = next((e for e in mine if e["id"] == entry["id"]), None)
         for o, ptr in peers_of(me, mine, prefix) if me else []:
-            hits.append((LOG, o["line"], "copy", f"### {o['id']} {o['title']}", f"peers by Touches on {ptr}"))
+            hits.append((o["file"], o["line"], "copy", f"### {o['id']} {o['title']}", f"peers by Touches on {ptr}"))
     return notes, hits
 
 
@@ -3158,7 +3168,9 @@ def cmd_reading_list(root: Path, args) -> int:
         hits = [f for f in tracked(root) if matches(f, [pattern])] or [pattern]
         for f in hits:
             # A docmap key names the page in either form; list the one on disk.
-            owners = [q for p in doc_owners(board, f)
+            # A docmap page named itself is the page a task takes on: it is read too.
+            pages = doc_owners(board, f) + [p for p in board.data.get("docmap") or {} if same_page(f, p)]
+            owners = [q for p in dict.fromkeys(pages)
                       if (q := next((g for g in page_forms(p) if (root / g).exists()), ""))]
             want += [p for p in owners if p not in want]
             if not owners and f.endswith(SRC_EXT):
@@ -3182,6 +3194,10 @@ def cmd_reading_list(root: Path, args) -> int:
     items = roadmap_items("HEAD", ("open", "taken"))
     if gone := unreachable_line():
         print(f"  ({gone})")
+    # And the research still open on it: a spec taking a page sees what is undecided there.
+    ideas_text = (root / IDEAS).read_text(errors="replace") if (root / IDEAS).is_file() else ""
+    ideas = [(e, [pointer_term(t)[0] for t in entry_touches(e["block"]) or []])
+             for e in idea_entries(ideas_text, log_prefix(board.trunk))]
 
     def show(page: str, line: str) -> None:
         """Print PAGE once, wherever it first appears, with the items that name it."""
@@ -3192,6 +3208,9 @@ def cmd_reading_list(root: Path, args) -> int:
         for kind, iid, what, touches in items:
             if any(same_page(t, page) for t in touches):
                 print(f"      {kind.lower()} `{iid}`: {what}   ({ROADMAP})")
+        for e, touches in ideas:
+            if any(same_page(t, page) for t in touches):
+                print(f"      idea {e['id']}: {e['title']}   ({IDEAS})")
     for page in want:
         show(page, f"  {page}")
         for up, below in pages_above(page, have, deep, flat):
@@ -3248,8 +3267,8 @@ def proposed_added(trunk: str, commit: str) -> list[dict]:
     ruling the owner hasn't made, which the hubnode sends up while the job builds."""
     since = git("merge-base", trunk, commit)
     prefix = log_prefix(trunk)
-    before = {e["id"]: e["block"] for e in log_entries(at_rev(since, LOG), prefix)} if since else {}
-    return [e for e in log_entries(at_rev(commit, LOG), prefix)
+    before = {e["id"]: e["block"] for e in log_entries(entries_at(since), prefix)} if since else {}
+    return [e for e in log_entries(entries_at(commit), prefix)
             if e["status"].startswith("Proposed") and before.get(e["id"]) != e["block"]]
 
 
@@ -3354,7 +3373,7 @@ def cmd_gate(root: Path, args) -> int:
     if weak:
         print(f"warning: {weak}", file=sys.stderr)
     for e in proposed_added(trunk, commit):
-        print(f"warning: {LOG} § {e['id']} {e['title']} is Proposed: it merges unruled unless "
+        print(f"warning: {e['file']} § {e['id']} {e['title']} is Proposed: it merges unruled unless "
               "the owner said to gate it as proposed", file=sys.stderr)
     # The commit the note names, never the job's live worktree, which may have moved on; and
     # trunk merged in the way `jig sync` merges it, so the gate checks the merge a sync makes.
@@ -3614,7 +3633,7 @@ def process_lines(root: Path, files: list[str]) -> list[tuple[str, int, str]]:
 # state machine), so old text is not searched for them: whoever writes a page judges it.
 def project_sections(text: str) -> list[str]:
     where = (f"parked work → an item under ## {NO_PHASE} in {ROADMAP} naming this page; "
-             f"an open question → an ## Open entry in {LOG}")
+             f"an open question → an idea in {IDEAS}")
     return [f"## {name} is the project's: {where}"
             for name, _ in page_sections(text)[1:] if name.lower() == "undefined"]
 
@@ -5537,8 +5556,9 @@ def is_entry(path: str, entry_files: list[str]) -> bool:
     """entry_files are jig's globs, never git pathspecs: git's `**` misses a file directly
     under the folder. jig's own files never count, or a `**/*.md` would make M3 ask the
     hubnode's trunk bookkeeping for a log line that M4 then refuses on trunk. The decision log
-    is the exception, always: it is the metarepo's decisions, which pararepos cite."""
-    return path == LOG or (not path.startswith(f"{DIR}/") and matches(path, entry_files))
+    and the ideas file are the exception, always: they are the metarepo's decisions and open
+    questions, which pararepos cite."""
+    return path in (LOG, IDEAS) or (not path.startswith(f"{DIR}/") and matches(path, entry_files))
 
 
 def entry_paths(rev: str, cwd: str | None = None) -> list[str]:
@@ -5646,7 +5666,8 @@ def meta_rules(root: Path, board: "Board", meta: dict, staged: bool) -> list[str
     branch_paths = git("-c", "core.quotePath=false", "diff", "--name-only", "--no-renames", since,
                        *(["--cached"] if staged else [])).splitlines()
     record = LOG if by_log else CHANGELOG
-    cited = [p for p in branch_paths if p and p != record and is_entry(p, entry)]
+    # An idea is recorded by itself, as an entry is: no change line for it.
+    cited = [p for p in branch_paths if p and p not in (record, IDEAS) and is_entry(p, entry)]
     # A metarepo that hasn't moved its glossary yet still names README.md in entry_files, and
     # pararepos cite only that section of it: its other prose changes with no log line. The
     # move takes README.md out of entry_files, and this with it.
@@ -5661,7 +5682,7 @@ def meta_rules(root: Path, board: "Board", meta: dict, staged: bool) -> list[str
     # a decision is reviewed work, so it comes in by a merge like the pages that cite it.
     # The roadmap's view is that bookkeeping too, where the repo keeps a roadmap.
     keeps = (ROADMAP_VIEW,) if in_index(ROADMAP, staged) or at_rev(trunk, ROADMAP) else ()
-    if trunk_side and paths and not all((p.startswith(f"{DIR}/") and p != LOG) or p in keeps
+    if trunk_side and paths and not all((p.startswith(f"{DIR}/") and p not in (LOG, IDEAS)) or p in keeps
                                       for p in paths):
         out.append(f"M4 {trunk} takes only merges of reviewed branches: commit on a branch")
     return out
@@ -5827,7 +5848,7 @@ def cmd_meta_init(root: Path, args) -> int:
 # ---------------------------------------------------------------- decision log
 
 # Every repo keeps one log: decision entries and Keep a Changelog lines, grouped by release.
-# Open entries change in place under ## Open. An entry says what holds now, so a reversed one is
+# An open question is an idea, in the ideas file, where it changes in place. An entry says what holds now, so a reversed one is
 # removed by the commit adding the entry that supersedes it, and git keeps its text. A release's
 # change lines are what that version told its readers, so they are frozen.
 LOG = f"{DIR}/decisions.md"
@@ -5845,8 +5866,18 @@ LOG_HEAD = (
     "(`.jig/RULES.md`, Versioning).\n"
     "A breaking change is one that a reader taking the release must act on: a `**Breaking:**` line "
     "says what to change, and it doesn't set the version's level.\n")
-LOG_SEED = "# Decisions and changes\n\n" + LOG_HEAD + "\n## Open\n\n## Unreleased\n"
-OLD_LOG_SEED = "# Decisions and changes\n\n" + OLD_LOG_HEAD + "\n## Open\n\n## Unreleased\n"
+LOG_SEED = "# Decisions and changes\n\n" + LOG_HEAD + "\n## Unreleased\n"
+# The seeds earlier jigs wrote, with ## Open, still read as an empty log.
+OLD_LOG_SEEDS = ("# Decisions and changes\n\n" + LOG_HEAD + "\n## Open\n\n## Unreleased\n",
+                 "# Decisions and changes\n\n" + OLD_LOG_HEAD + "\n## Open\n\n## Unreleased\n")
+# The log holds decisions only. What is still to be researched before it can be decided, scoped,
+# built and documented is an idea, in an entry of the log's form with an id from the log's
+# counter: released entries and pararepos cite ids an Open entry had, so an idea keeps its id,
+# and deciding it moves its block into the log.
+IDEAS = f"{DIR}/ideas.md"
+IDEAS_SEED = ("# Ideas\n\nQuestions and ideas to research before they can be decided, scoped, built "
+              "and documented: one entry each, as the decision log's, `Open` or `Proposed`.\n")
+IDEA_STATUSES = ("Open", "Proposed")
 LOG_STATUSES = ("Accepted", "Open", "Proposed")
 CHANGE_GROUPS = ("Added", "Changed", "Deprecated", "Removed", "Fixed", "Security")
 RELEASE_HEADING = re.compile(r"^## (v\d+\.\d+(?:\.\d+)?) - (\d{4}-\d{2}-\d{2})( \[YANKED\])?[ \t]*$")
@@ -5895,8 +5926,13 @@ def log_entries(text: str, prefix: str) -> list[dict]:
     out: list[dict] = []
     section = ""
     lines = text.splitlines()
+    # In with_ideas' text, what follows its ideas heading is the ideas file, its lines counted from there.
+    base = None
     for n, line in enumerate(lines):
-        if line.startswith("## "):
+        if line == IDEAS_JOIN and base is None:
+            base, section = n, IDEAS
+            continue
+        if line.startswith("## ") and base is None:
             m = RELEASE_HEADING.match(line)
             section = m.group(1) if m else line[3:].strip()
         if line.startswith(("## ", "### ")) and out and out[-1]["end"] is None:
@@ -5907,10 +5943,37 @@ def log_entries(text: str, prefix: str) -> list[dict]:
             if status.startswith("#"):
                 status = ""
             out.append({"id": m.group(1), "title": m.group(2), "section": section,
-                        "status": status, "line": n + 1, "start": n, "end": None})
+                        "status": status, "line": n + 1 - (base + 1 if base is not None else 0),
+                        "file": IDEAS if base is not None else LOG, "start": n, "end": None})
     for e in out:
         e["block"] = "\n".join(lines[e["start"]:e["end"] if e["end"] is not None else len(lines)]).rstrip()
     return out
+
+
+# One text for the readers of an entry by id: the log, then this line, then the ideas file. An
+# entry after it reads as section IDEAS, its line and file the ideas file's own.
+IDEAS_JOIN = f"## {IDEAS}"
+
+
+def with_ideas(log: str, ideas: str) -> str:
+    """The log's text and the ideas file's as one, for a reader that looks an id up in both."""
+    return f"{log.rstrip(chr(10))}\n\n{IDEAS_JOIN}\n{ideas}" if ideas.strip() else log
+
+
+def idea_entries(text: str, prefix: str) -> list[dict]:
+    """The ideas file's entries, as log_entries gives a log's, in section IDEAS."""
+    return log_entries(with_ideas("", text), prefix)
+
+
+def read_entries_text(root: Path) -> str:
+    """This checkout's log and ideas file, as with_ideas joins them."""
+    read = lambda f: (root / f).read_text(errors="replace") if (root / f).is_file() else ""
+    return with_ideas(read(LOG), read(IDEAS))
+
+
+def entries_at(rev: str, cwd: str | None = None) -> str:
+    """The log and ideas file at REV, as with_ideas joins them."""
+    return with_ideas(git("show", f"{rev}:{LOG}", cwd=cwd), git("show", f"{rev}:{IDEAS}", cwd=cwd))
 
 
 def status_parts(status: str, prefix: str) -> tuple[str, str, str, list[str]] | None:
@@ -5969,20 +6032,20 @@ def log_problems(text: str, prefix: str, trunk: str = "") -> list[str]:
         parts = status_parts(e["status"], prefix)
         if parts is None:
             out.append(f"M2 {at} needs a status line under its heading: `Accepted (who, "
-                       f"YYYY-MM-DD).`, or under ## Open `Open (YYYY-MM-DD).` / `Proposed (YYYY-MM-DD).`, "
-                       f"optionally ending `Supersedes {prefix}007.`")
+                       f"YYYY-MM-DD).`, optionally ending `Supersedes {prefix}007.`; an open question "
+                       f"is an idea, in {IDEAS}")
             continue
         status, who, _, sup = parts
         if status == "Accepted" and not who:
             out.append(f"M2 {at}: an accepted entry says who decided: `Accepted (who, YYYY-MM-DD).`")
         if e["section"] == "Open" and status == "Accepted":
-            out.append(f"M2 {at} is accepted: move it out of ## Open, to ## Unreleased")
+            out.append(f"M2 {at} is accepted: move it to ## Unreleased")
         elif e["section"] not in ("Open", "") and status != "Accepted":
             where = "## Unreleased" if e["section"] == "Unreleased" else f"release {e['section']}"
-            out.append(f"M2 {at} is {status.lower()}: {where} holds accepted entries only; it "
-                       f"belongs under ## Open")
+            out.append(f"M2 {at} is {status.lower()}: {where} holds accepted entries only; an "
+                       f"idea goes in {IDEAS}")
         elif e["section"] == "":
-            out.append(f"M2 {at} sits above ## Open: an entry belongs under ## Open, ## Unreleased "
+            out.append(f"M2 {at} sits above the log's sections: an entry belongs under ## Unreleased "
                        f"or a release")
         for s in sup:
             if s not in known and not (trunk and in_log_history(s, trunk)):
@@ -5991,6 +6054,75 @@ def log_problems(text: str, prefix: str, trunk: str = "") -> list[str]:
             elif s == e["id"]:
                 out.append(f"M2 {at} supersedes itself")
     return out
+
+
+def open_problems(old: str, new: str, prefix: str) -> list[str]:
+    """The log keeps only decisions: a `## Open` heading it didn't have, and an Open or
+    Proposed entry added under one, are refused by line. A log not folded yet keeps what it
+    has, so its entries can still change in place until `jig update` folds them."""
+    out = []
+    if not any(OPEN_HEADING.match(l) for l in old.splitlines()):
+        out += [f"M2 {LOG}:{n} `## Open`: the log holds decisions only; an open question is an "
+                f"idea in {IDEAS}" for n, l in enumerate(new.splitlines(), 1) if OPEN_HEADING.match(l)]
+    was = {e["id"] for e in log_entries(old, prefix)}
+    out += [f"M2 {LOG}:{e['line']} {e['id']} is {e['status'].split(' ')[0].lower()}: an idea goes in {IDEAS}"
+            for e in log_entries(new, prefix)
+            if e["section"] == "Open" and e["id"] not in was and e["status"].startswith(IDEA_STATUSES)]
+    return out
+
+
+def ideas_problems(text: str, log: str, prefix: str, trunk: str = "", trunk_side: bool = False) -> list[str]:
+    """M2 for the ideas file: each idea's heading and status line, one block per id across it
+    and the log, its supersedes links, and on trunk numbered ids only."""
+    out: list[str] = []
+    for n, line in enumerate(text.splitlines(), 1):
+        if line.startswith("## "):
+            out.append(f"M2 {IDEAS}:{n} `{line.strip()}`: the ideas file has no sections, only its "
+                       f"entries, one after another")
+    ideas = idea_entries(text, prefix)
+    in_log = {e["id"] for e in log_entries(log, prefix)}
+    known = in_log | {e["id"] for e in ideas}
+    seen: set[str] = set()
+    for e in ideas:
+        at = f"{IDEAS}:{e['line']} {e['id']}"
+        if e["id"] in seen:
+            out.append(f"M2 {at} is a second idea with that id: an id names one thing")
+        seen.add(e["id"])
+        if e["id"] in in_log:
+            out.append(f"M2 {at} is also an entry in {LOG}: an id names one thing across both "
+                       f"files, so a decided idea leaves {IDEAS}")
+        if HEADING_STATUS.search(e["title"]):
+            out.append(f"M2 {at}: the heading is the id and title only; the status goes on the "
+                       f"line under it")
+        parts = status_parts(e["status"], prefix)
+        if parts is None:
+            out.append(f"M2 {at} needs a status line under its heading: `Open (YYYY-MM-DD).` or "
+                       f"`Proposed (YYYY-MM-DD).`, optionally ending `Supersedes {prefix}007.`")
+            continue
+        if parts[0] not in IDEA_STATUSES:
+            out.append(f"M2 {at} is decided: move it to {LOG} `## Unreleased`, its id and block "
+                       f"kept, with its `Accepted (who, YYYY-MM-DD).` line")
+        for sup in parts[3]:
+            if sup == e["id"]:
+                out.append(f"M2 {at} supersedes itself")
+            elif sup not in known and not (trunk and in_log_history(sup, trunk)):
+                out.append(f"M2 {at} supersedes {sup}, which has no entry in {LOG} or {IDEAS}"
+                           + (f" or in {trunk}'s history of them" if trunk else ""))
+        if trunk_side and "?" in e["id"]:
+            out.append(f"M2 {at} isn't numbered, and {trunk} takes numbers only: `jig merge "
+                       f"--number` numbers what a merge in progress brings in")
+    return out
+
+
+def ideas_rules(trunk: str, staged: bool, trunk_side: bool = False) -> list[str]:
+    """M2 for the ideas file, whenever a change touches it or the log beside it."""
+    new = in_index(IDEAS, staged)
+    old = at_rev(since_trunk(trunk), IDEAS)
+    if not new:
+        return [f"{IDEAS} is the repo's ideas log: it is never deleted"] if old else []
+    prefix = log_prefix(trunk)
+    return (ideas_problems(new, in_index(LOG, staged), prefix, trunk, trunk_side)
+            + touches_problems(old, new, prefix, trunk, staged, path=IDEAS))
 
 
 def replaced(e: dict, prefix: str) -> list[str]:
@@ -6018,7 +6150,7 @@ def in_log_history(want: str, rev: str) -> bool:
     if shallow():
         return True
     # Merges diffed too: `jig merge` numbers a job's D-?slug in the merge commit alone.
-    return bool(git("log", "-m", "-E", f"-G{history_re(want)}", "--format=%h", "-1", rev, "--", LOG))
+    return bool(git("log", "-m", "-E", f"-G{history_re(want)}", "--format=%h", "-1", rev, "--", LOG, IDEAS))
 
 
 def removed_entries(old: str, new: str) -> tuple[str, list[dict]]:
@@ -6178,7 +6310,11 @@ def move_rules(trunk: str, staged: bool, meta: dict | None) -> list[str]:
     added = [(line, m) for line in sorted(removed_lines(new) - removed_lines(old)) if (m := MOVE_LINE.match(line))]
     for _, m in added:
         seen[move_key(m.group("what"))] += 1
-    old_ids = {id_number(e["id"], prefix) for e in log_entries(old, prefix)}
+    # An idea moves down as an entry does: it leaves the ideas file in the commit writing its line.
+    since = since_trunk(trunk)
+    old_all = with_ideas(old, at_rev(since, IDEAS))
+    new_ideas = {id_number(e["id"], prefix) for e in idea_entries(in_index(IDEAS, staged), prefix)}
+    old_ids = {id_number(e["id"], prefix) for e in log_entries(old_all, prefix)}
     new_ids = {id_number(e["id"], prefix) for e in log_entries(new, prefix)}
     superseded = {id_number(i, prefix) for e in log_entries(new, prefix) for i in replaced(e, prefix)}
     for line, m in added:
@@ -6198,6 +6334,10 @@ def move_rules(trunk: str, staged: bool, meta: dict | None) -> list[str]:
                        f"holds is its successor, so move that one")
             continue
         # One the log still has is the strike check's refusal (struck_ids reads move lines too).
+        if num is not None and num in new_ideas:
+            out.append(f"{LOG}: `{line}` moves {what}, which this change doesn't remove from {IDEAS}: "
+                       f"a moved idea leaves in the commit that writes its line")
+            continue
         if num is not None and num not in old_ids and num not in new_ids and key not in rewritten:
             out.append(f"{LOG}: `{line}` moves {what}, which this change doesn't remove from the log: "
                        f"a moved entry leaves in the commit that writes its line")
@@ -6226,9 +6366,11 @@ def move_rules(trunk: str, staged: bool, meta: dict | None) -> list[str]:
         if body is None:
             out.append(f"{LOG}: `{line}`: {repo}'s {t} has no {path} (read {loc}/{path} on {t}): "
                        f"land it there first")
-        elif section and path == LOG:
-            if move_key(section) not in {move_key(e["id"]) for e in log_entries(body, log_prefix_of(body))}:
-                out.append(f"{LOG}: `{line}`: {repo}'s {LOG} on {t} has no entry {section}: "
+        elif section and path in (LOG, IDEAS):
+            # An id names an entry or an idea there: one decided since keeps it in the other file.
+            both = entries_at(t, str(loc))
+            if move_key(section) not in {move_key(e["id"]) for e in log_entries(both, log_prefix_of(both))}:
+                out.append(f"{LOG}: `{line}`: {repo}'s {path} on {t} has no entry {section}: "
                            f"land it there first")
         elif section and pointer_gap(path, section, True, body)[0] != RESOLVES:
             out.append(f"{LOG}: `{line}`: {repo}'s {path} on {t} has no heading {section}: "
@@ -6332,7 +6474,7 @@ def log_rules(trunk: str, staged: bool, trunk_side: bool = False) -> list[str]:
             return [f"{LOG} is the repo's decision log: it is never deleted"]
         return []
     prefix = log_prefix(trunk)
-    out = log_problems(new, prefix, trunk) + frozen_problems(old, new, trunk)
+    out = log_problems(new, prefix, trunk) + open_problems(old, new, prefix) + frozen_problems(old, new, trunk)
     if beyond:
         out += frozen_problems(head, new, trunk, only=beyond)
     out += touches_problems(old, new, prefix, trunk, staged)
@@ -6359,8 +6501,9 @@ def number_placeholders(root: Path, trunk: str) -> list[str]:
     files = [f for f in git("-c", "core.quotePath=false", "diff", "--cached", "--name-only",
                             "--diff-filter=AMR", "HEAD").splitlines() if f]
     texts = dict(head_texts_at(":", files))
-    log = texts.get(LOG) or git("show", f":{LOG}")
-    had = {e["id"] for e in log_entries(git("show", f"HEAD:{LOG}"), prefix)}
+    # One counter over the log and the ideas file: an idea keeps its id when it is decided.
+    log = with_ideas(texts.get(LOG) or git("show", f":{LOG}"), texts.get(IDEAS) or git("show", f":{IDEAS}"))
+    had = {e["id"] for e in log_entries(entries_at("HEAD"), prefix)}
     found = [e["id"] for e in log_entries(log, prefix) if "?" in e["id"] and e["id"] not in had]
     if not found:
         return []
@@ -6395,10 +6538,10 @@ def numbers_given(trunk: str) -> set[int]:
     if len(merging) != 1:
         return set()
     prefix = log_prefix(trunk)
-    theirs = log_entries(git("show", f"{merging[0]}:{LOG}"), prefix)
+    theirs = log_entries(entries_at(merging[0]), prefix)
     titles = {e["title"] for e in theirs if "?" in e["id"]}
     had = {e["id"] for e in theirs}
-    return {int(e["id"][len(prefix):]) for e in log_entries(git("show", f":{LOG}"), prefix)
+    return {int(e["id"][len(prefix):]) for e in log_entries(entries_at(""), prefix)
             if e["title"] in titles and e["id"] not in had and e["id"][len(prefix):].isdigit()}
 
 
@@ -6420,12 +6563,14 @@ def removed_entry(want: str, prefix: str, rev: str = "HEAD",
     if "?" in want:
         return None
     # First parent, merges diffed against it: a job's D-?slug is numbered only in its merge.
+    # The ideas file too: an idea dropped or moved down left from there, and one decided moved
+    # its block into the log, where this finds it first.
     for c in git("log", "-m", "--first-parent", "-E", f"-G{history_re(want)}", "--format=%H", rev,
-                 "--", LOG, cwd=cwd).splitlines():
-        here = log_entries(git("show", f"{c}:{LOG}", cwd=cwd), prefix)
+                 "--", LOG, IDEAS, cwd=cwd).splitlines():
+        here = log_entries(entries_at(c, cwd), prefix)
         if any(e["id"] == want for e in here):
             return c, next(e for e in here if e["id"] == want), None
-        had = next((e for e in log_entries(git("show", f"{c}^:{LOG}", cwd=cwd), prefix) if e["id"] == want), None)
+        had = next((e for e in log_entries(entries_at(f"{c}^", cwd), prefix) if e["id"] == want), None)
         if had:
             by = next((e for e in here if want in replaced(e, prefix)), None)
             return git("rev-parse", f"{c}^", cwd=cwd), had, by
@@ -6476,7 +6621,7 @@ def cmd_decision(root: Path, args) -> int:
     board = Board.load(root)
     prefix = log_prefix(board.trunk)
     path = root / LOG
-    entries = log_entries(path.read_text() if path.exists() else "", prefix)
+    entries = log_entries(read_entries_text(root), prefix)
     by_id = {e["id"]: e for e in entries}
     want = args.id
     if want not in by_id:
@@ -6494,8 +6639,9 @@ def cmd_decision(root: Path, args) -> int:
             die(f"no entry {args.id} in {LOG} or in its history", 1)
         commit, e, by = steps[0]
         print(e["block"])
-        where = e["section"] if e["section"] not in ("Open", "Unreleased", "") else f"## {e['section'] or 'Open'}"
-        print(f"\n{want} was removed from {LOG}; it stood last at {commit[:7]}, in {where}.")
+        where = (e["section"] if e["section"] not in ("Open", "Unreleased", "", IDEAS)
+                 else "an idea" if e["section"] == IDEAS else f"## {e['section'] or 'Unreleased'}")
+        print(f"\n{want} was removed from {e['file']}; it stood last at {commit[:7]}, in {where}.")
         for _, old, by in steps:
             if by:
                 print(f"  {old['id']} is superseded by {by['id']} {by['title']}")
@@ -6518,9 +6664,13 @@ def cmd_decision(root: Path, args) -> int:
         cur = later.get(cur)
 
     def where(e: dict) -> str:
-        return "## Open" if e["section"] == "Open" else e["section"] or "above ## Open"
+        if e["section"] == IDEAS:
+            return f"an idea in {IDEAS}"
+        return f"## {e['section']}" if e["section"] == "Open" else e["section"] or "above the log's sections"
 
     print(by_id[want]["block"])
+    if by_id[want]["section"] == IDEAS:
+        print(f"\n{want} is an idea in {IDEAS}: not decided yet.")
     if len(chain) > 1:
         print("\nChain, oldest first:")
         for i in chain:
@@ -6707,7 +6857,9 @@ def peer_logs(root: Path, trunk: str) -> tuple[list[tuple[str, str, str]], list[
     if para:
         cache, why = meta_cache(root, para)
         if cache and (cache / LOG).is_file():
-            logs.append((META_KEY, f"{para['meta']}/{LOG}", (cache / LOG).read_text(errors="replace")))
+            ideas = (cache / IDEAS).read_text(errors="replace") if (cache / IDEAS).is_file() else ""
+            logs.append((META_KEY, f"{para['meta']}/{LOG}",
+                         with_ideas((cache / LOG).read_text(errors="replace"), ideas)))
         else:
             unread.append(why or f"{para['meta']}'s log, which its cache at the pin doesn't hold")
     for p in (meta or {}).get("pararepos", []):
@@ -6715,7 +6867,7 @@ def peer_logs(root: Path, trunk: str) -> tuple[list[tuple[str, str, str]], list[
         if loc is None or not loc.is_dir():
             unread.append(f"{p}, which `jig repos` doesn't list here")
             continue
-        text = git("show", f"{Board.trunk_name(loc)}:{LOG}", cwd=str(loc))
+        text = entries_at(Board.trunk_name(loc), str(loc))
         if text:
             logs.append((p, f"{p}/{LOG}", text))
     return logs, unread
@@ -6723,11 +6875,13 @@ def peer_logs(root: Path, trunk: str) -> tuple[list[tuple[str, str, str]], list[
 
 def touching_entries(text: str, prefix: str, writer: str, label: str,
                      names: dict[str, str]) -> list[dict]:
-    """A log's live entries, each with its pointers and page keys."""
+    """A log's live entries, each with its pointers and page keys. An idea in with_ideas' text
+    is labelled with its ideas file, so a reader sees it is not decided."""
     out = []
     for e in live_entries(text, prefix):
         ptrs = entry_touches(e["block"]) or []
-        out.append({**e, "label": label, "writer": writer, "pointers": ptrs,
+        here = label[:-len(LOG)] + IDEAS if e["file"] == IDEAS and label.endswith(LOG) else label
+        out.append({**e, "label": here, "writer": writer, "pointers": ptrs,
                     "keys": [touch_key(p, writer, names) for p in ptrs]})
     return out
 
@@ -6736,7 +6890,7 @@ def touching(root: Path, trunk: str, own: str) -> tuple[list[dict], list[str]]:
     """Every live entry in this repo's log OWN and in every peer log, and the logs not read."""
     names = touch_names(root, trunk)
     logs, unread = peer_logs(root, trunk)
-    out = touching_entries(own, log_prefix(trunk), SELF, LOG, names)
+    out = touching_entries(own, log_prefix(trunk), SELF, LOG, names)  # OWN as with_ideas joins it
     for writer, label, text in logs:
         out += touching_entries(text, log_prefix_of(text), writer, label, names)
     return out, unread
@@ -6776,7 +6930,7 @@ def pair_lines(root: Path, trunk: str, rng: str) -> list[str]:
                if e["id"] in edited and e["id"] not in gone]
     if not changed:
         return []
-    every, unread = touching(root, trunk, git("show", f"{trunk}:{LOG}", cwd=str(root)))
+    every, unread = touching(root, trunk, entries_at(trunk, str(root)))
     every += changed
     groups: dict[tuple[str, str, str], list[str]] = {}
     seen = set()
@@ -6949,15 +7103,18 @@ def touched_term(path: str, term: str, repo: str, cache: Path | None, staged: bo
     return "" if term.casefold() in have else f"is no term in {where}: add `## {term}` there, or name a term it has"
 
 
-def touches_problems(old: str, new: str, prefix: str, trunk: str, staged: bool) -> list[str]:
+def touches_problems(old: str, new: str, prefix: str, trunk: str, staged: bool,
+                     path: str = LOG) -> list[str]:
     """M2: an entry added or changed names the pages it touches, and each is a docs page. An
     entry as trunk has it is left alone until it changes. `jig update --merge-log` converting a
     register writes entries decided before Touches; they are backfilled from update's list. Only
     those: an entry a later commit on the branch adds names its pages."""
     root = Path.cwd()
-    migrating = not log_entries(old, prefix) and migrating_log(trunk, staged)
+    # Only the log is ever converted from a register or records; an idea names its pages.
+    migrating = path == LOG and not log_entries(old, prefix) and migrating_log(trunk, staged)
     converted = migrated_ids(trunk, (load_meta(trunk) or {}).get("decision_prefix")) if migrating else set()
-    converted |= records_converted(old, new, prefix, trunk, staged)
+    if path == LOG:
+        converted |= records_converted(old, new, prefix, trunk, staged)
     names = touch_names(root, trunk)
     para, meta = load_para(trunk), load_meta(trunk)
     cache, _ = meta_cache(root, para) if para else (None, "")
@@ -6967,7 +7124,7 @@ def touches_problems(old: str, new: str, prefix: str, trunk: str, staged: bool) 
     for e in log_entries(new, prefix):
         if was.get(e["id"]) == e["block"] or e["id"] in converted:
             continue
-        at = f"{LOG}:{e['line']} {e['id']}"
+        at = f"{path}:{e['line']} {e['id']}"
         ptrs = entry_touches(e["block"])
         reason = touches_none(e["block"])
         if reason is not None:
@@ -7064,10 +7221,9 @@ def cmd_peers(root: Path, args) -> int:
     """`jig decision <id> --peers`: the entries a reader should read beside this one."""
     board = Board.load(root)
     prefix = log_prefix(board.trunk)
-    path = root / LOG
     names = touch_names(root, board.trunk)
     others, unread = peer_logs(root, board.trunk)
-    logs = [(SELF, LOG, path.read_text() if path.exists() else "")] + others
+    logs = [(SELF, LOG, read_entries_text(root))] + others
     every = [e for w, label, text in logs
              for e in touching_entries(text, prefix if w == SELF else log_prefix_of(text), w, label, names)]
     entry, hopped = start_entry(root, args.id, logs, every, names, unread)
@@ -7084,7 +7240,8 @@ def cmd_peers(root: Path, args) -> int:
     found = peers_of(entry, every, prefix)
     print(f"\nPeers ({len(found)}):" if found else "\nNo peers.")
     for o, ptr in found:
-        print(f"  {o['label']} § {o['id']} {o['title']} ({ptr})")
+        idea = ", an idea" if o["file"] == IDEAS else ""
+        print(f"  {o['label']} § {o['id']} {o['title']} ({ptr}{idea})")
         print(f"      {rule_sentence(o['block'])}")
     for u in unread:
         print(f"not read: {u}")
@@ -7096,8 +7253,7 @@ def placement_hints(root: Path, trunk: str) -> list[str]:
     does. A ruling two repos share is probably the metarepo's."""
     if not load_meta(trunk):
         return []
-    path = root / LOG
-    every, _ = touching(root, trunk, path.read_text() if path.exists() else "")
+    every, _ = touching(root, trunk, read_entries_text(root))
     ours = [k for e in every if e["writer"] == SELF for k in e["keys"]]
     by_page: dict[str, set[str]] = {}
     for e in every:
@@ -7245,10 +7401,9 @@ def cmd_release(root: Path, args) -> int:
                 + ", ".join(f"{c[:12]} {s}" for c, s in owed)
                 + f"): run `jig queue --full -- ./{DIR}/scripts/check.sh --full` on {trunk}, then `jig checked`")
     # Released, a D-?<slug> would be frozen under its version and never get its number.
-    log_now = (root / LOG).read_text() if (root / LOG).exists() else ""
-    problems += [f"{LOG}:{e['line']} {e['id']} isn't numbered: a merge numbers it (`jig merge "
+    problems += [f"{e['file']}:{e['line']} {e['id']} isn't numbered: a merge numbers it (`jig merge "
                  f"--number` while one is in progress); number it on a branch before releasing"
-                 for e in log_entries(log_now, log_prefix(trunk)) if "?" in e["id"]]
+                 for e in log_entries(read_entries_text(root), log_prefix(trunk)) if "?" in e["id"]]
     if problems:
         for p in problems:
             print(f"refused: {p}", file=sys.stderr)
@@ -8237,9 +8392,9 @@ def terms_changed(loc: Path, old: str, new: str) -> list[str]:
     # The glossary is read term by term, in either home, by glossary_changes; the README's
     # other headings (Install, Usage) are prose, not terms.
     gloss = "README.md" in paths or GLOSSARY in paths
-    log = LOG in paths
+    log = LOG in paths or IDEAS in paths
     regs = merged_registers(loc, old, new)
-    paths = [f for f in paths if f not in ("README.md", GLOSSARY, LOG, *regs)]
+    paths = [f for f in paths if f not in ("README.md", GLOSSARY, LOG, IDEAS, *regs)]
     found = []
     if regs:
         # Across the merge into the log the same decisions changed shape, not meaning: only an
@@ -8253,7 +8408,7 @@ def terms_changed(loc: Path, old: str, new: str) -> list[str]:
             rows = parse_register(git("show", f"{old}:{r}", cwd=str(loc)), decision_prefix_at(loc, old))[0]
             date_superseded(loc, r, rows, decision_prefix_at(loc, old), old)
             was |= {decision_id(e["id"]): shape(e["title"], e["status"]) for e in rows if e["word"] != "rejected"}
-        entries = log_entries(git("show", f"{new}:{LOG}", cwd=str(loc)), prefix)
+        entries = log_entries(entries_at(new, str(loc)), prefix)
         now = {decision_id(e["id"]): (e["id"], shape(e["title"], e["status"]), e["status"]) for e in entries}
         for i, (shown, sh, status) in now.items():
             if was.get(i) != sh:
@@ -8264,7 +8419,7 @@ def terms_changed(loc: Path, old: str, new: str) -> list[str]:
         # An entry added, edited or removed, and what a new entry supersedes: a pararepo cites
         # the old id, and needs to hear that it no longer holds.
         prefix = decision_prefix_at(loc, new)
-        was, now = ({e["id"]: e for e in log_entries(git("show", f"{r}:{LOG}", cwd=str(loc)), prefix)}
+        was, now = ({e["id"]: e for e in log_entries(entries_at(r, str(loc)), prefix)}
                     for r in (old, new))
         for i in sorted({*was, *now}, key=lambda i: (now.get(i) or was[i])["line"]):
             if (was.get(i) or {}).get("block") != (now.get(i) or {}).get("block"):
@@ -8631,7 +8786,7 @@ def stage_pin_bumps(root: Path, meta: dict, prev: str, tag: str) -> list[str]:
     if not prev:
         return out
     prefix = decision_prefix_at(root, tag)
-    now_log = git("show", f"{tag}:{LOG}")
+    now_log = entries_at(tag)
     key = lambda line: line.split(", which ")[0]
 
     def broken(there: Path, para: dict, trunk: str, since: str, here: set[str]) -> tuple[list[str], list[str]]:
@@ -8657,7 +8812,7 @@ def stage_pin_bumps(root: Path, meta: dict, prev: str, tag: str) -> list[str]:
             if cited and cited.group(1) in moved and ": now " not in l:
                 l += f": now `{name}/{moved[cited.group(1)]}`"
             rewrites.append(l)
-        then = log_entries(git("show", f"{since}:{LOG}"), prefix)
+        then = log_entries(entries_at(since), prefix)
         gone = sorted({e["id"] for e in then} - {e["id"] for e in log_entries(now_log, prefix)})
         # An id a gone entry had superseded hopped to it; once that one moves down, the old id's
         # new home is the move's too, so a bare citation of it is news.
@@ -8817,6 +8972,11 @@ def changes_report(root: Path, loc: Path, old: str, new: str) -> list[str]:
     # What the metarepo moved down reads as moved, with its new home, never as removed.
     moves = moves_in(git("show", f"{new}:{LOG}", cwd=str(loc)))
     here = this_repo_names(root)
+    prefix = decision_prefix_at(loc, new)
+    # An idea decided in place keeps its id: it reads as accepted, never as removed.
+    was_idea = {e["id"] for e in log_entries(entries_at(old, str(loc)), prefix) if e["section"] in (IDEAS, "Open")}
+    decided = {e["id"] for e in log_entries(entries_at(new, str(loc)), prefix)
+               if e["id"] in was_idea and e["section"] != IDEAS}
     for was, now in entries_moved(loc, old, new):
         users = used_in(was)
         state = (f"moved: {shown_pointer(moves[was], here)}" if not now and was in moves
@@ -8828,7 +8988,7 @@ def changes_report(root: Path, loc: Path, old: str, new: str) -> list[str]:
         users = used_in(term, bool(re.fullmatch(decision_ids(loc, new), term)))
         # A heading moves as `<page> § <heading>`, and its term is the heading alone.
         ptr = moves.get(term) or next((p for k, p in moves.items() if k.endswith(f" § {term}")), None)
-        state = f" (moved: {shown_pointer(ptr, here)})" if ptr else ""
+        state = f" (moved: {shown_pointer(ptr, here)})" if ptr else " (accepted)" if term in decided else ""
         out.append(f"  {term}{state}: " + (f"used in {', '.join(users)}" if users else "not used here"))
     _, moved, was, now = glossary_changes(loc, old, new)
     for term in moved:
@@ -8940,6 +9100,9 @@ def meta_citations(root: Path, para: dict, ids: str, loc: Path | None = None,
                 if roadmap and not mtrunk:
                     continue
                 body = trunk_show(loc, path) if roadmap else meta_text(path)
+                if path in (LOG, IDEAS) and body is not None:
+                    # One id names an entry or an idea: one decided or folded keeps it, in the other file.
+                    body = with_ideas(meta_text(LOG) or "", meta_text(IDEAS) or "")
                 at_ = mtrunk if roadmap else pin
                 row = rows.match(plain(section)) if section and body else None
                 if row and (not code or row.group(1) == plain(section)):
@@ -8985,9 +9148,10 @@ def uncovered_paths(root: Path, loc: Path, para: dict) -> None:
     cited = [(m.group(1), m.group(0)) for f in sorted((root / CACHE).rglob("*.md"))
              for m in row.finditer(f.read_text(errors="replace"))]
     # The log's entries, each its whole block: a decision's text runs past its heading.
-    log = root / CACHE / LOG
+    log, ideas = root / CACHE / LOG, root / CACHE / IDEAS
     prefix = decision_prefix_at(loc, para["pin"])
-    cited += [(e["id"], e["block"]) for e in log_entries(log.read_text(errors="replace") if log.is_file() else "", prefix)]
+    read = lambda f: f.read_text(errors="replace") if f.is_file() else ""
+    cited += [(e["id"], e["block"]) for e in log_entries(with_ideas(read(log), read(ideas)), prefix)]
     if not cited:
         return
     # "this" names this repo only in a pararepo's own pointers to the metarepo; in a metarepo
@@ -9915,30 +10079,39 @@ def cmd_staging(root: Path, args) -> int:
         if rest or not entries:
             die(f"{path.name} holds {'no decision entries' if not entries else 'lines before its first entry'}: "
                 f"each decision is `### {prefix}?<slug> <title>` with its status line under it", 1)
-        problems = log_problems("## Open\n\n" + "\n\n".join(e["block"] for e in entries
-                                                                 if not e["status"].startswith("Accepted"))
-                                + "\n\n## Unreleased\n\n" + "\n\n".join(e["block"] for e in entries
-                                                                       if e["status"].startswith("Accepted")),
-                                prefix)
+        decided = [e for e in entries if e["status"].startswith("Accepted")]
+        ideas = [e for e in entries if not e["status"].startswith("Accepted")]
+        problems = log_problems("## Unreleased\n\n" + "\n\n".join(e["block"] for e in decided), prefix)
+        problems += ideas_problems("\n\n".join(e["block"] for e in ideas), "", prefix)
         problems = [p for p in problems if "supersedes" not in p]
         if problems:
             die("\n  ".join([f"{path.name} isn't ready for the log:", *problems]), 1)
+        # An open question is an idea, appended to the ideas file beside the log; an accepted
+        # entry is this release's.
+        ideas_file = log.with_name(Path(IDEAS).name)
         text = log.read_text() if log.exists() else LOG_SEED
-        have = {decision_id(e["id"]) for e in log_entries(text, prefix)}
+        ideas_text = ideas_file.read_text() if ideas_file.exists() else IDEAS_SEED
+        have = {decision_id(e["id"]) for e in log_entries(with_ideas(text, ideas_text), prefix)}
         dupes = [e["id"] for e in entries if decision_id(e["id"]) in have]
         if dupes:
-            die(f"{', '.join(dupes)} already in {dest}: stage it as `change: update`", 1)
-        for e in entries:
-            # Open questions are asked under ## Open; an accepted entry is this release's.
-            section = "## Unreleased" if e["status"].startswith("Accepted") else "## Open"
-            if not re.search(rf"^{section}[ \t]*$", text, re.M):
-                text = text.rstrip("\n") + f"\n\n{section}\n"
-            text = re.sub(rf"^{section}[ \t]*\n", lambda m: f"{m.group(0)}\n{e['block']}\n", text,
+            die(f"{', '.join(dupes)} already in {dest} or its ideas file: stage it as `change: update`", 1)
+        for e in decided:
+            if not re.search(r"^## Unreleased[ \t]*$", text, re.M):
+                text = text.rstrip("\n") + "\n\n## Unreleased\n"
+            text = re.sub(r"^## Unreleased[ \t]*\n", lambda m: f"{m.group(0)}\n{e['block']}\n", text,
                           count=1, flags=re.M)
+        for e in ideas:
+            ideas_text = ideas_text.rstrip("\n") + f"\n\n{e['block']}\n"
         log.parent.mkdir(parents=True, exist_ok=True)
-        log.write_text(text)
-        n = len(entries)
-        return done(f"{n} entr{'ies' if n > 1 else 'y'} added to {dest}")
+        said = []
+        if decided:
+            log.write_text(text)
+            said.append(f"{len(decided)} entr{'ies' if len(decided) > 1 else 'y'} added to {dest}")
+        if ideas:
+            ideas_file.write_text(ideas_text)
+            idea_at = str(Path(dest).with_name(Path(IDEAS).name))
+            said.append(f"{len(ideas)} idea{'s' if len(ideas) > 1 else ''} added to {idea_at}")
+        return done(", ".join(said))
     out = inside(dest)
     if out.exists():
         die(f"{dest} exists: stage it as `change: update`, or pick another path", 1)
@@ -12026,6 +12199,67 @@ def fold_roadmap(root: Path, here: Path) -> None:
             git("add", "--", ROADMAP_VIEW, check=True)
 
 
+OPEN_HEADING = re.compile(r"^##[ \t]+Open[ \t]*$", re.I)
+
+
+def fold_open(log: str, ideas: str) -> tuple[str, str]:
+    """LOG with its `## Open` sections gone, and IDEAS with what they held appended, entry
+    blocks byte for byte: the log keeps only decisions."""
+    lines = log.split("\n")
+    moved, keep, inside = [], [], False
+    for l in lines:
+        if l.startswith("## ") or l.startswith("##\t"):
+            inside = bool(OPEN_HEADING.match(l.rstrip("\r")))
+            if inside:
+                continue
+        (moved if inside else keep).append(l)
+    body = "\n".join(trimmed(moved))
+    ideas = ideas or IDEAS_SEED
+    if body.strip():
+        ideas = ideas.rstrip("\r\n") + "\n\n" + body + "\n"
+    # Squeeze the blank lines the section left between the header and ## Unreleased to one.
+    new = re.sub(r"\n{3,}", "\n\n", "\n".join(keep))
+    return new, ideas
+
+
+def has_open(root: Path) -> bool:
+    return (root / LOG).is_file() and any(OPEN_HEADING.match(l.rstrip("\r"))
+                                          for l in read_raw(root / LOG).split("\n"))
+
+
+def fold_ideas(root: Path, here: Path | None = None) -> list[str]:
+    """Move the log's `## Open` entries into the ideas file, and stage both. The ids moved."""
+    log, ideas = read_raw(root / LOG), read_raw(root / IDEAS) if (root / IDEAS).is_file() else ""
+    prefix = log_prefix_of(log)
+    ids = [e["id"] for e in log_entries(log, prefix) if e["section"] == "Open"]
+    new_log, new_ideas = fold_open(log, ideas)
+    write_raw(root / LOG, new_log)
+    write_raw(root / IDEAS, new_ideas)
+    git("add", "--", LOG, IDEAS, check=True)
+    return ids
+
+
+def cmd_fold_ideas(root: Path, apply: bool) -> int:
+    """`jig update --fold-ideas`: the fold where `jig update --apply` can't make it, a metarepo,
+    whose log changes only in a job (M4). Run in that job's worktree, or on trunk elsewhere."""
+    if not has_open(root):
+        print(f"{LOG} has no ## Open: nothing to fold")
+        return 0
+    trunk = Board.trunk_name(root)
+    prefix = log_prefix_of(read_raw(root / LOG))
+    ids = [e["id"] for e in log_entries(read_raw(root / LOG), prefix) if e["section"] == "Open"]
+    print(f"Folding {LOG}'s ## Open into {IDEAS}: " + (", ".join(ids) or "no entries") + ", ids and blocks kept.")
+    if not apply:
+        print("Dry run: nothing changed. Run it again with --apply.")
+        return 0
+    if (root / META).exists() and git("branch", "--show-current") == trunk:
+        die(f"in a metarepo the fold is a change to its log (M4): open a job sharing {LOG} and {IDEAS}, "
+            f"run `jig update --apply --fold-ideas` in its worktree, and merge it", 2)
+    fold_ideas(root)
+    print(f"Staged {LOG} and {IDEAS}, nothing committed: commit them.")
+    return 0
+
+
 def has_up_next(root: Path) -> bool:
     return (root / ROADMAP).is_file() and up_next_heading(read_raw(root / ROADMAP))
 
@@ -12040,6 +12274,16 @@ STEPS: list = [
      + ". Commit this update, which installs the checker that reads it, then run "
      "`jig update --apply` again to fold",
      lambda root, after: has_up_next(root) and not knows_one_list(root), lambda root, here: None),
+    (f"fold {LOG}'s ## Open into {IDEAS}, ids and blocks kept byte for byte: the log keeps only "
+     f"decisions, and an open question is an idea; the hook then refuses ## Open and an Open or "
+     f"Proposed entry added to the log",
+     lambda root, after: has_open(root) and not (root / META).exists(), fold_ideas),
+    (f"{LOG}'s ## Open waits to fold into {IDEAS}: in a metarepo a job's (M4). Open one sharing "
+     f"{LOG} and {IDEAS}, run `jig update --apply --fold-ideas` in its worktree, and merge it",
+     lambda root, after: has_open(root) and (root / META).exists(), lambda root, here: None),
+    (f"add {IDEAS}, the ideas log: open questions and ideas to research",
+     lambda root, after: IDEAS not in after and not (root / IDEAS).exists() and not has_open(root),
+     lambda root, here: ((root / IDEAS).write_text(IDEAS_SEED), git("add", "--", IDEAS))),
     (f"add {STAGING}/ (its .gitignore), where chats drop files for this repo",
      lambda root, after: f"{STAGING}/.gitignore" not in after
      and not (root / STAGING / ".gitignore").exists(),
@@ -13031,6 +13275,8 @@ def cmd_update(root: Path, args) -> int:
         return cmd_merge_log(root, args.apply)
     if getattr(args, "sweep", False):
         return cmd_sweep(root, args.apply)
+    if getattr(args, "fold_ideas", False):
+        return cmd_fold_ideas(root, args.apply)
     if getattr(args, "glossary", False):
         return cmd_glossary(root, args.apply)
     here = Path(__file__).resolve().parent
@@ -13484,7 +13730,7 @@ def highest_id(text: str, prefix: str, history: bool = False) -> int:
     seen = id_numbers(text, prefix)
     if history:
         seen |= {int(n) for n in re.findall(rf"(?<![\w-]){re.escape(prefix)}(\d+)(?!\d)",
-                                            git("log", "-p", "--format=", "HEAD", "--", LOG))}
+                                            git("log", "-p", "--format=", "HEAD", "--", LOG, IDEAS))}
     return max(seen, default=0)
 
 
@@ -13527,7 +13773,7 @@ def old_log_files(root: Path) -> list[tuple[str, str]]:
 
 
 def log_is_seed(root: Path) -> bool:
-    return (root / LOG).is_file() and (root / LOG).read_text() in (LOG_SEED, OLD_LOG_SEED)
+    return (root / LOG).is_file() and (root / LOG).read_text() in (LOG_SEED, *OLD_LOG_SEEDS)
 
 
 def log_sources(root: Path) -> list[tuple[str, str]]:
@@ -13756,10 +14002,10 @@ def record_index_left(index: str, text: str, paths: dict) -> str:
 
 
 def insert_entries(text: str, prefix: str, add: dict[str, list[list[str]]]) -> str:
-    """TEXT with ADD's entry blocks after the last entry of each section, `Open` and
-    `Unreleased`, before Unreleased's change lines; every line already there stays as it was."""
+    """TEXT with ADD's entry blocks after the last entry of `## Unreleased`, before its change
+    lines; every line already there stays as it was."""
     lines = text.splitlines()
-    for section in ("Open", "Unreleased"):
+    for section in ("Unreleased",):
         if not add.get(section):
             continue
         start = next(i for i, l in enumerate(lines) if l.rstrip() == f"## {section}")
@@ -13783,7 +14029,8 @@ def record_plan(root: Path, log: str, prefix: str) -> dict:
     read = lambda f: (root / f).read_text(errors="replace") if (root / f).is_file() else ""
     folders = record_folders(root, files, read)
     plan = {"folders": folders, "text": log, "notes": [], "problems": [], "undated": [], "remove": [],
-            "keep": [], "write": {}, "rewrites": [], "left": [], "named": [], "hook": [], "ids": []}
+            "keep": [], "write": {}, "rewrites": [], "left": [], "named": [], "hook": [], "ids": [],
+            "ideas": []}
     if not folders:
         return plan
     recs = []
@@ -13827,7 +14074,7 @@ def record_plan(root: Path, log: str, prefix: str) -> dict:
         for n, f in info["records"]:
             paths.setdefault(f, None)
     log_dir = os.path.dirname(LOG)
-    add: dict[str, list[list[str]]] = {"Open": [], "Unreleased": []}
+    add: dict[str, list[list[str]]] = {"Unreleased": []}
     for r in recs:
         if r["kind"] == "left":
             continue
@@ -13885,7 +14132,11 @@ def record_plan(root: Path, log: str, prefix: str) -> dict:
         # Last, and past the citation rewrite: a handoff's "record 0070" can still be followed.
         out += ["", f"Record {r['num']} before this log."] if out else [f"Record {r['num']} before this log."]
         block = [f"### {r['id']} {title}".rstrip(), status, "", *out]
-        add["Open" if r["kind"] in ("open", "proposed") else "Unreleased"].append(block)
+        # An open, proposed or draft record is an idea: the ideas file takes it, not the log.
+        if r["kind"] in ("open", "proposed"):
+            plan["ideas"].append("\n".join(block))
+        else:
+            add["Unreleased"].append(block)
         plan["ids"].append(r["id"])
         for l in block:
             hit = PROJECT_PATHS.search(l)
@@ -14198,14 +14449,16 @@ def merged_log(root: Path) -> dict:
             if e["where"] == where:
                 out += [f"### {e['id']} {e['title']}".rstrip(), e["status"], *([""] + e["rest"] if e["rest"] else []), ""]
         return out
-    head = LOG_SEED.replace("## Open\n\n## Unreleased\n", "")
+    head = LOG_SEED.replace("## Unreleased\n", "")
     if rejected:
         # Their numbers stay taken: numbering starts above every id the log has ever named.
         head += f"Rejected before this log, and left out of it: {', '.join(rejected)} (git keeps their rows).\n\n"
     if struck:
         head += (f"Struck as project scope before this log, and left out of it: {', '.join(struck)} "
                  "(git keeps their rows).\n\n")
-    text = head + "## Open\n\n" + "\n".join(blocks("Open")) + "\n## Unreleased\n\n"
+    # An open or proposed row is an idea: it goes to the ideas file, not the log.
+    ideas = "\n".join(blocks("Open")).strip("\n")
+    text = head + "## Unreleased\n\n"
     text += "\n".join(blocks("Unreleased") + grouped(unreleased[1:])) + "\n"
     for heading, body, release in sections:
         lines = grouped(body) if release else trimmed(body)
@@ -14214,11 +14467,11 @@ def merged_log(root: Path) -> dict:
     placed: dict[str, list[str]] = {}
     for e in entries:
         placed.setdefault(e["where"].replace("## ", ""), []).append(e["id"])
-    notes = [f"{', '.join(ids)} → {w}" for w, ids in placed.items()]
+    notes = [f"{', '.join(ids)} → {IDEAS if w == 'Open' else w}" for w, ids in placed.items()]
     notes += [f"{', '.join(rejected)}: rejected, left out (their numbers stay taken)"] if rejected else []
     notes += [f"{', '.join(struck)}: struck as project scope, left out (their numbers stay taken)"] if struck else []
-    return {"text": text, "notes": notes, "homeless": homeless, "keep": keep, "prefix": p,
-            "struck_live": gone_live, "undated": undated, "lost": lost}
+    return {"text": text, "ideas": [ideas] if ideas else [], "notes": notes, "homeless": homeless,
+            "keep": keep, "prefix": p, "struck_live": gone_live, "undated": undated, "lost": lost}
 
 
 def names_of(root: Path, gone: list[str]) -> list[tuple[str, int]]:
@@ -14347,15 +14600,19 @@ def cmd_merge_log(root: Path, apply: bool) -> int:
                      for e in parse_register((root / f).read_text(errors="replace"), old_prefix(root))[0] if e["bad"]]
         problems += m["lost"] + m["struck_live"]
     else:
-        m = {"notes": [], "undated": [], "homeless": []}
+        m = {"notes": [], "undated": [], "homeless": [], "ideas": []}
         keep = {}
         text = (root / LOG).read_text() if in_use else LOG_SEED
         prefix = log_prefix_of(text) if in_use else (old_prefix(root) or META_DEFAULTS["decision_prefix"])
     rp = record_plan(root, text, prefix)
     text = rp["text"]
     problems += rp["problems"]
+    new_ideas = m["ideas"] + rp["ideas"]
+    ideas_text = (root / IDEAS).read_text() if (root / IDEAS).is_file() else IDEAS_SEED
+    for block in new_ideas:
+        ideas_text = ideas_text.rstrip("\n") + f"\n\n{block}\n"
     if not rp["problems"]:
-        problems += log_problems(text, prefix)
+        problems += log_problems(text, prefix) + ideas_problems(ideas_text, text, prefix)
     gone = [f for f, _ in files_in if f not in keep]
     print("Merging into " + LOG + ":")
     for f, what in sources:
@@ -14409,10 +14666,14 @@ def cmd_merge_log(root: Path, apply: bool) -> int:
     if not apply:
         if not in_use:
             print(f"\n--- {LOG}, as it would be written ---\n{text}")
+        if new_ideas:
+            print(f"\n--- {IDEAS}, as it would be written ---\n{ideas_text}")
         print("Dry run: nothing changed. On the owner's yes: "
               + (job if branch_needed else "jig update --apply --merge-log"))
         return 0
     (root / LOG).write_text(text)
+    if new_ideas or not (root / IDEAS).exists():
+        (root / IDEAS).write_text(ideas_text)
     for f in gone + rp["remove"]:
         git("rm", "-q", "--", f, check=True)
     for f, rest in keep.items():
@@ -14425,10 +14686,11 @@ def cmd_merge_log(root: Path, apply: bool) -> int:
         meta.write_text(json.dumps(d, indent=2) + "\n")
     if on_trunk_now:
         (root / CONFIG).write_text(json.dumps(data, indent=2) + "\n")
-    git("add", "--", LOG, *keep, *rp["write"], *([META] if entry is not None and files_in else []),
+    git("add", "--", LOG, IDEAS, *keep, *rp["write"], *([META] if entry is not None and files_in else []),
         *([CONFIG] if on_trunk_now else []), check=True)
     removed = gone + rp["remove"]
-    print(f"\nWritten {LOG}" + (f"; {', '.join(removed)} removed" if removed else "")
+    print(f"\nWritten {LOG}" + (f" and {IDEAS}" if new_ideas else "")
+          + (f"; {', '.join(removed)} removed" if removed else "")
           + (f"; {', '.join(keep)} kept, holding only what has no home: move it by hand" if keep else "")
           + ". Staged, nothing committed: commit it here"
           + ("" if on_trunk_now or not said else
@@ -15638,6 +15900,7 @@ def main(argv: list[str] | None = None) -> int:
     up = sub.add_parser("update", help="bring this repo to the current jig layout (dry run)")
     up.add_argument("--apply", action="store_true", help="make the changes the dry run lists")
     up.add_argument("--merge-log", action="store_true", help=f"on the owner's yes: merge CHANGELOG.md and the decision register into {LOG}")
+    up.add_argument("--fold-ideas", action="store_true", help=f"in a metarepo's job: fold {LOG}'s ## Open into {IDEAS}")
     up.add_argument("--sweep", action="store_true", help=f"on the owner's yes: move pages' ## Undefined entries to {NO_PHASE} in {ROADMAP}")
     up.add_argument("--glossary", action="store_true", help=f"on the owner's yes: move the README's glossary, or GLOSSARY.md, to {GLOSSARY}, rewriting what points to it")
     rg = sub.add_parser("rig", help="the repo's picture: what can start, what waits on what and on the owner")
