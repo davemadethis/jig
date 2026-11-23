@@ -11509,7 +11509,8 @@ def roadmap_edit(root: Path, fam: "Family", trunk: str, file: str) -> int:
     base = norm(roadmap_base(root, fam, trunk))
     if not base:
         die(f"no {ROADMAP} on {trunk}: this repo keeps no roadmap")
-    if fam.kind != "para" and (git("branch", "--show-current") != trunk or not is_main_worktree(root)):
+    here = Path(git("rev-parse", "--show-toplevel") or ".")
+    if fam.kind != "para" and (git("branch", "--show-current") != trunk or not is_main_worktree(here)):
         die(f"edit the roadmap in the {trunk} checkout: R5 keeps {ROADMAP} on {trunk}")
     if fam.kind != "para" and (root / ROADMAP).exists() and (root / ROADMAP).read_text().rstrip("\n") != base.rstrip("\n"):
         die(f"{ROADMAP} in the {trunk} checkout differs from {trunk}'s: commit or discard it first, "

@@ -5331,7 +5331,7 @@ out=$($J roadmap --edit 2>&1); rc=$?
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'labels walyt-mesh, which docs/glossary.md has no term for'" "$out"
 msg="roadmap edit: with .jig/roadmap.md changed and uncommitted in meta's trunk checkout, --edit is refused, naming it"
 python3 -c "import sys; p=sys.argv[1]; s=open(p).read(); open(p,'w').write(s.replace(' (labels walyt-mesh)', ''))" "$mdraft"
-printf '\n' >> .jig/roadmap.md
+printf '\n- `u`: uncommitted\n' >> .jig/roadmap.md
 out=$($J roadmap --edit 2>&1); rc=$?
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '.jig/roadmap.md in the main checkout differs'" "$out"
 git checkout -q -- .jig/roadmap.md
