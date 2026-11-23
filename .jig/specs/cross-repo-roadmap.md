@@ -208,7 +208,7 @@ Part C:
 - [ ] (unreachable) With `pb` removed from the repos file, `jig roadmap` in `meta` shows `Familiar App alpha/host` as `unknown`, naming `pb`. With `meta` removed, a spec commit in `pa` passes its `Scope:` check with a warning naming `meta`.
 - [ ] (drop guard) A `meta` commit dropping `Walyt alpha/pairing` while a spec in `pa` takes it is refused, naming that spec.
 - [ ] (unphased scope, live) `meta` has `## Familiar App No phase` with item `y (touches docs/y.md)`, `docs/y.md` on `pb`'s trunk. `pb` merges a job whose spec takes `Familiar App No phase/y`. `jig roadmap` in `meta` shows it done, and `pb`'s merge wrote nothing to `meta`. `jig reading-list docs/y.md` in `pb` lists it.
-- [ ] (a moved page's items follow it) `meta` has `docs/w.md`, touched by `Walyt alpha/w`. A `meta` commit moving `docs/w.md` down to `pa` (its move line naming `pa/docs/w.md`) with the scope still touching `docs/w.md` is refused, the refusal naming `Walyt alpha/w` and the page's new path in `pa`, and no staged roadmap change. With the scope's `(touches …)` re-pointed in that commit, it passes, the page checked on `pa`'s trunk.
+- [ ] (a moved page's items follow it) `meta` has `docs/w.md`, touched by `w (touches docs/w.md)` in a section the metarepo owns (its own phase `## Demos`). A `meta` commit moving `docs/w.md` down to `pa` (its move line naming `pa/docs/w.md`, the page already on `pa`'s trunk) with the scope left in `## Demos` is refused, naming `Demos/w`, `pa/docs/w.md` and pa's section (`## Walyt <phase>`), and no staged roadmap change. With the scope moved in that commit to `## Walyt alpha` as `w (touches docs/w.md)`, it passes, the page checked on `pa`'s trunk.
 - [ ] (no regression) `python3 .jig/jig.py queue -- bash tests/smoke.sh roadmap rig pararepo metarepo moves boundary` passes.
 
 Part D:
@@ -267,6 +267,8 @@ Later versions, each its own spec once this lands, in the order they build on ea
   - The one list's form (`## No phase`, `## <Product> No phase`, ids `<heading>/<id>`) in every repo: the owner's correction left "the list's syntax" to jig, and R2 asks for "one place for them not two" in a stand-alone repo too.
   - A page moved down takes its items into the product's section in the same commit, once the pararepo reads the one roadmap: the owner's "roadmap items relating to the items being moved should move too", now that one roadmap makes it possible; the staged route stays for a pararepo with its own roadmap.
   - Built as parts A to D with `--partial`: build order is the hubnode's and the spec role's.
+
+- Interpreted: the hubnode, 2026-11-23, on the work role's reading of "(a moved page's items follow it)": the scope touching a page the metarepo moves down sits in a section the metarepo owns; the move is refused unless the same commit moves the item into the pararepo's product section, touches at its path there, checked on the pararepo's trunk. Rejected: the scope already under `## Walyt alpha`, its touches read as meta's pages until the move, since item 11 makes a page under a product heading the owning repo's from the start. The staged `target:` route stays only for a pararepo that keeps its own roadmap.
 
 ## Open questions for the owner
 1. Answered: "1.1 yes", Parts 1 and 2 first, with one list per product joining by the end-state ruling (Owner's rulings). Built as parts A to D.

@@ -4904,6 +4904,107 @@ out=$($J gate 2>&1)
 expect_pass sh -c "! echo \"\$0\" | grep -q 'answers built for\\|still under'" "$out"
 }
 
+# ---------------------------------------------------------------- one roadmap across a family
+sec_family() {
+export JIG_CONFIG="$T/repos.json"
+fnew() { mkdir -p "$T/$1" && cd "$T/$1" && git init -q -b main && git config user.email t@t && git config user.name t \
+  && cp -r "$P/jig" .jig && cp "$P/AGENTS.md" "$P/CLAUDE.md" .; }
+plant() { git add -A && git -c core.hooksPath=/dev/null commit -qm "$1"; }
+FM="$T/meta"; fnew meta && git add -A && git commit -qm init && $J init --meta --name meta >/dev/null && git add -A && git commit -qm meta-init && $J release $(mf) >/dev/null
+printf '\n## Walyt\n\nThe wallet app.\n\nOwner: `pa`.\n\n## Familiar App\n\nThe companion app.\n\nOwner: `pb`.\n' >> docs/glossary.md
+python3 -c "import json; f='.jig/meta.json'; d=json.load(open(f)); d['pararepos']=['pa','pb']; json.dump(d, open(f,'w'), indent=2)"
+plant "glossary and pararepos"
+for r in pa pb; do
+  fnew $r && mkdir -p docs src && printf '# P\n\nP is.\n' > docs/p.md && printf '# Y\n\nY is.\n' > docs/y.md && printf 'x = 1\n' > src/x.py
+  git add -A && git commit -qm init && $J init >/dev/null && board "b['docmap'] = {'docs/y.md': ['src/**']}" && git add -A && git commit -qm board
+  $J init --para meta --location "$FM" >/dev/null 2>&1 && git add -A && git commit -qm para-init
+  python3 .jig/jig.py repos add para "$T/$r" --name $r >/dev/null
+done
+FA="$T/pa"; FB="$T/pb"
+fnext() { $J rig --json | python3 -c "import json,sys; d=json.load(sys.stdin); print(' '.join(x['id'] + ':' + x['state'] for x in d['items'] if x['kind'] == 'next-step'))"; }
+fspec() { mkdir -p .jig/specs && printf '# %s\n\nSource: smoke\nScope: %s\n\n## Intent\nx\n\n## Touches\n- `src/x.py`\n' "$1" "$2" > ".jig/specs/$1.md"; }
+cd "$FM"
+printf '# Roadmap\n\n## Walyt alpha\nScopes:\n- `pairing`: pairing (after Familiar App alpha/host) (touches docs/p.md)\n\n## Familiar App alpha\nScopes:\n- `host`: the host\n- `host2`: a second host\n\n## Demos\nScopes:\n- `d`: a demo\n' > .jig/roadmap.md
+msg="family: meta's roadmap with two products and its own phase commits, docs/p.md found on pa's trunk"
+git add -A && expect_pass git commit -qm 'GLOSSARY: roadmap'
+msg="family: jig roadmap in meta shows each product's phase and its own as current"
+expect_pass sh -c "$J roadmap | grep -qx 'Walyt alpha  current' && $J roadmap | grep -qx 'Familiar App alpha  current' && $J roadmap | grep -qx 'Demos  current'"
+msg="family: a product section's page is the owning repo's: one pa lacks is refused, though meta has it"
+mkdir -p docs/o && printf '# O\n\nO is.\n' > docs/o/o.md && plant "meta page"
+printf '\n## Walyt beta\nScopes:\n- `o`: x (touches docs/o/o.md)\n' >> .jig/roadmap.md && git add -A; out=$(git commit -qm 'GLOSSARY: o' 2>&1); rc=$?; git reset -q --hard
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'Walyt beta/o touches docs/o/o.md'" "$out"
+cd "$FA"
+msg="family: rig in pa doesn't offer Walyt alpha/pairing: it waits on Familiar App alpha/host"
+expect_pass sh -c "test '$(fnext)' = 'Walyt alpha/pairing:blocked' && $J rig | sed -n '/^Waiting on:/,/^\$/p' | grep -q 'next    Walyt alpha/pairing  waits on Familiar App alpha/host'"
+msg="family: jig roadmap in pa reads meta's roadmap from its trunk"
+expect_pass sh -c "$J roadmap | grep -q 'is meta.s, read from its trunk' && $J roadmap | grep -qx 'Walyt alpha  current'"
+cd "$FM"
+msg="family: the deadlock is refused: host waiting on Walyt alpha/pairing is a ring, named once"
+sed -i.bak 's/- `host`: the host/- `host`: the host (after Walyt alpha\/pairing)/' .jig/roadmap.md && rm .jig/roadmap.md.bak && git add -A
+out=$(git commit -qm 'GLOSSARY: ring' 2>&1); rc=$?; git reset -q --hard
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'a ring: Familiar App alpha/host, Walyt alpha/pairing' && test \$(echo \"\$0\" | grep -c 'a ring') = 1" "$out"
+msg="family: a scope added on meta's trunk, no release: a spec in pa taking it commits, one taking nope is refused, naming meta's roadmap"
+sed -i.bak 's/^- `pairing`/- `z2`: new\n- `pairing`/' .jig/roadmap.md && rm .jig/roadmap.md.bak && git add -A && git commit -qm 'GLOSSARY: z2'
+cd "$FA" && fspec s2 'Walyt alpha/z2' && git add -A
+expect_pass git commit -qm s2
+fspec sn 'Walyt alpha/nope' && git add -A; out=$(git commit -qm sn 2>&1); rc=$?; git reset -q --hard
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \"takes Walyt alpha/nope, which meta's .jig/roadmap.md on its trunk doesn't have\"" "$out"
+fspec sp 'Walyt alpha/pairing' && git add -A && git commit -qm sp
+cd "$FM"
+msg="family: dropping Walyt alpha/pairing in meta while pa's spec takes it is refused, naming that spec"
+sed -i.bak '/^- `pairing`/d' .jig/roadmap.md && rm .jig/roadmap.md.bak && git add -A; out=$(git commit -qm 'GLOSSARY: drop' 2>&1); rc=$?; git reset -q --hard
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'drops Walyt alpha/pairing, which pa:.jig/specs/sp.md still takes'" "$out"
+( cd "$FA" && git rm -q .jig/specs/sp.md && git commit -qm "no sp" )
+msg="family: with pb out of the repos file, meta's roadmap shows pb's open scopes unknown, naming pb"
+cp "$T/repos.json" "$T/repos.full" && python3 -c "import json; f='$T/repos.json'; d=json.load(open(f)); d.pop('pb'); json.dump(d, open(f,'w'))"
+expect_pass sh -c "$J roadmap | grep -qE '^  Familiar App alpha/host +unknown' && $J roadmap | grep -q 'pb can.t be reached here'"
+cp "$T/repos.full" "$T/repos.json"
+msg="family: with meta out of the repos file, a spec commit in pa passes its Scope: check with a warning naming meta"
+python3 -c "import json; f='$T/repos.json'; d=json.load(open(f)); d.pop('meta'); json.dump(d, open(f,'w'))"
+cd "$FA" && fspec s3 'Walyt alpha/whatever' && git add -A; out=$(git commit -qm s3 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q 'warning: meta isn.t reachable here'" "$out"
+git rm -q .jig/specs/s3.md && git commit -qm "no s3"; cp "$T/repos.full" "$T/repos.json"
+# Progress, read live: pb builds host, and the merge writes nothing to meta.
+cd "$FB" && fspec h 'Familiar App alpha/host' && git add -A
+msg="family: pb's spec taking Familiar App alpha/host commits, checked against meta's trunk"
+expect_pass git commit -qm h
+metahead=$(git -C "$FM" rev-parse HEAD)
+$J open H --spec .jig/specs/h.md --owns 'src/**' >/dev/null && git add -A && git commit -qm "open H"
+( cd .git/jig/worktrees/H && printf 'x = 2\n' > src/x.py && git commit -qam work && $J reviewed >/dev/null \
+  && $J handoff >/dev/null 2>&1 && pcfold && git add -A && git commit -qm "note H" ) >/dev/null 2>&1
+gated H; $J merge H >/dev/null 2>&1
+msg="family: once pb merges it, with no meta release, rig in pa offers Walyt alpha/pairing"
+cd "$FA"; expect_pass test "$(fnext)" = "Walyt alpha/pairing:open"
+msg="family: jig roadmap in meta shows host done, and pb's merge wrote nothing to meta"
+cd "$FM"; expect_pass sh -c "$J roadmap | grep -qE '^  Familiar App alpha/host +done' && test \"\$(git -C '$FM' rev-parse HEAD)\" = '$metahead'"
+# The unphased list of a product, read live too.
+printf '\n## Familiar App No phase\n- `y`: the y work (touches docs/y.md)\n' >> .jig/roadmap.md && git add -A && git commit -qm 'GLOSSARY: y'
+cd "$FB"
+msg="family: pb's reading-list of a file docs/y.md covers lists Familiar App No phase/y, read from meta"
+expect_pass sh -c "$J reading-list src/x.py | grep -q 'no phase .Familiar App No phase/y.: the y work'"
+fspec yy 'Familiar App No phase/y' && git add -A && git commit -qm yy
+$J open Y --spec .jig/specs/yy.md --owns 'src/**' >/dev/null && git add -A && git commit -qm "open Y"
+( cd .git/jig/worktrees/Y && printf 'x = 3\n' > src/x.py && git commit -qam work && $J reviewed >/dev/null \
+  && $J handoff >/dev/null 2>&1 && pcfold && sed -i.bak 's/ — built \/ untouched \/ departed: smoke/ — built: done/' .jig/handoffs/Y-*.md && rm .jig/handoffs/*.bak && git add -A && git commit -qm "note Y" ) >/dev/null 2>&1
+metahead=$(git -C "$FM" rev-parse HEAD); gated Y; $J merge Y >/dev/null 2>&1
+msg="family: once pb merges the job taking it, meta's roadmap shows Familiar App No phase/y done, and pb wrote nothing to meta"
+cd "$FM"; expect_pass sh -c "$J roadmap | grep -qE '^  Familiar App No phase/y +done' && test \"\$(git -C '$FM' rev-parse HEAD)\" = '$metahead'"
+# A page meta moves down to pa takes its item into pa's section in the same commit.
+cd "$FA" && printf '# W\n\nW is.\n' > docs/w.md && git add -A && git commit -qm "w arrives"
+cd "$FM" && printf '# W\n\nW is.\n' > docs/w.md && plant "meta page w"
+sed -i.bak 's/^- `d`: a demo$/- `d`: a demo\n- `w`: the w work (touches docs\/w.md)/' .jig/roadmap.md && rm .jig/roadmap.md.bak && git add -A && git commit -qm 'GLOSSARY: Demos/w'
+git switch -q -c mvw && git rm -q docs/w.md && ulog "### Removed
+
+- docs/w.md: moved to pa/docs/w.md." && git add -A && git commit -qm 'GLOSSARY: w moves to pa' && $J reviewed >/dev/null && git switch -q main
+msg="family: meta moving docs/w.md down to pa, its scope left in Demos, is refused, naming the scope, pa/docs/w.md and pa's section"
+git merge -q --no-ff --no-commit mvw; out=$(git commit -qm 'GLOSSARY: merge mvw' 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '.Demos/w. touches docs/w.md, moved to pa/docs/w.md: its item follows its page into pa.s section (## Walyt <phase>' && ! echo \"\$0\" | grep -q 'target: pa'" "$out"
+msg="family: with the scope moved under ## Walyt alpha in that commit, the merge passes, the page checked on pa's trunk"
+sed -i.bak -e '/^- `w`: the w work/d' -e 's/^- `z2`: new$/- `z2`: new\n- `w`: the w work (touches docs\/w.md)/' .jig/roadmap.md && rm .jig/roadmap.md.bak && git add .jig/roadmap.md
+out=$(git commit -qm 'GLOSSARY: merge mvw' 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && grep -q '^- .w.: the w work' .jig/roadmap.md" "$out"
+}
+
 # ---------------------------------------------------------------- roadmap
 sec_roadmap() {
 rspec() { mkdir -p .jig/specs && printf '# %s\n\nSource: smoke\nScope: %s\n\n## Intent\nx\n' "$1" "$2" > ".jig/specs/$1.md"; }
@@ -9685,7 +9786,7 @@ msg="queue config: the overflow key with the owner's words commits"
 expect_pass setq '{"width": "all", "overflow": {"to": "github", "reason": "the owner: keep the standing yes"}}'
 }
 
-UNITS="rules merge_derived update board_split worktree_setup metarepo,staging pararepo release r6_takes,r6_ints merge_after_sync repos workflow init_old_board ledger_rows hardware update_per_file pararepo_commands entry_globs report_fixes sync_buffer buffer_answered pointers removals feedback slash_names homes structure meta_docs agents_lines page_contract roadmap boundary decisions supersede touches,touches_terms sweep staging_batches merge_log findings glossary headings check_levels role_line consolidate cheaper_rounds next svg update_roles holders rig rig_batch close versioning pin_bump moves claims inbox rigger queue"
+UNITS="rules merge_derived update board_split worktree_setup metarepo,staging pararepo release r6_takes,r6_ints merge_after_sync repos workflow init_old_board ledger_rows hardware update_per_file pararepo_commands entry_globs report_fixes sync_buffer buffer_answered pointers removals feedback slash_names homes structure meta_docs agents_lines page_contract roadmap family boundary decisions supersede touches,touches_terms sweep staging_batches merge_log findings glossary headings check_levels role_line consolidate cheaper_rounds next svg update_roles holders rig rig_batch close versioning pin_bump moves claims inbox rigger queue"
 
 if [ "${1:-}" = --list ]; then echo $UNITS | tr ' ,' '\n\n'; exit 0; fi
 if [ "${1:-}" = --unit ]; then        # --unit <run folder> <unit>: one unit, its output to a file

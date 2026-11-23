@@ -913,7 +913,10 @@ command at each step.
 ## Roadmap
 
 Optional: a repo with no `.jig/roadmap.md` has no roadmap, and nothing here applies to it.
-The product is the repo, so there is one roadmap and no product level in it.
+A repo is for one software product, and the hardware that runs it may be defined there, its
+pages segmented within `docs/` as the hardware skill's board pages are; so a stand-alone repo
+keeps one roadmap with no product level in it. A metarepo and its pararepos plan from one
+roadmap, the metarepo's (Products, below), so no scope exists in two copies to drift.
 
 - **The source**, `.jig/roadmap.md`: phases as `## <phase>` headings, in order (no dates: order
   is file order); every `## ` heading but `## No phase` is a phase. Each has an `Exit when:`
@@ -946,15 +949,38 @@ The product is the repo, so there is one roadmap and no product level in it.
   checker, and an older one refuses a page-naming `## No phase` item, so the first run installs
   the checker and names the fold as waiting on it, and the run after that commit folds, and
   rewrites `ROADMAP.md`. After it the hook refuses an `## Up next` heading, by line.
+- **Products**, in a metarepo's roadmap: a heading `## <Product> <phase>` belongs to a product
+  when its leading words, case folded, are a term in the metarepo's glossary with an `Owner:`
+  line naming a pararepo (its first backticked name, as `jig repos` knows it) or `this repo`;
+  the longest such term wins. Every other heading is one of the metarepo's own phases. Each
+  product's phases are ordered among themselves in file order and have their own current
+  phase, and so do the metarepo's own; nothing orders one product after another but an
+  `(after …)`, and a ref may name another product's phase or scope. `## <Product> No phase` is
+  that product's list, its ids `<Product> No phase/<id>`. A `(touches …)` page under a product
+  heading is a page of the product's owning repo, checked on that repo's trunk when it can be
+  reached. `jig roadmap` reports a product whose `Owner:` names no repo jig knows.
+- **One reader.** A pararepo with no roadmap of its own reads the metarepo's live, from its
+  checkout's trunk, never at the pin: a roadmap change is never released (Metarepo and
+  pararepos). Every reader goes through it: `jig roadmap`, rig, reading-list, fold-in and the
+  hooks. A scope's states are pulled from the specs and notes on the metarepo's trunk and on
+  each pararepo's that `jig repos` reaches; one it can't reach is named, and its products'
+  scopes read *unknown*. The hook checks a pararepo's `Scope:` lines against the metarepo's
+  trunk, and passes them with a warning naming it when it can't be reached; on the metarepo's
+  trunk it refuses dropping a scope a reachable pararepo's spec or note takes, naming the file.
+  A pararepo's merge writes nothing to the metarepo, and it writes no `ROADMAP.md`: the view is
+  the metarepo's. In a pararepo the next step comes from the current phases and lists of the
+  products it owns; in the metarepo, from its own and the products it owns as `this repo`.
 - **A phase's note** is the prose under its heading before `Exit when:` or `Scopes:`. The view
   shows it under the phase's heading.
 - **A touched page exists**, in either form. `jig roadmap` reports one that doesn't; on trunk
   the hook refuses a commit that leaves an item or a scope touching no page, so a page renamed
   or deleted there is re-pointed in the same commit; and `jig merge` re-points each page the job
-  moved. A page a metarepo moves down to a pararepo takes its items with it: the refusal names
-  the move's pointer, and the item goes by a roadmap change staged with `target: <pararepo>`,
-  applied there on its owner's yes, while this commit drops it, or the page from its
-  `(touches …)`. A section moved down leaves its page, so it moves no item.
+  moved. A page a metarepo moves down to a pararepo takes its items with it, and the refusal
+  names the move's pointer. To a pararepo that plans from the one roadmap, they follow it in the
+  same commit, into that pararepo's product section, with `(touches …)` at the page's path
+  there. To one that keeps a roadmap of its own, the item goes by a roadmap change staged with
+  `target: <pararepo>`, applied there on its owner's yes, while this commit drops it, or the page
+  from its `(touches …)`. A section moved down leaves its page, so it moves no item.
 - **Specs take scopes** with a `Scope:` line under `Source:`, e.g. `Scope: alpha/screen,
   alpha/battery`. Many-to-many: a spec may take several scopes, a scope may be taken by several
   specs, and a spec with no `Scope:` line takes none. A spec removed once its job merged keeps
@@ -1368,6 +1394,10 @@ hardware) cites it at a released tag. The metarepo points; nothing copies it. Th
    the trunk checkout off it.
 2. The metarepo holds no code and no copied pararepo content (What the metarepo holds).
 3. Only `jig release` tags, so a pin never names something that failed validation.
+
+One thing is read live instead of at the pin: the roadmap (Roadmap, Products and One reader).
+It is the plan, not a claim, so no release carries it, and a pararepo planning from it reads
+the metarepo's trunk.
 
 **What the metarepo holds.** A claim lives in the metarepo when another repo must agree with it
 or build against it: a contract, unless a decision makes a pararepo page its authority; then the
