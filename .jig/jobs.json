@@ -20,7 +20,7 @@
   },
   "bug-ci-runner-smoke": {
     "spec": ".jig/specs/bug-ci-runner-smoke.md",
-    "state": "claimed",
+    "state": "gated",
     "after": [
       "bug-docstring-escape"
     ],
