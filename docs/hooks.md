@@ -38,7 +38,7 @@ minute. It has four hooks:
 ## Opting in
 
 Claude Code warns about every plugin with hooks, because hooks run shell commands as you.
-The three hooks that run your repo's scripts do so only in a repo that opted in. The
-session-start hook runs nothing of the repo's: it reads and prints one line.
+The other three hooks run only in a repo that opted in. The session-start hook runs nothing of
+the repo's: it reads and prints one line.
 `python3 .jig/jig.py install-hooks` writes the opt-in marker, `.git/jig/enabled`. Git never clones `.git/`, so a repo you fetched can't turn itself
 on and get its scripts run.

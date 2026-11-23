@@ -62,7 +62,9 @@ hubnode adds it with `python3 .jig/jig.py share greeting src/other.py`.
 
 **5. Review.** The hubnode starts a fresh session for `/jig:review`. It sees the diff, the spec
 and the rules, and none of the conversation. The hubnode records the review in the job's
-worktree with `python3 .jig/jig.py reviewed --blocking 0` (or however many it found).
+worktree, with the review role's [tier](docs/glossary.md#tier) and
+[effort](docs/glossary.md#effort) and how many blocking findings it left:
+`python3 .jig/jig.py reviewed --tier 2 --effort 2 --blocking 0`.
 
 **6. Hand off.** The work subnode runs `python3 .jig/jig.py handoff`, which writes a note naming
 the reviewed commit. The subnode fills in every heading of the note and commits it. That's the
@@ -73,8 +75,8 @@ sets up a scratch checkout of that commit with trunk merged in, and prints the c
 to run there.
 
 **8. Check.** The hubnode starts a check subnode, which runs that printed check in the scratch
-checkout. When it passes, the subnode records it there, with the check role's
-[tier](docs/glossary.md#tier) and [effort](docs/glossary.md#effort):
+checkout. When it passes, the subnode records it there, with the check role's tier and
+effort:
 `python3 .jig/jig.py checked --tier 3 --effort 4 --seconds <s>`. Then the hubnode runs
 `python3 .jig/jig.py mark greeting gated` and commits `.jig/jobs.json` on trunk.
 
@@ -97,8 +99,8 @@ takes it.
 
 After init, `.jig/RULES.md` in your repo holds every rule the hooks enforce.
 
-**On trust.** jig's plugin hooks run your repo's own scripts only in a repo that opted in, with a
-marker git never clones. The session-start hook only reads and prints one line. [More](docs/hooks.md).
+**On trust.** All but one of jig's plugin hooks run only in a repo that opted in, with a marker git
+never clones. The session-start hook only reads and prints one line. [More](docs/hooks.md).
 
 ## 💬 Feedback and working on jig
 
