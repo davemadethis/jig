@@ -155,7 +155,7 @@ when a workflow or the owner calls it.
 A review with no blocking findings ends the fixing: the job hands off, as `jig next` says.
 Should-fix and optional findings get one round per part; what is left after it gets DEFERRED
 rows. A finding that needs behavior the spec never names is a spec change before it is built
-(an `Interpreted:` line the hubnode accepts, or the owner's answer), or an Up next item.
+(an `Interpreted:` line the hubnode accepts, or the owner's answer), or a `## No phase` item.
 
 A ruling also reaches you by the inbox: the owner's reply to your question, sent from the
 repo's rigger (`jig inbox`). The quoted owner words, with their date, are the owner's ruling, as
@@ -292,12 +292,19 @@ and commit both with the staged file's `Source: … (staged as <file>)` line in 
 A scope a spec still takes is re-pointed in that commit: the hook names the specs. Then
 `jig staging resolve <file>`, which looks for that line in a trunk commit to the roadmap.
 
-Parked work is an item under `## Up next` in `.jig/roadmap.md`, naming the pages it will
-touch, proposed the same way. Work with no phase yet is an item under `## No phase`, naming
-no pages. A roadmap change asks for no decision entry and no change line.
+In a pararepo that plans from its metarepo's roadmap (no `.jig/roadmap.md` of its own), a change
+to its products' sections is never made here or on the metarepo's trunk: write a `BUFFER.md`
+row and run `jig propose --buffer`, write the change on the `propose/` branch it makes, and it
+merges in the metarepo at the next sync the owner calls. In a metarepo, merging such a branch
+is a roadmap change like any other: show the diff, and merge on the owner's yes. Rig there lists
+each cross-product wait no section confirms with `(needed by …)`: put it to the owner.
 
-`jig merge` rewrites `ROADMAP.md` in the merge commit, and removes from `.jig/roadmap.md` each
-Up next item the note's fold-in answers built. After solo work on trunk, `jig roadmap` says
+Work with no phase yet, parked mid-build (naming the pages it will touch) or not started, is
+an item under `## No phase` in `.jig/roadmap.md`, proposed the same way. A roadmap change asks
+for no decision entry and no change line. A built item stays, read done from the spec that
+took it, until a roadmap change of the owner's removes it.
+
+`jig merge` rewrites `ROADMAP.md` in the merge commit. After solo work on trunk, `jig roadmap` says
 when it is stale: `jig roadmap --write` and commit it.
 
 ## Never

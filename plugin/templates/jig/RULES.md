@@ -277,9 +277,9 @@ current, is the skeleton):
 A page has no `## Undefined` section, and no section that holds the project: build status
 (done, pending, not built yet), or when and in what order work will happen. What the section
 says decides, not its heading: a `## Status` or `## Current state` describing the product's own
-thing (a status call, a state machine's states) is product. Work parked mid-build is an item
-under `## Up next` in `.jig/roadmap.md`, naming the pages it will touch, and named work with no
-phase yet an item under `## No phase` (Roadmap), each written only on the owner's word. An open
+thing (a status call, a state machine's states) is product. Work with no phase yet, parked
+mid-build (naming the pages it will touch) or not started, is an item under `## No phase` in
+`.jig/roadmap.md` (Roadmap), written only on the owner's word. An open
 product question is an `## Open` entry in `.jig/decisions.md`, which the page may cite. Review
 findings not taken go in `.jig/ledgers/DEFERRED.md`. `jig survey` lists a `## Undefined`
 heading, jig's own retired one, with where its content goes; it searches no other heading,
@@ -467,13 +467,13 @@ log, each with where it goes. It searches no words that may be the product's. `j
 changes a page only by `--sweep`, below, on the owner's yes, and reshaping a repo's pages is a job of its own there.
 
 `jig update` sweeps a repo onto the boundary, each move on the owner's yes. Under Repo files to
-review it lists each page's `## Undefined` entry as the `## Up next` item it would become, the
+review it lists each page's `## Undefined` entry as the `## No phase` item it would become, the
 project paths and quoted scope ids above, and the repo's plan and register files with where
 each one's content goes: `TODO.md`, `BACKLOG.md`, `STATUS.md`, `PLAN.md` and a hand-written
 `ROADMAP.md` to `.jig/roadmap.md`; `FEATURES.md` to its systems' pages and decision entries;
 `RULES.md`, `CONVENTIONS.md` and `CONTRIBUTING.md` sorted line by line by the test under Homes.
 It lists, too, each page line naming a `.jig/` path (Product and process). It judges none of
-them. `jig update --apply --sweep` writes the Up next items to `.jig/roadmap.md`, creating it when
+them. `jig update --apply --sweep` writes the items under `## No phase` in `.jig/roadmap.md`, creating it when
 absent, on trunk (R5), and removes each emptied Undefined section where the pages may change:
 on trunk, or in a metarepo a job's worktree (M4), where it removes only the sections whose
 entries trunk's roadmap holds.
@@ -540,13 +540,16 @@ several, such as its system page and the page of the board it runs on — and wr
 checklist into the note. A moved file asks the page that covered its old path too. Each line
 asks whether the page still describes the code: it is either ticked as updated — the stale
 sentences edited, deleting text included — or says why none went stale. Each roadmap item
-naming a covering page with `(touches …)`, an `## Up next` item or a taken scope, gets a line
-of its own, answered **built**, **untouched**, or **departed: <why>**, with anything after the
-answer the answerer's to add. Built means the work's description is in the page's body now. The
-roadmap changes on trunk only, so `jig merge` deletes an Up next item answered built from
-`.jig/roadmap.md` in the merge commit and rewrites `ROADMAP.md`; a scope's state comes from its
-specs, as ever. Solo work on trunk has no merge: there `jig gate` refuses while an item the
-note answers built is still under Up next, so it is deleted on trunk in a commit of its own. `jig gate` refuses while a line is unanswered; untouched and departed are answers.
+naming a covering page with `(touches …)`, a `## No phase` item not done or a taken scope,
+gets a line of its own, answered **built**, **untouched**, or **departed: <why>**, with
+anything after the answer the answerer's to add. Built means the work's description is in the
+page's body now. An answer changes no roadmap: an item's state, like a scope's, comes from the
+specs that take it, so a built item stays, read done once its spec is complete, until the
+owner's roadmap change removes it. So `jig gate` refuses built on a `## No phase` item that no
+spec of the job takes, as the gate's own merge of trunk leaves the spec, read once that merge
+is made (a merge that needs a hand is refused first): the spec's `Scope: No phase/<id>` is what
+makes it read done. `jig gate` refuses while a line is unanswered; untouched and
+departed are answers.
 
 Ownership comes from `docmap` in `config.json`:
 
@@ -752,7 +755,7 @@ with the defaults.
 A review with no blocking findings ends the fixing: the job hands off, as `jig next` says.
 Should-fix and optional findings get one round per part; what is left after it gets DEFERRED
 rows. A finding that needs behavior the spec never names is a spec change before it is built
-(an `Interpreted:` line the hubnode accepts, or the owner's answer), or an Up next item.
+(an `Interpreted:` line the hubnode accepts, or the owner's answer), or a `## No phase` item.
 
 **Ranking settings.** A setting ranks by tier first, then effort: a better tier at any effort
 ranks above a worse tier at any effort, and within one tier the higher effort ranks above.
@@ -910,37 +913,79 @@ command at each step.
 ## Roadmap
 
 Optional: a repo with no `.jig/roadmap.md` has no roadmap, and nothing here applies to it.
-The product is the repo, so there is one roadmap and no product level in it.
+A repo is for one software product, and the hardware that runs it may be defined there, its
+pages segmented within `docs/` as the hardware skill's board pages are; so a stand-alone repo
+keeps one roadmap with no product level in it. A metarepo and its pararepos plan from one
+roadmap, the metarepo's (Products, below), so no scope exists in two copies to drift.
 
 - **The source**, `.jig/roadmap.md`: phases as `## <phase>` headings, in order (no dates: order
-  is file order); every `## ` heading but `## Up next` and `## No phase` is a phase. Each has an `Exit when:` checklist of what
-  the owner checks, a `Scopes:` list of `` - `<scope>`: <what it is> `` (unindented, the name
+  is file order); every `## ` heading but `## No phase` is a phase. Each has an `Exit when:`
+  checklist of what the owner checks, a `Scopes:` list of `` - `<scope>`: <what it is> `` (unindented, the name
   with no space or `/`), or both. A scope's id is `<phase>/<scope>`. "Every scope is done" is
   implied, never written as a box. A duplicate phase or scope id, a phase with neither list,
   or a line under `Scopes:` that isn't a scope is refused by the hook, by line, and reported
   by `jig roadmap`. A scope may end with `(touches docs/<page>.md, …)`, the pages it will change.
-- **Up next**, a reserved section that isn't a phase: work parked mid-build, in no order,
-  on the owner's word. Each item reads
-  `` - `<id>`: <what is parked>; stops at <where>; parked <YYYY-MM-DD> (touches docs/<page>.md, …) ``,
-  unindented, and names the pages it will touch; the hook refuses one that names none, or a
-  duplicate id, by line. `jig reading-list` prints, after each page, the Up next items and the
-  scopes not yet done that name it, and fold-in asks about them (Fold-in). An item answered
-  built leaves the roadmap in the merge commit.
-- **No phase**, the other reserved section that isn't a phase: work the owner has named and
-  given no phase yet, in no order. Each item reads `` - `<id>`: <what it is> ``, unindented, and
-  names no pages: an item with `(touches …)` is parked work, which is Up next's. The hook refuses
-  one, a duplicate id, or a line that isn't an item, by line. A spec can't take one: when its work
-  starts, the owner moves it to a phase's `Scopes:`. It has no state, sits in no phase line, and
-  is never current, so work with no stage never reads as a stage.
+- **Dependencies**: a scope may name what it waits on, `(after <ref>, …)`, after its text and
+  before any `(touches …)`; a phase may, with a line `(after <ref>, …)` of its own anywhere
+  outside its `Scopes:` (its note, after a list, among its boxes), which applies to each of
+  its scopes. A ref is `<phase>/<scope>`, `<phase>` or `No phase/<id>` in the same
+  roadmap. A wait written as prose is no wait: jig reads only this form. On trunk, when the
+  roadmap changes, the hook refuses, by line, a ref naming nothing the roadmap has, a ref to
+  itself (a scope naming its own phase too), and a ring, named once with all its members;
+  `jig roadmap` reports the same.
+- **No phase**, the one reserved section that isn't a phase, and the one list for work with
+  no phase, in no order, on the owner's word: work parked mid-build and work not started, one
+  place for both. Each item reads `` - `<id>`: <what it is> ``, unindented, optionally ending
+  `(after <ref>, …)` and `(touches docs/<page>.md, …)` as a scope does; a parked item says
+  `<what is parked>; stops at <where>; parked <YYYY-MM-DD>` as its text. Its id is
+  `No phase/<id>`, which a `Scope:` line takes as it takes a scope, and its state is derived the
+  same way: open, taken or done. It sits in no phase line and is never current, so work with
+  no stage never reads as a stage. The hook refuses a duplicate id or a line that isn't an
+  item, by line. `jig reading-list` prints, after each page, the items not done and the scopes
+  not done that name it, and fold-in asks about them (Fold-in). A built item stays, shown done,
+  until the owner's roadmap change removes it: dropping a done item a note still takes is no
+  drop. `## Up next`, the list's old second home, is folded into it by `jig update --apply`,
+  ids and text kept, on trunk on the owner's yes, in two runs: the hook runs trunk's committed
+  checker, and an older one refuses a page-naming `## No phase` item, so the first run installs
+  the checker and names the fold as waiting on it, and the run after that commit folds, and
+  rewrites `ROADMAP.md`. After it the hook refuses an `## Up next` heading, by line.
+- **Products**, in a metarepo's roadmap: a heading `## <Product> <phase>` belongs to a product
+  when its leading words, case folded, are a term in the metarepo's glossary with an `Owner:`
+  line naming a pararepo (its first backticked name, as `jig repos` knows it) or `this repo`;
+  the longest such term wins. Every other heading is one of the metarepo's own phases. Each
+  product's phases are ordered among themselves in file order and have their own current
+  phase, and so do the metarepo's own; nothing orders one product after another but an
+  `(after …)`, and a ref may name another product's phase or scope. `## <Product> No phase` is
+  that product's list, its ids `<Product> No phase/<id>`. A `(touches …)` page under a product
+  heading is a page of the product's owning repo, checked on that repo's trunk when it can be
+  reached. `jig roadmap` reports a product whose `Owner:` names no repo jig knows.
+- **One reader.** A pararepo with no roadmap of its own reads the metarepo's live, from its
+  checkout's trunk, never at the pin: a roadmap change is never released (Metarepo and
+  pararepos). Every reader goes through it: `jig roadmap`, rig, reading-list, fold-in and the
+  hooks. A scope's states are pulled from the specs and notes on the metarepo's trunk and on
+  each pararepo's that `jig repos` reaches; one it can't reach is named, and its products'
+  scopes read *unknown*. The hook checks a pararepo's `Scope:` lines against the metarepo's
+  trunk, and passes them with a warning naming it when it can't be reached; on the metarepo's
+  trunk it refuses dropping a scope a reachable pararepo's spec or note takes, naming the file;
+  one dropped while that pararepo can't be reached passes with a warning, and that pararepo's
+  next commit to the spec taking it is refused. A pararepo that keeps a roadmap of its own is
+  its own family of one: its specs take its own scopes, never the metarepo's. A pararepo whose
+  trunk removes a page its product section touches commits, warning that the metarepo's item
+  needs re-pointing.
+  A pararepo's merge writes nothing to the metarepo, and it writes no `ROADMAP.md`: the view is
+  the metarepo's. In a pararepo the next step comes from the current phases and lists of the
+  products it owns; in the metarepo, from its own and the products it owns as `this repo`.
 - **A phase's note** is the prose under its heading before `Exit when:` or `Scopes:`. The view
   shows it under the phase's heading.
 - **A touched page exists**, in either form. `jig roadmap` reports one that doesn't; on trunk
   the hook refuses a commit that leaves an item or a scope touching no page, so a page renamed
   or deleted there is re-pointed in the same commit; and `jig merge` re-points each page the job
-  moved. A page a metarepo moves down to a pararepo takes its items with it: the refusal names
-  the move's pointer, and the item goes by a roadmap change staged with `target: <pararepo>`,
-  applied there on its owner's yes, while this commit drops it, or the page from its
-  `(touches …)`. A section moved down leaves its page, so it moves no item.
+  moved. A page a metarepo moves down to a pararepo takes its items with it, and the refusal
+  names the move's pointer. To a pararepo that plans from the one roadmap, they follow it in the
+  same commit, into that pararepo's product section, with `(touches …)` at the page's path
+  there. To one that keeps a roadmap of its own, the item goes by a roadmap change staged with
+  `target: <pararepo>`, applied there on its owner's yes, while this commit drops it, or the page
+  from its `(touches …)`. A section moved down leaves its page, so it moves no item.
 - **Specs take scopes** with a `Scope:` line under `Source:`, e.g. `Scope: alpha/screen,
   alpha/battery`. Many-to-many: a spec may take several scopes, a scope may be taken by several
   specs, and a spec with no `Scope:` line takes none. A spec removed once its job merged keeps
@@ -953,29 +998,62 @@ The product is the repo, so there is one roadmap and no product level in it.
 - **States are derived**, never edited. A scope is *open* (no spec takes it), *taken* (a spec
   that takes it isn't complete) or *done* (taken, and every spec that takes it is complete). A
   phase is *done* when every scope in it is done and every `Exit when:` box is ticked; one with
-  no scopes and no boxes is *empty*, and never done. The first phase not done is *current*,
-  the rest *next*.
+  no scopes and no boxes is *empty*, and never done. The first phase not done whose own
+  `(after …)` refs are all done is *current*, the rest *next*. A scope is **blocked** while any
+  ref, its own or its phase's, isn't done: derived like the states, a qualifier on them, never
+  a fourth. `jig roadmap` and the view add `after <ref>` beside an open blocked scope.
 - **The view**, `ROADMAP.md` at the root, generated from tracked files and never edited by hand: a line of the
   phases with their states, then per phase its note, its exit boxes and a board, a table with Open, Taken
-  and Done columns holding its scopes, each with its specs linked, then Up next, each item with
-  its pages, then No phase, each item with what it is. Plain Markdown, so it renders
+  and Done columns holding its scopes, each with its specs linked, then No phase, a board of
+  its items the same way. Plain Markdown, so it renders
   anywhere. `jig merge` rewrites it in the merge commit, when states change; after solo work on
   trunk, `jig roadmap --write` rewrites it, and `jig roadmap` says when it is stale.
 - **R5** covers both files: they change on trunk only. In a metarepo, M4 lets the hubnode
   commit `ROADMAP.md` on trunk like the rest of jig's bookkeeping. Phases and scopes are the
   owner's plan, not work, so they change on trunk only, and a branch regenerating the view would
   only make merge conflicts. A roadmap change asks for no decision entry and no change line:
-  git keeps its history.
-- **The hook refuses** a spec whose `Scope:` names a scope trunk's roadmap doesn't have (on
+  git keeps its history. One other branch may carry `.jig/roadmap.md`: a metarepo's
+  `propose/` branch, a pararepo's buffered edit (Edits, below), whose merge is a trunk commit
+  on the metarepo owner's yes, where the hook checks it as any trunk change.
+- **Edits.** No hubnode edits another repo's content. A pararepo's changes to its products'
+  sections are buffered and reach the metarepo by the regular sync process, when the owner
+  decides: a `BUFFER.md` row and `jig propose`, the change written on its
+  `propose/<repo>-<slug>` branch in the metarepo, never on its trunk, and merged there at the
+  next sync the owner calls. A pararepo's merge writes nothing to the metarepo's roadmap.
+  Labels, names and new products (the glossary term and its `Owner:` line) are the metarepo's
+  hubnode's.
+- **Moving in**, once per pararepo, by hand, on the owner's yes: the metarepo's glossary names
+  the product with its `Owner:` line; the pararepo proposes its phases as
+  `## <Product> <phase>` and its `## No phase` items as `## <Product> No phase`, and the
+  metarepo merges it; then the pararepo's next commit removes its `.jig/roadmap.md` and
+  `ROADMAP.md`, its `Scope:` lines re-pointed to the metarepo's ids, which the hook checks on the
+  metarepo's trunk. After it, the pararepo's hook refuses a `.jig/roadmap.md` while the
+  metarepo's roadmap holds a product it owns, and `jig update --sweep` writes none there: its
+  `## Undefined` entries are proposed under `## <Product> No phase`.
+- **Unconfirmed waits.** A scope or phase may say what waits on it, `(needed by <ref>, …)`,
+  as it says what it waits on. A cross-product `(after …)` the waited-on scope or phase doesn't
+  confirm so is listed by `jig roadmap` in the metarepo and under rig's Waiting on you, for the
+  owner to rule on. It blocks no commit and no step: the wait itself still blocks as any does.
+- **The hook refuses** a spec whose `Scope:` names a scope or `No phase/<id>` trunk's roadmap doesn't have (on
   trunk, the commit's own roadmap), and on trunk a roadmap change that drops or renames a scope
   a spec still takes, naming the spec: re-point it in the same commit.
 - **The next step** is one step ahead, as if staging and the waiting specs were cleared: the
-  first Up next item whose pages no open job's, waiting spec's or staged file's Touches names
-  (by the page itself: a glob or a folder doesn't count, and an Up next item has no scope id
-  to take), else the current phase's first open scope that no waiting spec or staged file
-  takes by its `Scope:` line. An Up next item passed over is listed as waiting on what names
-  its pages. `jig rig` (Workflow) proposes it to the owner and
-  never writes the roadmap.
+  first open, unblocked item of No phase that names pages, none of which an open job's,
+  waiting spec's or staged file's Touches names (by the page itself: a glob or a folder
+  doesn't count), and that no waiting spec or staged file takes; an item naming no pages is
+  never offered. Else a scope from one walk out from the **front**, each phase not done up to
+  and including the current one, nearest first and in file order within a round. A phase
+  reaches its waits, then its scopes not done; the first scope that is open, unblocked and
+  taken by no waiting spec or staged file's `Scope:` line is the step; a blocked or taken
+  scope reaches what it waits on, so the work that unblocks it is offered as soon as it isn't
+  blocked. So the current phase's own first free scope comes first, and one reached past the
+  front's own scopes says who waits on it. A walk that ends at work done or under way offers
+  no step. Under rig's Waiting on (work, not an answer) are each item passed over because its
+  pages are named, waiting on what names them, each blocked item naming pages, and each open
+  blocked scope of a front phase that nothing takes, waiting on its refs. A waiting spec or
+  staged file whose `Scope:` names a blocked scope waits on that scope's refs, as a `Build
+  after` waits, and never starts. `jig rig` (Workflow) proposes the step to the owner and never
+  writes the roadmap.
 
 ## Decision log
 
@@ -1350,6 +1428,10 @@ hardware) cites it at a released tag. The metarepo points; nothing copies it. Th
 2. The metarepo holds no code and no copied pararepo content (What the metarepo holds).
 3. Only `jig release` tags, so a pin never names something that failed validation.
 
+One thing is read live instead of at the pin: the roadmap (Roadmap, Products and One reader).
+It is the plan, not a claim, so no release carries it, and a pararepo planning from it reads
+the metarepo's trunk.
+
 **What the metarepo holds.** A claim lives in the metarepo when another repo must agree with it
 or build against it: a contract, unless a decision makes a pararepo page its authority; then the
 metarepo holds the decision and points to the page. Otherwise a claim lives with its one owner,
@@ -1611,7 +1693,7 @@ jig release [--milestone|--feature|--patch|--version X.Y.Z] [--force]   the repo
 jig survey [--json] [--levels]   inventory the repo against the jig shape; --levels: each page's level and its evidence
 jig update [--apply]        bring the repo to the current jig layout, and carry out the moves findings approves (dry run without --apply)
 jig update [--apply] --merge-log   on the owner's yes: CHANGELOG.md, the register and folders of decision records into .jig/decisions.md
-jig update [--apply] --sweep   on the owner's yes: pages' ## Undefined entries to ## Up next in .jig/roadmap.md
+jig update [--apply] --sweep   on the owner's yes: pages' ## Undefined entries to ## No phase in .jig/roadmap.md
 jig update [--apply] --glossary   on the owner's yes: the README's glossary, or GLOSSARY.md, to docs/glossary.md, its pointers rewritten
 jig staging [resolve|drop <file>]   list staged files, or land / drop one
 jig repos [add repo|meta|para | rename <new> | alias <repo> <alias> [--remove] | which <name>]  where your repos live (user config)

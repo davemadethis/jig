@@ -28,10 +28,14 @@ Before anything is built:
 
 1. Restate the intent in one sentence. If you can't, ask — one question, the hard one, not the obvious one — but only one the owner's own words leave open, checked as `/jig:decision-cards` (Is it open?) says.
 2. Copy the spec template to `.jig/specs/<kebab-task-name>.md` (create `.jig/specs/` if it isn't there yet) and fill it: the repo's `.jig/specs/_template.md` if it has one, else `${CLAUDE_PLUGIN_ROOT}/templates/specs/_template.md`. "Done when" must be checkable by running something.
-3. If the repo has `.jig/roadmap.md`, replace the template's comment under `Source:` with a
+3. If the repo has a roadmap, replace the template's comment under `Source:` with a
    `Scope:` line naming the scopes this task takes, as `<phase>/<scope>` from it
-   (`Scope: alpha/screen, alpha/battery`). A task that takes none (a bug fix, say) leaves the
-   line out, and so does a repo with no roadmap: delete the comment either way.
+   (`Scope: alpha/screen, alpha/battery`), or `<list>/<id>` for an item of a list
+   (`No phase/pay`). A pararepo with no `.jig/roadmap.md` of its own plans from its metarepo's
+   (`jig roadmap` prints it): its ids carry the product, `App alpha/pairing` or
+   `App No phase/pay`, and the hook checks them against the metarepo's trunk. A task that
+   takes none (a bug fix, say) leaves the line out, and so does a repo with no roadmap: delete
+   the comment either way.
    A scope the roadmap doesn't have is refused at commit: a new one is the owner's, proposed
    as a roadmap change (`/jig:stage`), never invented here.
 4. List the files you expect to touch. If the list is long or you're unsure, inspect first and revise. In a pararepo, say whether any is a contract path (`.jig/para.json`): then the change needs a row in `.jig/ledgers/BUFFER.md` (or `meta: buffered <row id>` here), a metarepo proposal (`jig propose`), `meta: <name> pointers <branch>` (`jig propose --pointers`) when it only moves what metarepo pointers point at, or `meta: none — <reason>`. Working ahead of the metarepo while behavior settles is the buffer's job. In a metarepo, a spec that changes a claim lists every place that states it, found by meaning and not only by its words, and its done-when covers each one (RULES.md: Every copy). Each changed claim is stated only at its home, with a pointer everywhere else (RULES.md: What the metarepo holds): a contract lives in the metarepo, where a decision row and the pages citing it as their source are one home; a claim one pararepo owns lives in that pararepo.
@@ -44,12 +48,12 @@ Before anything is built:
    it writes: `AGENTS.md`, a skill, a script, or a section of `.jig/process.md`.
 5. Read the pages `jig reading-list <those files>` prints. A page describes
    the code; where it disagrees, the code on trunk is reality and the page is stale. For each
-   roadmap item it lists under a page (an `## Up next` item or a scope), say in the spec which
-   it is: **adopt** (this task builds it; its content goes into the page's body, and an Up
-   next item leaves the roadmap when the job merges), **depart** (the task goes another way,
-   and why), or **leave** (out of scope). Work parked mid-build is an Up next item, naming its
-   pages, and named work with no phase yet a `## No phase` item, each added on the owner's
-   word as a roadmap change (`/jig:stage`), never written on a page. The spec is where project
+   roadmap item it lists under a page (a `## No phase` item or a scope), say in the spec which
+   it is: **adopt** (this task builds it; its content goes into the page's body, and the spec
+   takes it with its `Scope:` line, `No phase/<id>` for an item, so it reads done when the job
+   lands), **depart** (the task goes another way, and why), or **leave** (out of scope). Work
+   with no phase yet, parked mid-build (naming its pages) or not started, is a `## No phase`
+   item, added on the owner's word as a roadmap change (`/jig:stage`), never written on a page. The spec is where project
    meets product: of each decision entry and page change it plans, ask is this about the product, about when and in what order we build it, or about how the
    repository is worked? What is the project stays in the spec or the roadmap, and how the repo is
    worked goes to its home by the test in `.jig/RULES.md` (Homes), never a page; the pages and entries it writes describe the

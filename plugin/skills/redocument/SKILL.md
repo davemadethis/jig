@@ -236,7 +236,7 @@ Your spec carries the job's remap rows and the Sources. You write only your page
      what is seen on screen; review is no holder) → `## Invariants`,
      as `- <fact> — <why>; held by <holder>.`;
    - **a parked intent, a status or a plan** (an `## Undefined`, `## Status` or `## Roadmap`
-     section, "phase 3", a priority order) → an `## Up next` candidate in the report, naming
+     section, "phase 3", a priority order) → a `## No phase` candidate in the report, naming
      this page, added to `.jig/roadmap.md` on trunk only once the owner confirms it; never on
      the page, which says what the product does today;
    - **an open product question** → an `## Open` entry candidate for `.jig/decisions.md`;
@@ -271,7 +271,7 @@ Your spec carries the job's remap rows and the Sources. You write only your page
    ### Cited (a pararepo only)
    - <old path> § <heading> → <new path> § <heading>
    ### Flagged (the owner's call)
-   - Up next candidate: `<id>`: <what is parked>; stops at <where>; parked <date> (touches <new path>) — <source>
+   - No phase candidate: `<id>`: <what is parked>; stops at <where>; parked <date> (touches <new path>) — <source>
    - Open question: <question> — <source>
    - Failed admission: <would-be invariant> — missing <why | holder>
    - Process: <claim> → <AGENTS.md | .jig/scripts/<file> | .jig/process.md § <section>> — <source>

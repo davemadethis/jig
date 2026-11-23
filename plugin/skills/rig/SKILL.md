@@ -27,8 +27,9 @@ as `/jig:fix` shows them; its specs come back as waiting specs on a later run. A
 ended with still staged is stored `concluded` (that skill says when): it waits on the owner.
 
 For each item whose `judged` is null: each staged file, and the next-step item whose `state`
-is `open` (a next-step item whose `state` is `taken` is already under way: it is listed under
-Waiting on, and gets no judgment and no question):
+is `open` (a next-step item whose `state` is `taken` is already under way, and one whose
+`state` is `blocked` is a roadmap scope waiting on the refs its `(after …)` names: each is
+listed under Waiting on, and gets no judgment and no question):
 
 - **A staged file:** read it whole. Call it `ready` when a spec can be written from it as it
   is, with no answer from the owner; `open` when it can't. An open file gets only the questions
@@ -40,8 +41,9 @@ Waiting on, and gets no judgment and no question):
   file whose every question its owner's words answer is `ready`. A ready file gets its
   recommendation: the spec it becomes, in one line. A judgment handed to a subagent gets this
   paragraph and Is it open? in its brief.
-- **The next step** (the open one): its question: take it now (a spec for it), or leave it
-  where it is, with one recommended and why.
+- **The next step** (the open one): a `## No phase` item naming pages, or a roadmap scope. Its
+  question: take it now (a spec for it, whose `Scope:` line takes it, `No phase/<id>` for an
+  item, so it reads done once built), or leave it where it is, with one recommended and why.
 
 Store each: `jig rig --store-put <path>` with a JSON object on stdin,
 `{"call": "ready"|"open", "about": "…", "context": "…", "questions": [{"ask": "…", "options": ["…"], "recommended": 0, "because": "…"}], "recommend": "…"}`.
@@ -55,16 +57,21 @@ inline visual, it may; the sections and their contents stay these.
 
 1. The count line: how many things wait on the owner's answers (every question: the open
    staged files, each `noted` file and `concluded` feedback report, the open next step, each
-   group with an overlap and each dependency cycle, a ring once), and how many can start now.
+   group with an overlap, each dependency cycle, a ring once, and each unconfirmed
+   cross-product wait), and how many can start now.
 2. **Can start now:** each `group`, its items in the order given, each with what it comes
    after, and each overlapping pair the group's `overlaps` names.
 3. **Waiting on:** each item and what it waits for: a job, a spec or a staged file. A taken
-   staged file waits on the spec or job that carries it.
+   staged file waits on the spec or job that carries it. A blocked scope waits on the scopes
+   or phases its `(after …)` names: work, not an answer. In a pararepo the roadmap is the
+   metarepo's: only the products this repo owns give it steps, and a line naming a repo rig
+   couldn't reach says so.
 4. **Waiting on you:** the open staged files, each `noted` file with the note that carried it
    (the hubnode's step), each `concluded` feedback report with what
    `/jig:fix` found, the next step whose `state` is `open`, each
-   group with an overlap (one line: one job for its items, or keep some apart) and each
-   dependency cycle (`cycles`).
+   group with an overlap (one line: one job for its items, or keep some apart), each
+   dependency cycle (`cycles`), and in a metarepo each cross-product wait no section confirms
+   (`unconfirmed`): the owner rules on it, and it blocks nothing.
 5. **Running:** each open job with its step, who takes it, and whether it continues a session
    or starts one, as `jig rig` printed it from `jig next`; then each `fixing` feedback report
    with its group and its session.
@@ -100,9 +107,13 @@ in this order:
    `after` gets no other block: it builds after another item in its group, and once that
    opens as a job, it waits on that job.
 6. Each dependency cycle named under Waiting on: which item goes first?
-7. No block for a `noted` file: it is the hubnode's step (`/jig:hubnode`, Merging), done here
+7. Each unconfirmed cross-product wait (`unconfirmed`, a metarepo's): keep it, the waited-on
+   product's repo confirming it with `(needed by <waiter>)` on the scope or phase it names
+   (recommended when the work really is needed), or drop it, the waiter's repo removing its
+   `(after …)`. It blocks nothing meanwhile: the wait itself still blocks as any does.
+8. No block for a `noted` file: it is the hubnode's step (`/jig:hubnode`, Merging), done here
    in § 4 as that step says, and drawn under Waiting on you until it is.
-8. Each `concluded` feedback report: drop it (`jig staging drop`), or keep it staged for more
+9. Each `concluded` feedback report: drop it (`jig staging drop`), or keep it staged for more
    of what its `about` says is missing. A changed report is new again, and rig starts
    `/jig:fix` on it.
 
@@ -139,6 +150,13 @@ Nothing is ever dropped for it.
   a spec, remove those names from its own `Build after` line. In a staged file, remove them
   from its own `after:` header, as `/jig:stage` breaks a cycle: `jig rig` and `jig staging`
   read only the header, so nothing else breaks it.
+- **An unconfirmed wait's ruling:** show it; rig changes no roadmap. Keep: the waited-on
+  product's repo adds `(needed by <waiter>)`; drop: the waiter's repo removes its `(after …)`.
+  The repo whose section changes proposes it, as any change to a product's section goes: a
+  `BUFFER.md` row and `jig propose --buffer` there, the change on the `propose/` branch it
+  makes, merged in the metarepo at the next sync the owner calls. For the metarepo's own
+  sections, or a product it owns as `this repo`, the hubnode makes it as its skill's "A roadmap
+  change" says: the diff shown, applied on the owner's yes.
 - **Start a job:** open it and start its subnode as `/jig:hubnode` says (Assigning a step).
 - **The next step taken:** a spec for it, with the spec role. The roadmap itself is the
   owner's to edit: never change it here.
