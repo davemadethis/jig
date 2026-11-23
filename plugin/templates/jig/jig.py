@@ -13142,6 +13142,13 @@ def cmd_update(root: Path, args) -> int:
                               "and no line holds one: the hook refuses a page's second heading of "
                               "one name instead)")
     warnings = plan["warn"] + board_warn
+    # The hook refuses every trunk roadmap commit while a phase is out of type order, update's
+    # own fold included, so the plan names each one to fix in the same update.
+    roadmap_text = read_after(ROADMAP)
+    if roadmap_text:
+        owners = term_owners(read_after(GLOSSARY)) if read_after(META) else {}
+        warnings += [f"{ROADMAP} {x}: fix it in this update, or the hook refuses every change to "
+                     f"{ROADMAP} on trunk" for x in type_problems(parse_roadmap(roadmap_text), owners)]
     # plan_moves sees tracked files only; `git mv` onto an untracked one dies mid-apply, with
     # the renames before it staged.
     occupied = [f"{n} (from {o})" for o, n in plan["moves"].items()

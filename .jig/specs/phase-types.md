@@ -139,6 +139,8 @@ All parts:
 - Decided by the owner, 2026-11-23, on this spec's questions (relayed by the hubnode):
   - Type order (item 3): "enforce Prototype, then Pilot, then Production within a product".
   - The view's filters (item 7): "filters print to the terminal; ROADMAP.md stays whole".
+- Decided by the owner, 2026-11-23, on the review's should-fix 1 (an existing roadmap already out of type order, such as one with `Beta` after `Demos`, has every trunk roadmap commit refused once it updates, `jig update`'s own fold included), relayed by the hubnode: "Option 1". The order check covers the whole roadmap, not only the phases a commit adds or moves.
+  - Applied by `jig update`: its dry run lists every phase out of type order, by line and type, as a warning to fix in the same update before `--apply` folds anything, and exits 1 as update does for any warning.
 - Part order: A, then B, the first `--partial`, in one job. Both touch `cmd_roadmap` and the view.
 - A name that isn't Greek or `Pilot <letter>` is Production, never an error: the owner said Production names "are chosen by the user".
 - `--label` is roadmap-labels': whichever of the two specs lands second adds `--label` to this filter set (Kept separate).

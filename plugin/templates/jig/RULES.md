@@ -939,7 +939,8 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
   no marker and no config. Within one product, and among the repo's own phases, types run
   Prototype, then Pilot, then Production, in file order: on trunk, when the roadmap changes,
   the hook refuses, by line, a phase whose type comes before the type of a phase above it in
-  the same product, and `jig roadmap` reports it. `jig roadmap` prints each phase's type beside
+  the same product, and `jig roadmap` reports it; `jig update`'s dry run lists each one, to fix
+  in the same update. `jig roadmap` prints each phase's type beside
   its state, and the view shows it in the phase line and each phase's heading
   (`## alpha (Prototype, current)`).
 - **No phase**, the one reserved section that isn't a phase, and the one list for work with

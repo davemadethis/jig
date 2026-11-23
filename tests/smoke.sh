@@ -5739,6 +5739,10 @@ plant() { git add -A && git -c core.hooksPath=/dev/null commit -qm "$1"; }
 plant gamma
 out=$($J roadmap 2>&1); rc=$?
 expect_pass sh -c "test $rc = 1 && echo \"\$0\" | grep -q 'phase gamma (Prototype) comes after'" "$out"
+msg="phase types: update's dry run lists gamma, by line and type, as a warning to fix in the same update, and exits 1"
+printf '# an older release\n' >> .jig/jig.py && plant "older jig"
+out=$($UP 2>&1); rc=$?
+expect_pass sh -c "test $rc = 1 && echo \"\$0\" | grep -A99 '^Warnings:' | grep 'line $n: phase gamma (Prototype) comes after Launch (Production)' | grep -q 'fix it in this update'" "$out"
 
 # A metarepo planning two products: the order holds within each, never across them.
 fnew() { mkdir -p "$T/$1" && cd "$T/$1" && git init -q -b main && git config user.email t@t && git config user.name t \
