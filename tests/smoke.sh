@@ -5258,8 +5258,70 @@ printf '\nMore intent.\n' >> .jig/specs/g.md && git commit -qam "g: more on trun
 msg="one list: with trunk editing the spec elsewhere too, the merge still takes only q: built on p is refused"
 gate_ok G; expect_pass sh -c "test $? != 0 && echo \"\$0\" | grep -q 'no spec of this job takes No phase/p' && ! echo \"\$0\" | grep -q 'takes No phase/q'" "$out"
 sed -i.bak 's/`p`: offline/`p2`: offline/' .jig/roadmap.md && sed -i.bak 's|^Scope: No phase/p$|Scope: No phase/p2|' .jig/specs/g.md && rm .jig/roadmap.md.bak .jig/specs/g.md.bak && git commit -qam "p is p2"
-msg="one list: an item trunk renamed since the handoff is refused as gone from trunk, with jig sync as the way on"
-gate_ok G; expect_pass sh -c "test $? != 0 && echo \"\$0\" | grep -q 'No phase/p is gone from main.s roadmap: .jig sync., then hand off again' && ! echo \"\$0\" | grep -q 'add .Scope: No phase/p.'" "$out"
+msg="one list: trunk re-pointing the Scope: line the branch re-pointed too is a merge that needs a hand, refused first"
+gate_ok G; expect_pass sh -c "test $? != 0 && echo \"\$0\" | grep -q 'needs a hand in .jig/specs/g.md' && ! echo \"\$0\" | grep -q 'no spec of this job takes'" "$out"
+# The built check reads the spec in the gate's own merge, once that merge is made.
+gmk() {  # gmk <dir>: list items p and q on docs/x.md, spec g taking p, job G open on it
+  pcnew "$T/$1" && mkdir -p docs src && printf '# X\n\nX is.\n' > docs/x.md && printf 'x = 1\n' > src/x.py
+  git add -A && git commit -qm init && $J init >/dev/null && board "b['docmap'] = {'docs/x.md': ['src/**']}" && git add -A && git commit -qm board
+  printf '# Roadmap\n\n## No phase\n- `p`: offline (touches docs/x.md)\n- `q`: other (touches docs/x.md)\n' > .jig/roadmap.md
+  mkdir -p .jig/specs && printf '# G\n\nSource: smoke\nScope: No phase/p\n\n## Intent\nx\n' > .jig/specs/g.md
+  git add -A && git commit -qm plan && $J open G --spec .jig/specs/g.md --owns 'src/**' >/dev/null && git add -A && git commit -qm "open G"; }
+ghand() {  # ghand <built id> [setup in the branch] [answer the rest]: hand G off, <built id> built, the other untouched
+  ( cd .git/jig/worktrees/G && eval "${2:-:}" && printf 'x = 2\n' > src/x.py && git commit -qam work && $J reviewed >/dev/null && $J handoff >/dev/null 2>&1 \
+    && python3 - "$1" "${3:-yes}" <<'PY'
+import glob, sys
+f = glob.glob('.jig/handoffs/G-*.md')[0]; out = []
+for l in open(f).read().splitlines():
+    if ' — built / untouched / departed: ___' in l:
+        l = l.replace('- [ ]', '- [x]').replace(' — built / untouched / departed: ___',
+                      ' — built: it works' if f'No phase/{sys.argv[1]}' in l else ' — untouched: not this job')
+    elif sys.argv[2] == 'yes' and l.startswith('- [ ]'):
+        l = l.replace('- [ ]', '- [x]').replace('___', 'smoke')
+    out.append(l)
+open(f, 'w').write('\n'.join(out) + '\n')
+PY
+    git add -A && git commit -qm "note G" ) >/dev/null 2>&1; }
+gk() { out=$($J gate G 2>&1); rc=$?; left=$(test -d .git/jig/worktrees/gate-G && echo left); git worktree remove --force .git/jig/worktrees/gate-G 2>/dev/null; return $rc; }
+grp() { sed -i.bak "s|^Scope: No phase/$1\$|Scope: No phase/$2|" .jig/specs/g.md && rm .jig/specs/g.md.bak; }
+gmk gm1 && ghand p "grp p q && git commit -qam 'g: q'"
+msg="gate merge: the branch re-points p to q: built on p is refused, nothing on q, and no checkout is left"
+gk; expect_pass sh -c "test $rc = 1 && echo \"\$0\" | grep -q 'no spec of this job takes No phase/p' && ! echo \"\$0\" | grep -q 'takes No phase/q' && test -z '$left'" "$out"
+DEC_J='### D-?gj the job rules
+Accepted (owner, 2026-11-13).
+Touches: none — smoke'
+DEC_T='### D-001 trunk rules
+Accepted (owner, 2026-11-01).
+Touches: none — smoke'
+for want in p q; do
+gmk gm3$want && ghand $want "ulog \"\$DEC_J\" && git commit -qam 'D-?gj'"
+grp p q && ulog "$DEC_T" && git commit -qam "g: q; D-001"
+gk
+if [ $want = p ]; then
+  msg="gate merge: trunk re-points p to q and both sides append to the log: built on p is refused, read in the merge"
+  expect_pass sh -c "test $rc = 1 && echo \"\$0\" | grep -q 'no spec of this job takes No phase/p'" "$out"
+else
+  msg="gate merge: the same shape, built on q, passes: the merge's spec takes q"
+  expect_pass sh -c "test $rc = 0 && ! echo \"\$0\" | grep -q 'no spec of this job takes'" "$out"
+fi
+done
+gmk gm4 && ghand p && grp p q && git commit -qam "g: q"
+mkdir -p "$T/oldgit" && printf '#!/bin/sh\nfor a in "$@"; do [ "$a" = "--write-tree" ] && { echo "usage: git merge-tree" >&2; exit 129; }; done\nexec %s "$@"\n' "$(command -v git)" > "$T/oldgit/git" && chmod +x "$T/oldgit/git"
+out=$(PATH="$T/oldgit:$PATH" $J gate G 2>&1); rc=$?; git worktree remove --force .git/jig/worktrees/gate-G 2>/dev/null
+msg="gate merge: with a git whose merge-tree has no --write-tree, built on p is refused as with real git, and no git floor is named"
+expect_pass sh -c "test $rc = 1 && echo \"\$0\" | grep -q 'no spec of this job takes No phase/p' && ! echo \"\$0\" | grep -q '2.38'" "$out"
+msg="gate merge: jig.py reads no merged spec of its own: no merged_spec is left"
+expect_refuse grep -q 'def merged_spec' .jig/jig.py
+gmk gm6 && ghand p
+sed -i.bak 's/`p`: offline/`p2`: offline/' .jig/roadmap.md && rm .jig/roadmap.md.bak && grp p p2 && git commit -qam "p is p2"
+msg="gate merge: an item trunk renamed since the handoff is refused as gone from trunk, with jig sync as the way on"
+gk; expect_pass sh -c "test $rc = 1 && echo \"\$0\" | grep -q 'No phase/p is gone from main.s roadmap: .jig sync., then hand off again' && ! echo \"\$0\" | grep -q 'add .Scope: No phase/p.' && test -z '$left'" "$out"
+gmk gm5 && ghand p "grp p q && git commit -qam 'g: q'" no
+msg="gate merge: an unanswered line is refused first, before any checkout"
+gk; expect_pass sh -c "test $rc = 1 && echo \"\$0\" | grep -q 'unanswered' && ! echo \"\$0\" | grep -q 'no spec of this job takes' && ! echo \"\$0\" | grep -q ': gate [0-9a-f]* from' && test -z '$left'" "$out"
+( cd .git/jig/worktrees/G && pcfold && git add -A && git commit -qm "answer" ) >/dev/null 2>&1
+msg="gate merge: once it is answered, the next gate refuses the wrong built answer, after the merge"
+gk; expect_pass sh -c "test $rc = 1 && echo \"\$0\" | grep -q 'no spec of this job takes No phase/p' && echo \"\$0\" | grep -q ': gate [0-9a-f]* from' && test -z '$left'" "$out"
 msg="no phase: the review, spec and RULES texts send work with no phase, parked or not, to ## No phase"
 expect_pass sh -c "for f in '$P/../skills/review/SKILL.md' '$P/../skills/spec/SKILL.md' '$P/jig/RULES.md'; do grep -q 'No phase' \"\$f\" || exit 1; done"
 

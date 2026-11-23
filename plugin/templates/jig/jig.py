@@ -3232,16 +3232,27 @@ def proposed_added(trunk: str, commit: str) -> list[dict]:
             if e["status"].startswith("Proposed") and before.get(e["id"]) != e["block"]]
 
 
-def merged_spec(rev: str, trunk: str, path: str) -> str:
-    """PATH as merging REV into TRUNK leaves it, by git's own merge of the two, written as a
-    tree and never checked out: a scope re-pointed on trunk, or added there after the job
-    opened, counts, and one the branch re-pointed away from doesn't, whatever else either side
-    changed. A merge git can't make is refused later by the gate's own merge; meanwhile REV's
-    copy is read."""
-    p = subprocess.run(["git", "merge-tree", "--write-tree", "--no-messages", rev, trunk],
-                       capture_output=True, text=True)
-    tree = p.stdout.split("\n", 1)[0].strip()
-    return git("show", f"{tree if p.returncode == 0 and tree else rev}:{path}")
+def built_untaken(where: Path, trunk: str, note: str, body: str, fold: str, specs: set[str]) -> list[str]:
+    """Each fold-in line of FOLD answering built on a `## No phase` item that no spec of the job
+    takes, read in the gate's merged checkout WHERE, with why: no spec takes it (add its
+    `Scope:` line), or the item is gone from the merged roadmap (sync, then hand off again).
+    SPECS are the job's, the note's own `Spec:` added; the note's `Scope:` lines count too."""
+    named = re.search(r"^Spec: (\S+)", body, re.M)
+    read = lambda f: (where / f).read_text(errors="replace") if (where / f).is_file() else ""
+    took = {sc for f in specs | ({named.group(1)} if named else set()) for sc in spec_scopes(read(f))} \
+        | set(scopes_in(note, body))
+    there = roadmap_scopes(read(ROADMAP))
+    out = []
+    for l in fold.splitlines():
+        u = ITEM_LINE.match(l.strip())
+        if not u or u.group(1) != NO_PHASE or u.group(2) in took or item_answer(u.group(5)) \
+                or not u.group(5).strip().lower().startswith("built"):
+            continue
+        out.append(f"{l.strip()}   <- built, but " + (
+            f"no spec of this job takes {u.group(2)}: add `Scope: {u.group(2)}` to the spec, so the "
+            "item reads done" if u.group(2) in there else
+            f"{u.group(2)} is gone from {trunk}'s roadmap: `jig sync`, then hand off again"))
+    return out
 
 
 def cmd_gate(root: Path, args) -> int:
@@ -3273,24 +3284,10 @@ def cmd_gate(root: Path, args) -> int:
                       if l.strip().startswith("- [")
                       and (l.strip().startswith("- [ ]") or "___" in l)]
         # Each item line needs one answer; anything after it is the answerer's to say.
-        # A list item reads done only through a spec that takes it, so a built answer with no
-        # such spec would leave built work open, offered again.
-        named_spec = re.search(r"^Spec: (\S+)", body, re.M)
-        specs = job_specs(branch, name, trunk) | ({named_spec.group(1)} if named_spec else set())
-        at = re.search(r"^Commit: (\w+)", body, re.M)
-        took = {sc for f in specs for sc in spec_scopes(merged_spec(at.group(1) if at else branch, trunk, f))} \
-            | set(scopes_in(note, body))
-        on_trunk = roadmap_scopes(at_rev(trunk, ROADMAP))
         for l in sec.group(1).splitlines():
             u = ITEM_LINE.match(l.strip())
             if u and l not in open_lines and (why := item_answer(u.group(5))):
                 open_lines.append(f"{l.strip()}   <- {why}")
-            elif u and l not in open_lines and u.group(1) == NO_PHASE and u.group(2) not in took \
-                    and u.group(5).strip().lower().startswith("built"):
-                open_lines.append(f"{l.strip()}   <- built, but " + (
-                    f"no spec of this job takes {u.group(2)}: add `Scope: {u.group(2)}` to the spec, so "
-                    "the item reads done" if u.group(2) in on_trunk else
-                    f"{u.group(2)} is gone from {trunk}'s roadmap: `jig sync`, then hand off again"))
         for l in sec.group(1).splitlines():
             if l not in open_lines and (why := pair_problem(l)):
                 open_lines.append(f"{l.strip()}   <- {why}")
@@ -3360,6 +3357,20 @@ def cmd_gate(root: Path, args) -> int:
               f"that by `jig sync` and hands off again. "
               + ("The checkout is removed." if gone else
                  f"Remove the checkout: git worktree remove --force {scratch}"), file=sys.stderr)
+        return 1
+    # A list item reads done only through a spec that takes it, so a built answer with no such
+    # spec would leave built work open, offered again. The spec is read as this merge leaves
+    # it, in the checkout: a merge needing a hand is refused above, since the sync it asks for
+    # brings trunk's spec into the job.
+    unbuilt = built_untaken(where, trunk, note, body, sec.group(1) if sec else "",
+                            job_specs(branch, name, trunk))
+    if unbuilt:
+        gone = remove_checkout(where)
+        print(f"the fold-in in {note} is unanswered:", file=sys.stderr)
+        for l in unbuilt:
+            print(f"  {l}", file=sys.stderr)
+        if not gone:
+            print(f"Remove the checkout: git worktree remove --force {scratch}", file=sys.stderr)
         return 1
     # Pairs are found at handoff against the trunk of then; a job merged since may rule on the
     # same page, and the merge here is where the two first meet.
