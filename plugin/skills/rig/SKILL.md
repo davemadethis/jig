@@ -150,12 +150,13 @@ Nothing is ever dropped for it.
   a spec, remove those names from its own `Build after` line. In a staged file, remove them
   from its own `after:` header, as `/jig:stage` breaks a cycle: `jig rig` and `jig staging`
   read only the header, so nothing else breaks it.
-- **An unconfirmed wait's ruling:** the repo whose section changes proposes it, as any change
-  to a product's section goes: a `BUFFER.md` row and `jig propose --buffer` there, the change on
-  the `propose/` branch it makes, merged in the metarepo at the next sync the owner calls. Keep:
-  the waited-on product's repo adds `(needed by <waiter>)`; drop: the waiter's repo removes its
-  `(after …)`. For the metarepo's own sections, or a product it owns as `this repo`, it is a
-  roadmap change on its trunk, on the owner's yes.
+- **An unconfirmed wait's ruling:** show it; rig changes no roadmap. Keep: the waited-on
+  product's repo adds `(needed by <waiter>)`; drop: the waiter's repo removes its `(after …)`.
+  The repo whose section changes proposes it, as any change to a product's section goes: a
+  `BUFFER.md` row and `jig propose --buffer` there, the change on the `propose/` branch it
+  makes, merged in the metarepo at the next sync the owner calls. For the metarepo's own
+  sections, or a product it owns as `this repo`, the hubnode makes it as its skill's "A roadmap
+  change" says: the diff shown, applied on the owner's yes.
 - **Start a job:** open it and start its subnode as `/jig:hubnode` says (Assigning a step).
 - **The next step taken:** a spec for it, with the spec role. The roadmap itself is the
   owner's to edit: never change it here.

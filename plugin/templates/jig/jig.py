@@ -578,7 +578,8 @@ def check_rules(root: Path, board: Board, *, staged: bool) -> list[str]:
         if f in guarded and branch != trunk and not (f == ROADMAP and meta is not None
                                                      and proposed_branch(branch, trunk)):
             out.append(f"R5 the roadmap is the owner's: {f} is edited on {trunk} only"
-                       + (", or on a pararepo's propose/ branch" if meta is not None and f == ROADMAP else ""))
+                       + (", or on a propose/ branch `jig propose` opened that isn't merged yet"
+                          if meta is not None and f == ROADMAP else ""))
     out += roadmap_rules(board, branch, staged, paths, guarded)
     out += boundary_rules(trunk, branch, staged, paths, meta, board.data.get("not_docs") or [])
     out += page_form_rules(root, board, trunk, staged, guarded)
@@ -10105,6 +10106,7 @@ UP_NEXT = "Up next"
 # `(touches docs/a.md, docs/b.md)` at the end of a list item or a scope: the pages the work
 # will change, which reading-list and fold-in look items up by.
 TOUCHES = re.compile(r"\s*\(touches\s+([^()]*)\)\s*$")
+TOUCHES_ANY = re.compile(r"\(touches\s+([^()]*)\)")
 RESERVED = (UP_NEXT.lower(), NO_PHASE.lower())
 
 
@@ -10141,20 +10143,37 @@ def split_waits(what: str) -> tuple[str, list[str] | None, list[str] | None]:
     """(text, after refs, needed-by refs): the trailing `(after …)`, `(needed by …)` and
     `(touches …)`, in any order, split off, the `(touches …)` written back at the end of the
     text, where its readers look; None for one not written. Peeled in a loop, so no order of
-    the three can hide a wait as plain text."""
+    the three can hide a wait as plain text; one written twice is read whole, refs and pages
+    joined, and repeated_waits names it for the hook to refuse."""
     head, after, needed, touches = what, None, None, None
     while True:
-        if touches is None and (t := TOUCHES.search(head)):
-            touches, head = t.group(1), head[:t.start()]
-        elif after is None and (a := AFTER.search(head)):
-            after, head = refs_of(a.group(1)), head[:a.start()]
-        elif needed is None and (n := NEEDED.search(head)):
-            needed, head = refs_of(n.group(1)), head[:n.start()]
+        if t := TOUCHES.search(head):
+            touches, head = (t.group(1) if touches is None else f"{t.group(1)}, {touches}"), head[:t.start()]
+        elif a := AFTER.search(head):
+            after, head = refs_of(a.group(1)) + (after or []), head[:a.start()]
+        elif n := NEEDED.search(head):
+            needed, head = refs_of(n.group(1)) + (needed or []), head[:n.start()]
         else:
             break
     if after is None and needed is None:
         return what, None, None
     return head.rstrip() + (f" (touches {touches})" if touches is not None else ""), after, needed
+
+
+def repeated_waits(what: str) -> list[str]:
+    """Each of `(after …)`, `(needed by …)` and `(touches …)` that WHAT's tail writes twice:
+    one names all it holds, so a second is refused rather than half-read."""
+    head, seen, out = what, set(), []
+    while True:
+        for kind, rx in (("touches", TOUCHES), ("after", AFTER), ("needed by", NEEDED)):
+            if m := rx.search(head):
+                if kind in seen and kind not in out:
+                    out.append(kind)
+                seen.add(kind)
+                head = head[:m.start()]
+                break
+        else:
+            return out
 
 
 def refs_of(text: str | None) -> list[str]:
@@ -10205,6 +10224,8 @@ def parse_section(text: str, section: str, problems: list[str] | None = None) ->
                             f"unindented): {line.strip()}")
             continue
         body, refs, needed = split_waits((m.group(2) or "").strip())
+        for kind in repeated_waits((m.group(2) or "").strip()):
+            problems.append(f"line {n}: {at} item {m.group(1)} has a second ({kind} …): one names all it holds")
         what, pages = split_touches(body)
         if any(i["sid"] == f"{at}/{m.group(1)}" for i in items):
             problems.append(f"line {n}: {at} item {m.group(1)} appears twice")
@@ -10251,7 +10272,8 @@ def retarget_touches(text: str, moves: dict[str, str]) -> str:
         pages = [p.strip() for p in m.group(1).split(",") if p.strip()]
         new = [next((to for old, to in moves.items() if same_page(p.strip("`"), old)), p) for p in pages]
         return m.group(0).replace(m.group(1), ", ".join(new)) if new != pages else m.group(0)
-    return "".join(TOUCHES.sub(fix, line.rstrip("\n")) + ("\n" if line.endswith("\n") else "")
+    # Anywhere in the line: an `(after …)` or `(needed by …)` may follow it (split_waits).
+    return "".join(TOUCHES_ANY.sub(fix, line.rstrip("\n")) + ("\n" if line.endswith("\n") else "")
                    for line in text.splitlines(keepends=True))
 
 
@@ -10329,6 +10351,8 @@ def parse_roadmap(text: str, problems: list[str] | None = None) -> list[dict]:
                 problems.append(f"line {n}: scope {sid} appears twice")
             ids.add(sid)
             what, refs, needed = split_waits((m.group(2) or "").strip())
+            for kind in repeated_waits((m.group(2) or "").strip()):
+                problems.append(f"line {n}: scope {sid} has a second ({kind} …): one names all it holds")
             if refs is not None:
                 phases[-1]["after_of"][sid] = (refs, n)
                 if not refs:
@@ -11425,8 +11449,8 @@ def proposed_branch(branch: str, trunk: str) -> bool:
     opening, so a branch merely named so carries no roadmap change."""
     if not branch.startswith("propose/"):
         return False
-    first = git("rev-list", "--reverse", f"{trunk}..HEAD").split("\n", 1)[0]
-    return bool(first) and git("log", "-1", "--format=%s", first).startswith(OPENING)
+    first = git("rev-list", "--reverse", "--topo-order", f"{trunk}..HEAD").split("\n", 1)[0]
+    return bool(first) and opening_commit(main_root(), first)
 
 
 def moving_in(para: dict, staged: bool) -> list[str]:

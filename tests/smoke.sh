@@ -5672,6 +5672,20 @@ for order in '(after alpha/b) (touches docs/x.md) (needed by beta/c)' '(needed b
   msg="after: a scope ending $order waits on alpha/b, its page kept"
   expect_pass sh -c "test '$(rnext)' = 'alpha/a:blocked alpha/b:open' && $J roadmap --write >/dev/null && grep -q 'x (touches docs/x.md)<br>after alpha/b' ROADMAP.md"
 done
+ordn=$(( ordn + 1 )); ranew "ord$ordn"
+for kind in 'after alpha/b:after alpha/c:after' 'touches docs/x.md:touches docs/x.md:touches' 'needed by beta/c:needed by beta/d:needed by'; do
+  IFS=: read -r one two name <<<"$kind"
+  msg="after: a scope writing ($name …) twice is refused by line: one names all it holds"
+  rbad "## alpha\nScopes:\n- \`a\`: x ($one) ($two)\n- \`b\`: y\n- \`c\`: z\n"
+  expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'line 3: scope alpha/a has a second ($name …)'" "$out"
+done
+msg="after: a page a job moves is re-pointed in a (touches …) an (after …) follows, and the merge commits"
+printf '# Roadmap\n\n## alpha\nScopes:\n- `a`: x (touches docs/x.md) (after alpha/b)\n- `b`: y\n' > .jig/roadmap.md && git add -A && git commit -qm moves
+$J open J --owns 'docs/**' >/dev/null && git add -A && git commit -qm "open J"
+( cd .git/jig/worktrees/J && git mv docs/x.md docs/y.md && git commit -qm move && $J reviewed >/dev/null \
+  && $J handoff >/dev/null 2>&1 && pcfold && git add -A && git commit -qm "note J" ) >/dev/null 2>&1
+gated J; out=$($J merge J 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && grep -q '^- .a.: x (touches docs/y.md) (after alpha/b)$' .jig/roadmap.md" "$out"
 }
 
 # ---------------------------------------------------------------- project and product
