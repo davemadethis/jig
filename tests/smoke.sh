@@ -5128,7 +5128,7 @@ expect_pass sh -c "test $rc = 0 && grep -q '^- .ov.: overview (touches docs/intr
 [ $rc = 0 ] || echo "$out" | tail -5
 # Labels name the metarepo's glossary terms, read live from its trunk in a pararepo.
 cd "$FM"
-printf '\n## Teleport\n\nMoving a session between devices.\n\nOwner: `pb`.\n' >> docs/glossary.md && git add -A && git commit -qm "GLOSSARY: teleport"
+printf '\n## Teleport\n\nMoving a session between devices.\n\nOwner: `pb`.\n' >> docs/glossary.md && plant "GLOSSARY: teleport"
 sed -i.bak 's/^- `pairing`: pairing/- `pairing`: pairing (labels teleport)/' .jig/roadmap.md && rm .jig/roadmap.md.bak
 msg="family labels: Walyt alpha/pairing labelled teleport commits on meta's trunk"
 git add -A && expect_pass git commit -qm "GLOSSARY: label pairing"
