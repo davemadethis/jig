@@ -18,18 +18,6 @@
     ],
     "reserved": {}
   },
-  "bug-docstring-escape": {
-    "spec": ".jig/specs/bug-docstring-escape.md",
-    "state": "gated",
-    "after": [],
-    "owns": [],
-    "shares": [
-      "plugin/templates/jig/jig.py",
-      ".jig/scripts/check.sh"
-    ],
-    "reserved": {},
-    "check": "batch"
-  },
   "bug-owner-already-answered": {
     "spec": ".jig/specs/bug-owner-already-answered.md",
     "state": "gated",
