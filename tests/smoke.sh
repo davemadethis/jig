@@ -502,7 +502,7 @@ for layout in "eaec973 dot" "66a044c dot" "62c8d9f jig" "eaec973 aidev" "5d955a2
   expect_pass python3 -c "
 import subprocess
 allowed = {'$board', '.jig/config.json', '.jig/jobs.json', '.aidev/aidev.py', 'jig/jig.py', '.jig/jig.py',
-           '.aidev/RULES.md', 'jig/RULES.md', '.jig/RULES.md', '.jig/docs-page.md', '.gitignore', '.jig/scripts/setup.sh', '.jig/scripts/derive.sh', '.jig/scripts/release.sh', '.jig/scripts/publish.sh', '.jig/staging/.gitignore', '.jig/inbox/.gitignore', '.jig/decisions.md'}
+           '.aidev/RULES.md', 'jig/RULES.md', '.jig/RULES.md', '.jig/docs-page.md', '.gitignore', '.jig/scripts/setup.sh', '.jig/scripts/derive.sh', '.jig/scripts/release.sh', '.jig/scripts/publish.sh', '.jig/staging/.gitignore', '.jig/inbox/.gitignore', '.jig/decisions.md', '.jig/ideas.md'}
 for line in subprocess.check_output(['git', 'diff', '--cached', '-M', '--name-status'], text=True).splitlines():
     status, *paths = line.split('\t')
     assert status == 'R100' or set(paths) <= allowed | {'AGENTS.md'}, line
@@ -521,8 +521,8 @@ assert all(j.squeeze(l) in j.RETIRED for l in gone), gone"
   msg="update $name: hooks read trunk's .jig/jig.py and none was kept as .local; .git/jig/enabled, no .git/aidev, no old ignore line"
   expect_pass sh -c "grep -q 'git show main:.jig/jig.py' .git/hooks/pre-commit && ! ls .git/hooks/*.local && test -f .git/jig/enabled && test ! -e .git/aidev && ! grep -q worktrees .gitignore"
 
-  msg="update $name: nothing tracked is left in jig/, .aidev/, specs/ or ledgers/; the config is stamped 11, with release.sh, publish.sh and an empty decision log added"
-  expect_pass sh -c "test -z \"\$(git ls-files jig .aidev specs ledgers .jig/lanes.json)\" && ! grep -q payload .jig/config.json && grep -q '\"version\": 11' .jig/config.json && git ls-files --error-unmatch .jig/scripts/release.sh .jig/scripts/publish.sh .jig/decisions.md"
+  msg="update $name: nothing tracked is left in jig/, .aidev/, specs/ or ledgers/; the config is stamped 12, with release.sh, publish.sh, an empty decision log and its ideas file added"
+  expect_pass sh -c "test -z \"\$(git ls-files jig .aidev specs ledgers .jig/lanes.json)\" && ! grep -q payload .jig/config.json && grep -q '\"version\": 12' .jig/config.json && git ls-files --error-unmatch .jig/scripts/release.sh .jig/scripts/publish.sh .jig/decisions.md .jig/ideas.md"
 
   msg="update $name: publish.sh is added from the template, TODO line included, and staged"
   expect_pass sh -c "git diff --cached --name-status | grep -q '^A.\.jig/scripts/publish.sh$' && grep -q '^# TODO: publish steps\.' .jig/scripts/publish.sh && test -x .jig/scripts/publish.sh"
@@ -732,7 +732,7 @@ EOF
 import subprocess, sys
 removed = set(sys.argv[1].split())
 jig = {'.jig/config.json', '.jig/jobs.json', '.jig/jig.py', '.jig/RULES.md', '.jig/docs-page.md', '.jig/scripts/setup.sh', '.jig/scripts/derive.sh', '.jig/scripts/release.sh', '.jig/scripts/publish.sh',
-       '.jig/ledgers/DEFERRED.md', '.jig/staging/.gitignore', '.jig/inbox/.gitignore', '.gitignore', '.jig/decisions.md'}
+       '.jig/ledgers/DEFERRED.md', '.jig/staging/.gitignore', '.jig/inbox/.gitignore', '.gitignore', '.jig/decisions.md', '.jig/ideas.md'}
 for line in subprocess.check_output(['git', 'diff', '--cached', '-M', '--name-status'], text=True).splitlines():
     status, *paths = line.split('\t')
     assert status == 'R100' or (status == 'D' and paths[0] in removed) or paths[-1] in jig, line" "$removed $board"
@@ -1728,7 +1728,7 @@ printf '\n## v1.0.0 - 2026-01-01\n\n### Changed\n- Cite `mm/products/hardware/wa
 ulog '- Cite `mm/products/hardware/walyt.md` again.' && git add -A && git -c core.hooksPath=/dev/null commit -qm "log: released and unreleased citations"
 out=$($J sync 2>&1)
 msg="para sync: this repo's own released log lines aren't named; an Unreleased one is"
-expect_pass sh -c "test \"\$(echo \"\$0\" | grep -c '^.jig/decisions.md:.* cites mm/products/hardware/walyt.md')\" = 1 && echo \"\$0\" | grep -q '^.jig/decisions.md:10 cites'" "$out"
+expect_pass sh -c "test \"\$(echo \"\$0\" | grep -c '^.jig/decisions.md:.* cites mm/products/hardware/walyt.md')\" = 1 && echo \"\$0\" | grep -q '^.jig/decisions.md:8 cites'" "$out"
 
 msg="plugin: no instance names or the instance's decision prefix"
 expect_refuse grep -rnE 'Maige|maige|"E-' "$P/.."
@@ -3058,7 +3058,9 @@ printf 'x\n' >> products/a.md; git add -A; expect_refuse git commit -qm "PRODUCT
 msg="entry globs: M3 takes a change to notes.md, which no glob names, with no line"
 printf 'x\n' >> notes.md; git add -A; expect_pass git commit -qm "NOTES: n"
 # M3 judges the branch since it left trunk: a line one commit added covers the next ones.
-# This branch's line goes under the heading, trunk's at the end, so the sync merges cleanly.
+# This branch's line goes under the heading, trunk's at the end, so the sync merges cleanly:
+# two lines already on trunk keep them apart.
+git switch -q main && ulog '- spacer two' && ulog '- spacer one' && emerge em3s "LOG: spacers" .jig/decisions.md
 git switch -q main && git switch -q -c em4
 printf 'y\n' >> products/a.md && underhead '- y' && git add -A && git commit -qm "PRODUCTS: y"
 msg="entry globs: M3 takes a page-only commit on a branch whose earlier commit added the line"
@@ -3103,7 +3105,7 @@ EP="$T/ep"; pcnew "$EP" && mkdir -p api && printf 'x=1\n' > api/a.py
 git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
 $J init --para em --location "$EM" --contract 'api/**' >/dev/null && git add -A && git commit -qm "init --para"
 msg="entry globs: init --para caches products/a.md and products/b.md as files, and no file named for a folder"
-expect_pass sh -c "test \"\$(cd .jig/meta-cache && find . -type f | sort | tr '\n' ' ')\" = './.jig/decisions.md ./PIN ./products/a.md ./products/b.md ./products/x/b.md '"
+expect_pass sh -c "test \"\$(cd .jig/meta-cache && find . -type f | sort | tr '\n' ' ')\" = './.jig/decisions.md ./.jig/ideas.md ./PIN ./products/a.md ./products/b.md ./products/x/b.md '"
 
 # A proposal landed by `jig merge --subject`, its branch then deleted: the gate still finds it.
 mkdir -p .jig/specs && printf '# t\n\n## Decisions\n' > .jig/specs/t.md && $J propose .jig/specs/t.md t >/dev/null
@@ -3143,10 +3145,10 @@ msg="entry globs: with '**/*.md', a .jig/ file committed on trunk needs no chang
 mkdir -p .jig/specs && printf '# s\n' > .jig/specs/s.md && git add -A; expect_pass git commit -qm "TOOL: spec s"
 msg="entry globs: with '**/*.md', a .jig/ change alone is nothing to release"
 out=$($J release $(mf) 2>&1); expect_pass sh -c "echo \"\$0\" | grep -q 'nothing to release'" "$out"
-msg="entry globs: with '**/*.md', a pararepo's cache holds no .jig/ file but the decision log"
+msg="entry globs: with '**/*.md', a pararepo's cache holds no .jig/ file but the decision log and the ideas file"
 EK="$T/ek"; pcnew "$EK" && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
 $J init --para ej --location "$EJ" >/dev/null 2>&1
-expect_pass sh -c "test -f .jig/meta-cache/p.md && test \"\$(find .jig/meta-cache -path '*/.jig/*')\" = .jig/meta-cache/.jig/decisions.md"
+expect_pass sh -c "test -f .jig/meta-cache/p.md && test \"\$(find .jig/meta-cache -path '*/.jig/*' | sort | tr '\n' ' ')\" = '.jig/meta-cache/.jig/decisions.md .jig/meta-cache/.jig/ideas.md '"
 }
 
 # ---------------------------------------------------------------- report-fixes follow-up
@@ -6098,7 +6100,7 @@ msg="branch log: a later commit on the job adding ### Changed above its converte
 python3 -c "f='.jig/decisions.md'; s=open(f).read(); open(f,'w').write(s.replace('\n- D-002, D-003\n', '\n### Changed\n- D-002, D-003\n', 1))" && git add -A
 expect_pass git commit -qm "TOOL: Changed above a release line"; git reset -q --hard "$A"
 msg="branch log: a later commit on the job retitling a converted entry with no Touches line passes"
-sed -i.bak 's/^### D-002 which wire format?$/### D-002 which wire format, then?/' .jig/decisions.md && rm .jig/decisions.md.bak && git add -A
+sed -i.bak 's/^### D-002 which wire format?$/### D-002 which wire format, then?/' .jig/ideas.md && rm .jig/ideas.md.bak && git add -A
 expect_pass git commit -qm "D-002: retitled"; git reset -q --hard "$A"
 msg="branch log: a new numbered entry with no Touches line on the converted branch is refused: only the register's ids are exempt"
 ulog '### D-009 x
@@ -6154,9 +6156,9 @@ cp "$DL/.jig/decisions.md" /dev/null && python3 -c "import sys; sys.path.insert(
 out=$($UP --apply --merge-log 2>&1)
 expect_pass sh -c "echo \"\$0\" | grep -q '^Written .jig/decisions.md'" "$out"
 msg="migration: a range in a release line places each id; [Unreleased] is the one Unreleased; a # column is the id and Binds stays named"
-expect_pass sh -c "sed -n '/^## v1.0.0 - 2026-01-01/,\$p' .jig/decisions.md | grep -qx '### D-001 a' && sed -n '/^## v1.0.0 - 2026-01-01/,\$p' .jig/decisions.md | grep -qx '### D-002 b' && test \$(grep -ci '^## \[*unreleased' .jig/decisions.md) = 1 && grep -qx -- '- D-003 later' .jig/decisions.md && grep -qx 'Proposed (Bo, 2026-02-01).' .jig/decisions.md && grep -qx 'Binds: api' .jig/decisions.md"
+expect_pass sh -c "sed -n '/^## v1.0.0 - 2026-01-01/,\$p' .jig/decisions.md | grep -qx '### D-001 a' && sed -n '/^## v1.0.0 - 2026-01-01/,\$p' .jig/decisions.md | grep -qx '### D-002 b' && test \$(grep -ci '^## \[*unreleased' .jig/decisions.md) = 1 && grep -qx -- '- D-003 later' .jig/decisions.md && cat .jig/decisions.md .jig/ideas.md | grep -qx 'Proposed (Bo, 2026-02-01).' && cat .jig/decisions.md .jig/ideas.md | grep -qx 'Binds: api'"
 msg="migration: a row's note with commas and a date in it converts to a status line M2 takes, and the result checks clean"
-expect_pass sh -c "grep -qx 'Proposed (runtime team, from the 2026-10-27 identity research, 2026-10-27).' .jig/decisions.md && grep -qx 'Accepted (Dave, after review, 2026-10-28).' .jig/decisions.md && $J rules --staged | grep -qx ok"
+expect_pass sh -c "grep -qx 'Proposed (runtime team, from the 2026-10-27 identity research, 2026-10-27).' .jig/ideas.md && grep -qx 'Accepted (Dave, after review, 2026-10-28).' .jig/decisions.md && $J rules --staged | grep -qx ok"
 msg="migration: what has no home stays in the old file, as written, and the run names it"
 expect_pass sh -c "echo \"\$0\" | grep -q 'no home, move by hand: DECISIONS.md' && grep -qx '## Pending delivery' DECISIONS.md && grep -qx 'Accepted (Dave): hold the queue.' DECISIONS.md && ! grep -q '^| D-' DECISIONS.md && grep -qx 'Owner note: older history is in the wiki.' CHANGELOG.md && ! grep -q '^## ' CHANGELOG.md" "$out"
 cd "$DL"
@@ -8205,8 +8207,8 @@ printf 'b\n' > b.txt && git add -A && git commit -qm B
 msg="cheaper rounds: working alone, a new task's review-change against the last task's full review is refused"
 expect_refuse $J reviewed --change --tier 2 --effort 1
 cd "$CR"
-msg="cheaper rounds: the kickoff jig open prints says to message the hubnode on a Proposed entry"
-expect_pass sh -c "$J open k2 2>&1 | grep -q 'When you write or change a Proposed entry'"
+msg="cheaper rounds: the kickoff jig open prints says to message the hubnode on a Proposed idea"
+expect_pass sh -c "$J open k2 2>&1 | grep -q 'When you write or change a Proposed idea in .jig/ideas.md'"
 git checkout -q -- .jig/jobs.json 2>/dev/null
 }
 
@@ -9324,8 +9326,8 @@ expect_pass sh -c "test -f '$L/.jig/staging/mv-entries.md' && test -f '$L/.jig/s
 cd "$L" && git switch -q -c land
 for f in mv-entries.md mv-battery.md mv-walyt.md; do $J staging resolve $f >/dev/null 2>&1; done
 git add -A && git commit -qm "D-?battery, D-?mods: land from M" && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-commit land && $J merge --number >/dev/null && git commit -qm "merge land"
-msg="moves: L numbers the landed entries, accepted D-002 keeping E-002's who and date, and Open D-001"
-expect_pass sh -c "grep -qx '### D-002 two' .jig/decisions.md && grep -qx '### D-001 four' .jig/decisions.md && grep -qx 'Accepted (owner, 2026-11-02).' .jig/decisions.md && test -f docs/battery.md && grep -qx '## Mods' docs/walyt.md"
+msg="moves: L numbers the landed entries, accepted D-002 keeping E-002's who and date, and Open D-001, an idea"
+expect_pass sh -c "grep -qx '### D-002 two' .jig/decisions.md && grep -qx '### D-001 four' .jig/ideas.md && grep -qx 'Accepted (owner, 2026-11-02).' .jig/decisions.md && test -f docs/battery.md && grep -qx '## Mods' docs/walyt.md"
 
 cd "$M"
 # A job moving only a section leaves its page, so it moves no roadmap item.

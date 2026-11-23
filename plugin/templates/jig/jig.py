@@ -6504,7 +6504,9 @@ def number_placeholders(root: Path, trunk: str) -> list[str]:
     # One counter over the log and the ideas file: an idea keeps its id when it is decided.
     log = with_ideas(texts.get(LOG) or git("show", f":{LOG}"), texts.get(IDEAS) or git("show", f":{IDEAS}"))
     had = {e["id"] for e in log_entries(entries_at("HEAD"), prefix)}
-    found = [e["id"] for e in log_entries(log, prefix) if "?" in e["id"] and e["id"] not in had]
+    # Ideas first, as they stood when ## Open headed the log: a merge numbers as it always did.
+    found = [e["id"] for e in sorted(log_entries(log, prefix), key=lambda e: e["section"] != IDEAS)
+             if "?" in e["id"] and e["id"] not in had]
     if not found:
         return []
     nums = [m.group(1) for m in re.finditer(rf"^### {re.escape(prefix)}(\d+)", log, re.M)]
@@ -7110,11 +7112,12 @@ def touches_problems(old: str, new: str, prefix: str, trunk: str, staged: bool,
     register writes entries decided before Touches; they are backfilled from update's list. Only
     those: an entry a later commit on the branch adds names its pages."""
     root = Path.cwd()
-    # Only the log is ever converted from a register or records; an idea names its pages.
-    migrating = path == LOG and not log_entries(old, prefix) and migrating_log(trunk, staged)
+    # A register's open rows and open records convert into the ideas file, decided before
+    # Touches as the log's entries were: the log's own text says whether this is that merge.
+    log_old = old if path == LOG else at_rev(since_trunk(trunk), LOG)
+    migrating = not log_entries(log_old, prefix) and migrating_log(trunk, staged)
     converted = migrated_ids(trunk, (load_meta(trunk) or {}).get("decision_prefix")) if migrating else set()
-    if path == LOG:
-        converted |= records_converted(old, new, prefix, trunk, staged)
+    converted |= records_converted(old, new, prefix, trunk, staged)
     names = touch_names(root, trunk)
     para, meta = load_para(trunk), load_meta(trunk)
     cache, _ = meta_cache(root, para) if para else (None, "")
@@ -12281,8 +12284,11 @@ STEPS: list = [
     (f"{LOG}'s ## Open waits to fold into {IDEAS}: in a metarepo a job's (M4). Open one sharing "
      f"{LOG} and {IDEAS}, run `jig update --apply --fold-ideas` in its worktree, and merge it",
      lambda root, after: has_open(root) and (root / META).exists(), lambda root, here: None),
+    # A metarepo's trunk takes its ideas file only by merge (M4): its first idea, the fold or
+    # --merge-log writes it there in a job.
     (f"add {IDEAS}, the ideas log: open questions and ideas to research",
-     lambda root, after: IDEAS not in after and not (root / IDEAS).exists() and not has_open(root),
+     lambda root, after: IDEAS not in after and not (root / IDEAS).exists() and not has_open(root)
+     and not (root / META).exists(),
      lambda root, here: ((root / IDEAS).write_text(IDEAS_SEED), git("add", "--", IDEAS))),
     (f"add {STAGING}/ (its .gitignore), where chats drop files for this repo",
      lambda root, after: f"{STAGING}/.gitignore" not in after
