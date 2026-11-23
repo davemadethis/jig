@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Draw README's "Who does what" pictures from jig.py's ROLES and FLOWS, light and dark.
+"""Draw docs/workflows.md's roles-and-workflows pictures from jig.py's ROLES and FLOWS, light and dark.
 
     python3 scripts/roles_svg.py           write assets/roles-and-flows-{light,dark}.svg
     python3 scripts/roles_svg.py --check   exit 1, naming each SVG that differs from what it draws

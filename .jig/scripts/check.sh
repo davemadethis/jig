@@ -16,9 +16,9 @@ claude plugin validate ./plugin >/dev/null 2>&1 || fail "plugin invalid (claude 
 # PYTHONDONTWRITEBYTECODE says, and smoke copies that folder into every .jig/ it makes.
 python3 -W error -c 'import pathlib, sys
 for f in sys.argv[1:]: compile(pathlib.Path(f).read_text(encoding="utf-8"), f, "exec")' plugin/templates/jig/jig.py scripts/roles_svg.py || fail "jig.py does not compile"
-# README's "Who does what" pictures are drawn from jig.py's ROLES and FLOWS; a change to either
-# without a redraw would leave the README stating old tables.
-python3 scripts/roles_svg.py --check || fail "README's drawing is stale: python3 scripts/roles_svg.py, then commit assets/"
+# docs/workflows.md's pictures are drawn from jig.py's ROLES and FLOWS; a change to either
+# without a redraw would leave that page stating old tables.
+python3 scripts/roles_svg.py --check || fail "docs/workflows.md's drawing is stale: python3 scripts/roles_svg.py, then commit assets/"
 
 # --- complete --------------------------------------------------------------
 if [ "${1:-}" = "--full" ]; then

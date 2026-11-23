@@ -1,245 +1,20 @@
 # 🔩 jig
 
-AI coding agents are fast, and they drift. They skip the spec, fix the symptom, wave a review
+AI coding agents are fast, and they drift. They skip the plan, fix the symptom, wave a review
 through, and step on each other when two of them share a repo. A woodworker solves the same
-problem with a jig: you clamp the work in place once, and then every cut lands where it should.
+problem with a jig: clamp the work in place once, and the cuts come out the same each time.
 
-So that's what this is. A few short rules, a written spec before building, a reviewer who hasn't
-seen your reasoning, and parallel sessions that can't collide, with the parts that matter
-enforced by git hooks instead of a polite request in a prompt.
+So that's what this is. A short written [spec](docs/glossary.md#spec) before building, a bug
+looked into before it's fixed, and one review per [handoff](docs/glossary.md#handoff) from a
+reader who never saw your reasoning. Parallel sessions each get a [job](docs/glossary.md#job)
+with its own files, and a git hook refuses a commit outside them. The hooks run
+[trunk](docs/glossary.md#trunk)'s copy of the rules, so no branch can weaken them. I built it
+for prototyping software and firmware with Claude Code, but the checker runs fine without
+Claude Code.
 
-I built it for prototyping software and firmware with Claude Code. The enforcement runs fine
-without Claude Code.
+## 📦 Install
 
-## ✨ What it does
-
-- **Parallel sessions stay in their jobs.** Each session gets a *job*: its own branch,
-  worktree and declared files. A commit outside those files is refused by a git hook.
-- **The rules come from trunk.** Hooks run trunk's copy of the checker, so a branch can't
-  weaken the rules it's judged by.
-- **A bug gets investigated before it gets fixed.** `/jig:bug` asks why up to three times, tags
-  every fact `[seen]` or `[assumed]`, looks for the sibling code path that doesn't have the
-  problem, and makes you say whether you're correcting the cause or patching the symptom.
-  Patches are allowed. Each one gets a `WORKAROUND:` comment and a ledger row, and the hook
-  refuses the commit if the row is missing.
-- **One review per handoff, from a fresh reader.** The reviewer sees the diff, the spec and the
-  rules, and none of the conversation. `jig handoff` refuses a commit nobody reviewed.
-- **One always-loaded file, under 40 lines.** Agents read `AGENTS.md` on every task, and a long
-  one gets ignored wholesale. Everything else loads when a task needs it.
-- **Docs move with the code.** A board maps docs pages to source files, and a handoff has to
-  answer for every page its change touched. A page stays a single file until it has something
-  to hold (a datasheet, a step file, its own parts), and only then gets a folder. Editing a
-  part's file hands you its page and the system page above it, and your own terms live in
-  `docs/glossary.md`, a heading or a table row per term, so any page can point at one. Docs
-  point only at docs: the README may point into `docs/`, never the reverse.
-- **Every repo keeps one log of what changed and why.** `.jig/decisions.md` holds decision
-  entries (who decided, when, what it replaced) and plain change lines in Keep a Changelog's
-  groups, under one heading per release. You change your mind by writing a new entry that
-  supersedes the old one, which comes out of the log in the same commit, so the log shows what
-  holds now and git keeps the rest. Each entry names the pages it touches, and when two entries
-  touch the same page the handoff has to say whether they agree. `jig update` folds an old
-  `CHANGELOG.md` and decisions file into it when you say yes.
-- **Pages describe the product, and the roadmap holds the project.** A docs page or decision says
-  what the product is today and never points at a spec, a handoff or a phase. Work you parked
-  goes under `## Up next` in `.jig/roadmap.md`, naming the pages it will touch.
-- **The roadmap is worked out from the work.** Phases and scopes live in `.jig/roadmap.md`,
-  specs say which scopes they take, and a scope is done when the specs taking it have landed.
-  Nobody ticks a box to show progress. Each merge rewrites a `ROADMAP.md` kanban at the root
-  that any forge renders.
-- **Files from a chat land on purpose.** A spec, a user story, a feature request in your own
-  words ("I want it to do xyz") or a roadmap change written in some other chat goes into the
-  repo's `.jig/staging/` and waits there until a session in the repo resolves it. A feature
-  request comes back as a spec that lists everything it had to fill in, so you correct the
-  reading before anything gets built. A release is refused while anything is still staged.
-- **Every repo ships its own way, through one command.** `jig release` runs the repo's own
-  `.jig/scripts/release.sh` (a plugin file for one repo, a `.dmg` and an `.exe` for another),
-  checks the files it promised came out, and tags `vX.Y.Z`. The first time, `/jig:release`
-  asks you what the repo builds and writes the script with you.
-- **Repos that share decisions stay in sync.** A *metarepo* holds the definitions and decisions
-  several products share, sorted into the genre folders it declares at init (products,
-  features, principles and concepts, or your own). Each *pararepo* cites it at a released tag
-  as `<metarepo>/<path> § <heading>`, and `jig sync` checks every citation on every run: a page
-  the metarepo moved, a heading it renamed, a decision it dropped. A change to a decision asks
-  every page that cites it whether it still holds.
-- **It's portable.** The repo half is one stdlib Python file, some JSON and POSIX hooks. You can
-  run every command by hand, and any other agent tool can call the same ones.
-
-## ⚖️ Compared to other toolkits
-
-jig started as a reading of the toolkits people share for agentic coding: Superpowers,
-mattpocock/skills, ECC, Anthropic's Claude Code best practices and Kiro's spec-driven
-development, plus a few papers on embedded firmware. They all do the basics well (a spec before
-building, a small context file, a fresh-context reviewer), and I cut that down to what one
-person prototyping actually needs. Then I added the things none of them enforce.
-
-| | Superpowers | mattpocock/skills | ECC | Claude Code best practices | Kiro | **jig** |
-|---|---|---|---|---|---|---|
-| Spec before building | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Fresh-context review | ✅ | | ✅ | ✅ | | ✅ once per handoff, bound to the commit |
-| Parallel agents | worktrees | | worktrees | worktrees / teams | | worktrees **plus declared file ownership, hook-enforced** |
-| Scarce numbers (migrations, sections) | | | | | | handed out by the board, refused by the hook |
-| Rules enforced from trunk's copy | | | | | | ✅ |
-| Docs must move with code | | | | | | the gate refuses an unanswered page |
-| Decisions and releases | | | | | | one log per repo, conflicting decisions asked at handoff |
-| Roadmap progress | | | | | | worked out from landed work, never ticked by hand |
-| Workarounds | a comment, maybe | | | | | labeled and ledgered, or the hook refuses |
-| A fixed shape for bug investigation | | | | | | five steps before any fix |
-| Runs without the AI tool | | | | | | ✅ stdlib Python and git hooks |
-
-Most agent toolkits are prose: a long instructions file the model reads and mostly follows. jig
-keeps the prose to one short file and moves everything that must not be skipped into hooks. Its
-jobs, board and gate are a small, enforced version of what teams already do with topic
-branches, CODEOWNERS, PR templates and a merge queue, and `/jig:survey` names which of those a
-repo already has.
-
-## 🧭 How it's put together
-
-This repo holds two things:
-
-- **A Claude Code plugin** in `plugin/`. Two node skills (`hubnode`, `subnode`) and five role
-  skills (`spec`, `bug`, `work`, `review`, `check`) run the loop; others set a repo up (`init`,
-  `survey`, `adopt`, `update`), move its docs onto the current page contract (`redocument`),
-  turn a repeat into a skill (`retro`), spec a circuit board and install the skills it needs
-  (`hardware`), land files from other chats (`stage`, `repos`), cut releases (`release`), and report bugs in jig itself
-  (`feedback`).
-- **A checker**, `plugin/templates/jig/jig.py`, which `init` copies into a hidden `.jig/` folder
-  in your repo with the rulebook, the board and three scripts. The checker owns the board,
-  runs the rules from git hooks, and drives sync, handoff and gate. The skills are thin
-  wrappers around it.
-
-Everything jig makes in your repo lives in `.jig/`, so nobody mistakes it for your project.
-Your root gets an `AGENTS.md`, a one-line `CLAUDE.md`, and a generated `ROADMAP.md` if you keep a
-roadmap, and that's it.
-
-A task moves through:
-
-```
-spec → plan → do → commit (hook-checked) → … → checks → review → handoff → gate → merge
-```
-
-## 🧑‍🤝‍🧑 Who does what
-
-Every session is a node: the hubnode, which is yours, or a subnode. A subnode takes one of five
-roles, each with its own model tier and effort. The workflows are data in `jig.py`, so
-`jig next` names each job's next step, who takes it, and whether it continues a session or
-starts one, and jig refuses a step taken out of order. The pictures are drawn from that data
-by `scripts/roles_svg.py`.
-
-The hubnode's entry point is `/jig:rig`: one picture of what can start now, what waits on
-what and what waits on you, with the roadmap's next step, then one batch of decisions.
-`/jig:rig auto` writes the specs and starts the jobs it can without asking, and leaves your
-questions open.
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/roles-and-flows-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="assets/roles-and-flows-light.svg">
-  <img src="assets/roles-and-flows-light.svg" alt="Roles: the hubnode (the owner's session) assigns, gates, merges, releases, pushes and publishes; a subnode takes one role, outside the trunk checkout; spec (tier 2, effort 2) writes and consolidates specs; bug (2,1) investigates and writes the spec for what it found; work (2,3, one session per job) builds, hands off, fixes and syncs; review (2,2, always a fresh session) runs review-work and review-change; check (3,4) runs the complete suite, before a release too, traces a failed batch and surveys; jig itself refuses steps out of order and cleans up after a merge. Workflows: Job is spec, work, review-work, handoff, gate, check, merge; Fix and Sync are work, review-change, handoff; Bug is bug, spec, then a Job; Feedback, Batch, Release, Survey and Redocument follow, each with its trigger and controls. The tables below say the same in text.">
-</picture>
-
-<details>
-<summary>The same, as tables</summary>
-
-**Nodes.**
-
-| Node | Settings | What it does | Roles it may load |
-|---|---|---|---|
-| hubnode | the owner's session; tier 2, effort 1 or better | talks, decides, assigns, gates, merges, releases, pushes, publishes | spec (only for specs drafted from the conversation) |
-| subnode | the role's | takes one role on one job, works only in its worktree, reports back, never touches trunk | any of the five |
-
-**Roles.**
-
-| Role | Tier, effort | Steps it owns |
-|---|---|---|
-| spec | 2, 2 | spec, consolidate |
-| bug | 2, 1 | bug, then the spec for what it found |
-| work | 2, 3 | work, handoff, fixes, hand-resolved syncs |
-| review | 2, 2 | review-work (the job's whole diff), review-change (only what changed since the last review); always a fresh session |
-| check | 3, 4 | check (the complete suite, before a release too), trace a failed batch, survey |
-
-The hubnode's own steps, which are no role's: assign, gate, merge, release, push, publish. jig itself
-(no model) refuses a step out of order, and removes a merged job's clean worktree and branch. Tiers and efforts are numbers; `plugin/tiers.json`
-maps them to models and effort levels.
-
-**Workflows.** `→` continues a session that already exists; `⇢` starts a new one.
-
-| Workflow | Steps | Trigger | Controls |
-|---|---|---|---|
-| Job | spec ⇢ work ⇢ review-work → handoff → gate ⇢ check → merge | `jig open` | merge only on the owner's word |
-| Fix | work ⇢ review-change → handoff | a review with blocking findings | three strikes: a job's third blocking review starts Bug |
-| Sync | work ⇢ review-change → handoff | a sync with a hand-resolved conflict | a clean sync needs nothing |
-| Bug | bug → spec ⇢ Job | a job's third blocking review, a feedback group, or the owner's `/jig:bug` | never on a session's own reading that something is broken |
-| Feedback | consolidate ⇢ bug + spec → consolidate ⇢ Job | staged feedback, in the jig repo | one bug + spec per group; overlaps answered before any job opens |
-| Batch | gate → merge ⇢ check → trace | two or more gated jobs | one check on trunk; a failure is traced to its merge, then Fix on that job |
-| Release | check → release → push → publish | the owner's word | refused while a batch check is owed; push and publish only on the owner's word |
-| Survey | survey ⇢ spec ⇢ Jobs | `/jig:survey`, `/jig:adopt`, `/jig:update` | |
-| Redocument | spec ⇢ Jobs ⇢ Batch ⇢ Job | `/jig:redocument` | the spec is the remap; the last job is the cleanup |
-
-Fixed, whatever the config says: the owner's word before merge, push and publish; a fresh
-session for every review; a complete check before a release.
-
-</details>
-
-## 🚀 Usage
-
-A new or small repo:
-
-```
-/jig:init
-```
-
-A repo with history and its own way of doing things. Both are read-only, and adopt writes a
-plan for you to approve before anything moves:
-
-```
-/jig:survey      # what's here, in the repo's own terms
-/jig:adopt       # a staged migration plan in .jig/specs/
-```
-
-A repo already on jig, after you install a newer plugin. It's a dry run first, and it asks
-before touching any file of yours:
-
-```
-/jig:update
-```
-
-A repo on jig whose pages need converting, whatever format they're in: the old Now / Rules /
-Checks shape, a house format of your own, or pages sitting outside `docs/`. The hubnode proposes
-a remap for you to approve, traces every claim to the code (or, in a metarepo, to a decision),
-then lands one page per job and deletes the old docs at the end. A page that's already in place
-and only drifted from the page contract doesn't need any of that, and `/jig:update` lists it to
-fix where it sits:
-
-```
-/jig:redocument
-```
-
-Day to day:
-
-```
-/jig:spec <task>         # .jig/specs/<task>.md before building
-/jig:bug <symptom>       # investigate before fixing
-/jig:review              # fresh-context review, once per handoff
-/jig:stage               # send a file from this chat to a repo, or resolve what's staged
-jig roadmap --write      # print the roadmap's state and rewrite ROADMAP.md
-/jig:repos add repo      # register this folder so other chats can stage files to it
-/jig:relay <repo> <text> # in another chat: this is that repo's hubnode talking; a reply is owed
-/jig:send                # show the reply for you to edit and send, then drop it in the repo's .jig/inbox/
-/jig:rigger <repo>       # make this chat the repo's rigger: its record and drafts, in a folder outside the repo
-/jig:release             # build and tag a version, the way this repo ships
-/jig:hubnode             # your session: owns trunk, the board and merges, and assigns each step
-/jig:subnode             # a session that takes one role on one job
-jig next                 # each job's next step, who takes it, continue or new session
-```
-
-Every rule the hooks enforce is written in `.jig/RULES.md` after init.
-
-`/jig:init`, `/jig:adopt`, `/jig:update`, `/jig:redocument`, `/jig:release`, `/jig:repos`,
-`/jig:relay`, `/jig:send`, `/jig:rigger` and `/jig:feedback` don't show in the slash list, and an
-agent can't start them on its own: each changes the repo, tags a release, writes your repo list,
-speaks to a hubnode or files a report on jig, so only you do. Type them in full at the start of a
-message.
-
-## 📦 Installation
+You need git, Python 3.10 or newer, and Claude Code. The repo half needs only git and Python.
 
 ```sh
 claude plugin marketplace add davemadethis/jig
@@ -249,30 +24,90 @@ claude plugin install jig@davemadethis
 To try it for one session without installing, clone this repo and run
 `claude --plugin-dir ./jig/plugin`.
 
-You need git, Python 3.10 or newer, and Claude Code. The repo half needs only git and Python.
+## 🧭 A first job
 
-**On trust.** Claude Code warns about every plugin with hooks, because hooks run shell commands
-as you. jig's (a format step after an edit, a check when the agent stops, and a count of unread
-inbox messages with your prompt in the trunk checkout) run your repo's own
-`.jig/scripts/format.sh` and `.jig/scripts/check.sh`, or read its `.jig/inbox/`, and only in a
-repo that opted in with `jig install-hooks`, which writes a marker inside `.git/`. Git never
-clones `.git/`, so a repo you fetched can't turn itself on. The whole hook config is
-`plugin/hooks/hooks.json`, and it's short enough to read in a minute.
+We'll walk one small job from start to finish, in a repo with a `src/app.py` and a `src/other.py`.
 
-## 💬 Feedback and development
+**1. Set up.** You run `/jig:init` in the repo. It writes a hidden `.jig/` folder (the checker,
+the rulebook, the [board](docs/glossary.md#board)) and installs the git hooks. Your root gets a
+short `AGENTS.md` and a one-line `CLAUDE.md`. Commit what it wrote.
 
-This is a personal tool, built in the open. Issues and discussion are on GitHub.
+**2. Write the spec.** You run `/jig:spec greeting`, and describe the task. It writes
+`.jig/specs/greeting.md`: what the task is, the files it touches, and how you'll know it's done.
+You read it, fix what it got wrong, and commit it.
 
-If jig misbehaves in your repo, a session tells you and stops. Run `/jig:feedback` if you want a
-report: it investigates the way `/jig:bug` does and stages the report in the jig repo, without
-patching your copy.
+**3. Open the job.** Your session is the [hubnode](docs/glossary.md#hubnode): the one that owns
+trunk, the board and every merge. It opens the job, which may change
+only `src/app.py`:
 
-To work on jig itself, start with `AGENTS.md`. `bash tests/smoke.sh` runs every rule end to end
-in a throwaway repo, and `claude plugin validate ./plugin` checks the plugin's shape. This repo
-runs jig on itself, so `.jig/` here is the installed release and `plugin/` is the code you edit.
+```sh
+python3 .jig/jig.py open greeting --spec .jig/specs/greeting.md --owns src/app.py
+git add .jig/jobs.json && git commit -m "open greeting"
+```
 
-## 📚 Further reading
+That makes a branch and a worktree at `.git/jig/worktrees/greeting`, and prints a kickoff
+naming both. The board is committed on trunk, because the hooks read trunk's copy.
 
-- `plugin/templates/jig/RULES.md`: the rulebook a repo gets
-- `plugin/skills/adopt/SKILL.md`: bringing an existing repo onto jig, including one that already
-  coordinates parallel work its own way
+**4. Build it.** The hubnode starts a second session in that worktree with the kickoff. That's
+a [subnode](docs/glossary.md#subnode), in the work [role](docs/glossary.md#role). Say it edits `src/app.py`, and also
+strays into `src/other.py`. The commit is refused:
+
+```
+$ git commit -am "greet"
+jig: R3 src/other.py is not job greeting's: ask the hubnode to add it to shares
+```
+
+The subnode puts `src/other.py` back and commits again. If the job really needs that file, the
+hubnode adds it with `python3 .jig/jig.py share greeting src/other.py`.
+
+**5. Review.** The hubnode starts a fresh session for `/jig:review`. It sees the diff, the spec
+and the rules, and none of the conversation. The hubnode records the review in the job's
+worktree. The record says the review role's [tier](docs/glossary.md#tier) and
+[effort](docs/glossary.md#effort), and how many blocking findings it left:
+`python3 .jig/jig.py reviewed --tier 2 --effort 2 --blocking 0`.
+
+**6. Hand off.** The work subnode runs `python3 .jig/jig.py handoff`, which writes a note naming
+the reviewed commit. The subnode fills in every heading of the note and commits it. That's the
+[handoff](docs/glossary.md#handoff).
+
+**7. [Gate](docs/glossary.md#gate).** The hubnode runs `python3 .jig/jig.py gate greeting`. It
+sets up a scratch checkout of that commit with trunk merged in, and prints the complete check
+to run there.
+
+**8. Check.** The hubnode starts a check subnode, which runs that printed check in the scratch
+checkout. When it passes, the subnode records it there, with the check role's tier and
+effort:
+`python3 .jig/jig.py checked --tier 3 --effort 4 --seconds <s>`. Then the hubnode runs
+`python3 .jig/jig.py mark greeting gated` and commits `.jig/jobs.json` on trunk.
+
+**9. Merge.** On your word, the hubnode runs `python3 .jig/jig.py merge greeting`. The job's
+entry leaves the board in the merge commit, and its worktree and branch go away.
+
+Every step above belongs to a [workflow](docs/glossary.md#workflow), and each subnode takes one
+role in it. At any point, `python3 .jig/jig.py next` says what each job needs next and who
+takes it.
+
+## 📚 Read more
+
+- [Jobs](docs/jobs.md): the board, owned files, the rules, handoff, gate and merge.
+- [Workflows](docs/workflows.md): [nodes](docs/glossary.md#node), roles, workflows, and who takes each step.
+- [Records](docs/records.md): pages, the [decision log](docs/glossary.md#decision-log), the [roadmap](docs/glossary.md#roadmap), [staging](docs/glossary.md#staging) and releases.
+- [Metarepos](docs/metarepos.md): several repos sharing one set of decisions through a [metarepo](docs/glossary.md#metarepo).
+- [Commands](docs/commands.md): every skill and checker command.
+- [Hooks](docs/hooks.md): what runs, when, and why it's safe.
+- [Glossary](docs/glossary.md): every jig term, and what it isn't.
+
+After init, `.jig/RULES.md` in your repo holds every rule the hooks enforce.
+
+**On trust.** All but one of jig's plugin hooks run only in a repo that opted in, with a marker git
+never clones. The session-start hook only reads and prints one line. [More](docs/hooks.md).
+
+## 💬 Feedback and working on jig
+
+This is a personal tool, built in the open. Issues and discussion are on GitHub. If jig
+misbehaves in your repo, run `/jig:feedback`. It looks into the cause and stages a report in the
+jig repo, without patching your copy.
+
+To work on jig itself, start with `AGENTS.md`. This repo runs jig on itself: `.jig/` is the
+installed release, and `plugin/` is the code you edit. `bash tests/smoke.sh` runs every rule
+end to end in throwaway repos.
