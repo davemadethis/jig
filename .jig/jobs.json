@@ -88,7 +88,8 @@
       "plugin/skills/rig/SKILL.md",
       "plugin/skills/retro/SKILL.md",
       "plugin/skills/init/SKILL.md",
-      "plugin/skills/update/SKILL.md"
+      "plugin/skills/update/SKILL.md",
+      "tests/fixtures/**"
     ],
     "reserved": {}
   }
