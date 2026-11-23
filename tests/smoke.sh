@@ -5219,6 +5219,137 @@ cd "$T" && pcnew "$T/solo" && git add -A && git commit -qm init && $J init >/dev
 expect_pass sh -c "$J family | grep -q 'no family'"
 }
 
+# ---------------------------------------------------------------- roadmap edit
+sec_roadmap_edit() {
+export JIG_CONFIG="$T/repos.json"
+enew() { mkdir -p "$T/$1" && cd "$T/$1" && git init -q -b main && git config user.email t@t && git config user.name t \
+  && cp -r "$P/jig" .jig && cp "$P/AGENTS.md" "$P/CLAUDE.md" .; }
+EM="$T/meta"; enew meta && git add -A && git commit -qm init && $J init --meta --name meta >/dev/null && git add -A && git commit -qm meta-init && $J release $(mf) >/dev/null
+printf '\n## Walyt\n\nThe wallet app.\n\nOwner: `pa`.\n\n## Familiar App\n\nThe companion app.\n\nOwner: `pb`.\n\n## Teleport\n\nMoving a session.\n\nOwner: `pb`.\n' >> docs/glossary.md
+python3 -c "import json; f='.jig/meta.json'; d=json.load(open(f)); d['pararepos']=['pa','pb']; json.dump(d, open(f,'w'), indent=2)"
+git add -A && git -c core.hooksPath=/dev/null commit -qm "glossary and pararepos"
+for r in pa pb; do
+  enew $r && mkdir -p docs && printf '# P\n\nP is.\n' > docs/p.md && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
+  $J init --para meta --location "$EM" >/dev/null 2>&1 && git add -A && git commit -qm para-init
+  python3 .jig/jig.py repos add para "$T/$r" --name $r >/dev/null
+done
+EA="$T/pa"
+cd "$EM"
+printf '# Roadmap\n\n## Walyt alpha\nScopes:\n- `pairing`: pairing (touches docs/p.md)\n\n## Familiar App alpha\nScopes:\n- `host`: the host\n\n## Demos\nScopes:\n- `d`: a demo\n' > .jig/roadmap.md
+git add -A && git commit -qm "GLOSSARY: roadmap"
+draft="$(cd "$EA" && git rev-parse --path-format=absolute --git-common-dir)/jig/roadmap-draft.md"
+edraft() { python3 -c "import sys; p=sys.argv[1]; s=open(p).read(); exec(sys.argv[2]); open(p,'w').write(s)" "$draft" "$1"; }
+state() { for r in "$EM" "$EA" "$T/pb"; do git -C "$r" for-each-ref --format='%(refname) %(objectname)'; git -C "$r" status --porcelain; done; }
+cd "$EA"
+msg="roadmap edit: --draft in pa writes the draft outside the tree and names the headings pa may change"
+out=$($J roadmap --draft 2>&1)
+expect_pass sh -c "test -f '$draft' && echo \"\$0\" | grep -q '## Walyt alpha' && echo \"\$0\" | grep -q '## Walyt No phase' && ! echo \"\$0\" | grep -q '## Demos' && test -z \"\$(git status --porcelain)\"" "$out"
+msg="roadmap edit: --draft again while a changed draft is there is refused, naming it"
+edraft "s = s.replace('- \`pairing\`: pairing (touches docs/p.md)', '- \`pairing\`: pairing (touches docs/p.md)\n- \`z3\`: the z3 work (labels teleport)')"
+out=$($J roadmap --draft 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'roadmap-draft.md is a draft that differs'" "$out"
+metamain=$(git -C "$EM" rev-parse main); heads="$(git -C "$EM" rev-parse HEAD) $(git rev-parse HEAD)"
+out=$($J roadmap --edit 2>&1); rc=$?
+br=$(git -C "$EM" for-each-ref --format='%(refname:short)' 'refs/heads/propose/pa-roadmap-*')
+msg="roadmap edit: --edit in pa writes propose/pa-roadmap-<date> in meta, z3 on it, only pa's sections differing from meta's trunk"
+expect_pass sh -c "test $rc = 0 && test -n '$br' && git -C '$EM' show '$br:.jig/roadmap.md' | grep -qx -- '- \`z3\`: the z3 work (labels teleport)' && test \"\$(git -C '$EM' diff main '$br' --stat | tail -1 | tr -d ' ')\" = '1filechanged,1insertion(+)'" "$out"
+msg="roadmap edit: meta's trunk and every checkout's HEAD are unchanged, and the draft is gone"
+expect_pass sh -c "test \"\$(git -C '$EM' rev-parse main)\" = '$metamain' && test \"\$(git -C '$EM' rev-parse HEAD) \$(git rev-parse HEAD)\" = '$heads' && test ! -e '$draft' && test -z \"\$(git -C '$EM' status --porcelain)\""
+msg="roadmap edit: pa has a new Open BUFFER.md row and a roadmap-<date>.md spec citing the branch, uncommitted"
+expect_pass sh -c "grep -q '^| B1 | meta/.jig/roadmap.md § Walyt alpha | added Walyt alpha/z3 | hubnode, ' .jig/ledgers/BUFFER.md && grep -qx -- '- meta: meta proposal $br' .jig/specs/roadmap-*.md && git status --porcelain | grep -q 'specs/roadmap-'"
+git add -A
+msg="roadmap edit: the spec and the BUFFER.md row commit in pa"
+expect_pass git commit -qm "specs: roadmap proposal"
+$J roadmap --draft >/dev/null 2>&1
+edraft "s = s.replace('- \`z3\`: the z3 work (labels teleport)', '- \`z3\`: the z3 work (labels teleport)\n- \`z4\`: the z4 work')"
+tip=$(git -C "$EM" rev-parse "$br")
+$J roadmap --edit >/dev/null 2>&1
+msg="roadmap edit: a second --draft shows the open proposal's lines, and a second --edit adds a commit to the same branch and a row to the same spec"
+expect_pass sh -c "test \"\$(git -C '$EM' rev-parse '$br~1')\" = '$tip' && git -C '$EM' show '$br:.jig/roadmap.md' | grep -qx -- '- \`z4\`: the z4 work' && test \$(git -C '$EM' show '$br:.jig/roadmap.md' | grep -c z3) = 1 && grep -q '^| B2 | .* | added Walyt alpha/z4 |' .jig/ledgers/BUFFER.md && test \$(git -C '$EM' for-each-ref 'refs/heads/propose/pa-roadmap-*' | wc -l) = 1 && test \$(ls .jig/specs/roadmap-*.md | wc -l) = 1 && grep -qx -- '- B2' .jig/specs/roadmap-*.md && grep -qx -- '- B1' .jig/specs/roadmap-*.md"
+git add -A && git commit -qm "specs: roadmap proposal B2"
+msg="roadmap edit: jig propose --buffer in pa afterwards doesn't take the roadmap rows"
+out=$($J propose --buffer later 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -q 'nothing to propose' && test \$(git -C '$EM' for-each-ref 'refs/heads/propose/*' | wc -l) = 1" "$out"
+before=$(state)
+$J roadmap --draft >/dev/null 2>&1
+msg="roadmap edit: a draft in pa changing a line under Familiar App alpha is refused by line, naming it and pb, writing nothing"
+edraft "s = s.replace('the host', 'the big host')"
+out=$($J roadmap --edit 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'line 9: ## Familiar App alpha is pb.s' && test \"\$(cd '$EA' && for r in '$EM' '$EA' '$T/pb'; do git -C \"\$r\" for-each-ref --format='%(refname) %(objectname)'; git -C \"\$r\" status --porcelain; done)\" = \"\$1\"" "$out" "$before"
+msg="roadmap edit: one changing meta's own ## Demos is refused, naming meta"
+edraft "s = s.replace('the big host', 'the host').replace('a demo', 'a big demo')"
+out=$($J roadmap --edit 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '## Demos is meta.s'" "$out"
+msg="roadmap edit: a new heading ## Gadget alpha, no product pa owns, is refused"
+edraft "s = s.replace('a big demo', 'a demo') + '\n## Gadget alpha\nScopes:\n- \`g\`: g\n'"
+out=$($J roadmap --edit 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '## Gadget alpha names no product this repo owns'" "$out"
+edraft "s = s.split('\n## Gadget alpha')[0] + '\n'"
+msg="roadmap edit: a ring in pa's section is refused as the hook words it"
+edraft "s = s.replace('the z3 work (labels teleport)', 'the z3 work (labels teleport) (after Walyt alpha/z4)').replace('the z4 work', 'the z4 work (after Walyt alpha/z3)')"
+out=$($J roadmap --edit 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'a ring: Walyt alpha/z3, Walyt alpha/z4' && echo \"\$0\" | grep -q 'nothing written'" "$out"
+edraft "s = s.replace(' (after Walyt alpha/z4)', '').replace(' (after Walyt alpha/z3)', '')"
+msg="roadmap edit: a ref to nothing is refused"
+edraft "s = s.replace('the z4 work', 'the z4 work (after Walyt alpha/nope)')"
+out=$($J roadmap --edit 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'waits on Walyt alpha/nope'" "$out"
+edraft "s = s.replace(' (after Walyt alpha/nope)', '')"
+msg="roadmap edit: a page pa's trunk lacks is refused"
+edraft "s = s.replace('the z4 work', 'the z4 work (touches docs/none.md)')"
+out=$($J roadmap --edit 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'Walyt alpha/z4 touches docs/none.md' && test \"\$(cd '$EA' && for r in '$EM' '$EA' '$T/pb'; do git -C \"\$r\" for-each-ref --format='%(refname) %(objectname)'; git -C \"\$r\" status --porcelain; done)\" = \"\$1\"" "$out" "$before"
+edraft "s = s.replace(' (touches docs/none.md)', '')"
+msg="roadmap edit: a label meta's glossary lacks is left off the branch's line and staged in meta for its hubnode"
+edraft "s = s.replace('the z4 work', 'the z4 work (labels walyt-mesh)')"
+out=$($J roadmap --edit 2>&1); rc=$?
+L="$EM/.jig/staging/label-walyt-mesh.md"
+expect_pass sh -c "test $rc = 0 && git -C '$EM' show '$br:.jig/roadmap.md' | grep -qx -- '- \`z4\`: the z4 work' && grep -qx 'target: meta' '$L' && grep -qx 'kind: doc' '$L' && grep -qx 'destination: docs/glossary.md' '$L' && grep -q 'Walyt alpha/z4' '$L' && grep -q 'pa' '$L' && echo \"\$0\" | grep -q 'added once the term lands'" "$out"
+msg="roadmap edit: jig staging check passes on the staged label"
+expect_pass $J staging check "$L"
+rm "$L"; git add -A && git commit -qm "specs: B3" >/dev/null
+msg="roadmap edit: meta merges the branch, and the merge passes meta's hook"
+out=$(cd "$EM" && git switch -q "$br" && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-edit "$br" 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && grep -q 'z3' '$EM/.jig/roadmap.md'" "$out"
+msg="roadmap edit: then a spec in pa taking Walyt alpha/z3 commits"
+mkdir -p .jig/specs && printf '# t\n\nSource: smoke\nScope: Walyt alpha/z3\n\n## Intent\nx\n' > .jig/specs/t3.md && git add -A
+expect_pass git commit -qm t3
+cd "$EM"
+msg="roadmap edit: in meta's trunk checkout, an edit of ## Demos writes .jig/roadmap.md uncommitted, and the commit passes"
+$J roadmap --draft >/dev/null 2>&1; mdraft="$(git rev-parse --path-format=absolute --git-common-dir)/jig/roadmap-draft.md"
+python3 -c "import sys; p=sys.argv[1]; s=open(p).read(); open(p,'w').write(s.replace('a demo', 'a better demo'))" "$mdraft"
+out=$($J roadmap --edit 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && git status --porcelain | grep -q '.jig/roadmap.md' && grep -q 'a better demo' .jig/roadmap.md && git add -A && git commit -qm 'GLOSSARY: demo'" "$out"
+msg="roadmap edit: in meta, a draft changing ## Walyt alpha is refused, naming pa"
+$J roadmap --draft >/dev/null 2>&1
+python3 -c "import sys; p=sys.argv[1]; s=open(p).read(); open(p,'w').write(s.replace('pairing (touches', 'the pairing (touches'))" "$mdraft"
+out=$($J roadmap --edit 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '## Walyt alpha is pa.s'" "$out"
+msg="roadmap edit: in meta, a label the glossary lacks is refused, naming the glossary"
+python3 -c "import sys; p=sys.argv[1]; s=open(p).read(); open(p,'w').write(s.replace('the pairing (touches', 'pairing (touches').replace('a better demo', 'a better demo (labels walyt-mesh)'))" "$mdraft"
+out=$($J roadmap --edit 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'labels walyt-mesh, which docs/glossary.md has no term for'" "$out"
+msg="roadmap edit: with .jig/roadmap.md changed and uncommitted in meta's trunk checkout, --edit is refused, naming it"
+python3 -c "import sys; p=sys.argv[1]; s=open(p).read(); open(p,'w').write(s.replace(' (labels walyt-mesh)', ''))" "$mdraft"
+printf '\n' >> .jig/roadmap.md
+out=$($J roadmap --edit 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '.jig/roadmap.md in the main checkout differs'" "$out"
+git checkout -q -- .jig/roadmap.md
+msg="roadmap edit: --edit in a job worktree is refused (R5)"
+$J open E --owns 'lib/**' >/dev/null && git add -A && git commit -qm "GLOSSARY: open E" >/dev/null 2>&1
+out=$(cd .git/jig/worktrees/E && $J roadmap --edit "$mdraft" 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'R5'" "$out"
+msg="roadmap edit: in a stand-alone repo, --draft then --edit writes trunk's checkout after the same checks"
+cd "$T" && pcnew "$T/solo" && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
+printf '# Roadmap\n\n## alpha\nScopes:\n- `a`: a\n' > .jig/roadmap.md && git add -A && git commit -qm roadmap
+sdraft="$(git rev-parse --path-format=absolute --git-common-dir)/jig/roadmap-draft.md"
+$J roadmap --draft >/dev/null
+python3 -c "import sys; p=sys.argv[1]; s=open(p).read(); open(p,'w').write(s + '- \`b\`: b (after alpha/nope)\n')" "$sdraft"
+out=$($J roadmap --edit 2>&1); rc=$?
+python3 -c "import sys; p=sys.argv[1]; s=open(p).read(); open(p,'w').write(s.replace(' (after alpha/nope)', ''))" "$sdraft"
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'waits on alpha/nope' && $J roadmap --edit >/dev/null && grep -q '^- .b.: b\$' .jig/roadmap.md && git add -A && git commit -qm 'roadmap b'" "$out"
+}
+
 # ---------------------------------------------------------------- labels
 sec_labels() {
 lspec() { mkdir -p .jig/specs && printf '# %s\n\nSource: smoke\nScope: %s\n\n## Intent\nx\n' "$1" "$2" > ".jig/specs/$1.md"; }
@@ -10093,7 +10224,7 @@ msg="queue config: the overflow key with the owner's words commits"
 expect_pass setq '{"width": "all", "overflow": {"to": "github", "reason": "the owner: keep the standing yes"}}'
 }
 
-UNITS="rules merge_derived update board_split worktree_setup metarepo,staging pararepo release r6_takes,r6_ints merge_after_sync repos workflow init_old_board ledger_rows hardware update_per_file pararepo_commands entry_globs report_fixes sync_buffer buffer_answered pointers removals feedback slash_names homes structure meta_docs agents_lines page_contract roadmap labels family family_report boundary decisions supersede touches,touches_terms sweep staging_batches merge_log findings glossary headings check_levels role_line consolidate cheaper_rounds next svg update_roles holders rig rig_batch close versioning pin_bump moves claims inbox rigger queue"
+UNITS="rules merge_derived update board_split worktree_setup metarepo,staging pararepo release r6_takes,r6_ints merge_after_sync repos workflow init_old_board ledger_rows hardware update_per_file pararepo_commands entry_globs report_fixes sync_buffer buffer_answered pointers removals feedback slash_names homes structure meta_docs agents_lines page_contract roadmap labels family family_report roadmap_edit boundary decisions supersede touches,touches_terms sweep staging_batches merge_log findings glossary headings check_levels role_line consolidate cheaper_rounds next svg update_roles holders rig rig_batch close versioning pin_bump moves claims inbox rigger queue"
 
 if [ "${1:-}" = --list ]; then echo $UNITS | tr ' ,' '\n\n'; exit 0; fi
 if [ "${1:-}" = --unit ]; then        # --unit <run folder> <unit>: one unit, its output to a file

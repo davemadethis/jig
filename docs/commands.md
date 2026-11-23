@@ -90,6 +90,9 @@ Records:
 - `python3 .jig/jig.py roadmap` prints the [roadmap](glossary.md#roadmap)'s states. `--write` regenerates its view.
   `--label <term>` prints only the scopes and items carrying that [label](glossary.md#label), across every
   product, with the term's owner.
+- `python3 .jig/jig.py roadmap --draft` writes the roadmap this repo plans from to a draft outside the tree, and
+  names the headings this repo may change. `--edit` checks the draft and writes it: on trunk's checkout, or in a
+  [pararepo](glossary.md#pararepo), on its open roadmap proposal in the metarepo.
 - `python3 .jig/jig.py family` reports what a [metarepo](glossary.md#metarepo)'s family has let sit: staged files and
   proposals with their ages, entries touching labelled work, and two names for one thing.
 - `python3 .jig/jig.py staging` lists staged files. `resolve` lands one and `drop` deletes one.

@@ -1043,6 +1043,29 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
   next sync the owner calls. A pararepo's merge writes nothing to the metarepo's roadmap.
   Labels, names and new products (the glossary term and its `Owner:` line) are the metarepo's
   hubnode's.
+  **The edit command.** `jig roadmap --draft` writes the roadmap this repo plans from (the
+  metarepo's trunk, live, in a pararepo, with its sections as its open roadmap proposal has
+  them; trunk's own otherwise) to `<git common dir>/jig/roadmap-draft.md`, outside the tree, and
+  prints its path and the headings this repo may change: a pararepo its products' phases and
+  lists; the metarepo its own and the products it owns as `this repo`; a stand-alone repo all.
+  It refuses while a draft that differs from that is there. `jig roadmap --edit [<file>]` reads
+  the roadmap again and refuses, writing nothing, by line: a line added, removed or changed under
+  a heading whose product another repo owns; in a pararepo, a new heading naming no product it
+  owns; and anything the hook would refuse on the result (shape, refs, rings, touched pages on
+  the owning repo's trunk, a dropped scope a reachable spec or note takes, labels). In a
+  pararepo a label the metarepo's glossary lacks is left off the line and staged in the
+  metarepo as `label-<term>.md` (`target: <meta>`, `kind: doc`, `destination:
+  docs/glossary.md`), naming the scopes it labels and the repo; in the metarepo or a
+  stand-alone repo it is refused, the term going in first. In the metarepo or a stand-alone
+  repo the edit writes `.jig/roadmap.md` in the trunk checkout (refused elsewhere, R5, and while
+  that file differs from trunk's), to commit on the owner's yes. In a pararepo it adds an Open
+  `BUFFER.md` row (`<meta>/.jig/roadmap.md § <heading>, …`; the scopes and items added, changed
+  or removed; `hubnode, <date>`) and commits the change on this repo's open roadmap proposal,
+  an unmerged `propose/<repo>-roadmap-<date>` branch its spec `roadmap-<date>.md` cites, or a
+  new one: by plumbing in the metarepo's checkout, so no checkout moves, replacing only this
+  repo's sections, whole. The spec lists roadmap rows only, so `jig propose --buffer` and
+  `jig release` never sweep them; commit it and `BUFFER.md` here. Either way the draft is
+  deleted.
 - **Moving in**, once per pararepo, by hand, on the owner's yes: the metarepo's glossary names
   the product with its `Owner:` line; the pararepo proposes its phases as
   `## <Product> <phase>` and its `## No phase` items as `## <Product> No phase`, and the
@@ -1641,6 +1664,12 @@ scope or item ids under different products (the metarepo's own sections count as
 once folded, or one the other with whole hyphen-words added at its start or end. Listed for the
 owner, never refused. `jig rig` points at it (Workflow).
 
+**A staged label.** A pararepo's roadmap edit naming a label the metarepo's glossary lacks
+stages `label-<term>.md` in the metarepo's `.jig/staging/` (Roadmap, Edits): a `kind: doc`
+update to `docs/glossary.md`, the metarepo hubnode's, since a new term is. The label is added
+by the pararepo's next edit once the term lands. A repo puts an existing term on its own
+scopes freely.
+
 **Citing the metarepo.** A pararepo cites the metarepo the way the metarepo points to it:
 `<meta>/<path>` (or `<meta>:<path>`), with `§ <section>` for a heading, matched as above. On
 every run, `jig sync` and the release name each citation in this repo's tracked files, specs and
@@ -1770,6 +1799,8 @@ jig workflow                the older command: the roles under the old step name
 jig handoff [--spec path] [--partial]   write the note for HEAD; --partial: it doesn't finish the spec
 jig roadmap [--write]       the roadmap's states on trunk; --write regenerates ROADMAP.md
 jig roadmap --label <term>  only the scopes and items carrying that label, across every product
+jig roadmap --draft         the roadmap this repo plans from, to a draft outside the tree; the headings it may change
+jig roadmap --edit [<file>] check the draft and write it: trunk's checkout, or a pararepo's open roadmap proposal
 jig family                  a family's staged files, unmerged proposals, entries touching labelled work, two names
 jig gate <name>             hubnode: verify, set up the scratch checkout, print its check
 jig propose <spec> <slug>   pararepo: open a proposal branch on the metarepo

@@ -67,6 +67,14 @@ A pararepo with a [roadmap](glossary.md#roadmap) of its own can move it into the
 The metarepo's glossary names the product, and the pararepo proposes its [phases](glossary.md#phase). After that,
 the metarepo holds the one roadmap for every product it lists.
 
+## Editing the roadmap
+
+`python3 .jig/jig.py roadmap --draft` writes the roadmap a repo plans from to a draft outside its
+tree, and `roadmap --edit` checks it and writes it. A pararepo may change only its own products'
+sections. Its edit lands as a `BUFFER.md` row and a commit on its open roadmap proposal in the
+metarepo, so nothing moves on the metarepo's trunk until its owner merges it at the next sync. A
+label the metarepo's glossary lacks is left off and staged there as a new term.
+
 ## The family report
 
 `python3 .jig/jig.py family`, run in the metarepo or any of its pararepos, prints the same

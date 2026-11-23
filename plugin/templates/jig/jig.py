@@ -19,6 +19,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import tempfile
 import sys
 import time
 import urllib.parse
@@ -11149,6 +11150,10 @@ def cmd_roadmap(root: Path, args) -> int:
     board = Board.load(root, working_tree=True)
     trunk = board.trunk
     fam = family(root, trunk)
+    if args.draft:
+        return roadmap_draft(main_root(), fam, trunk)
+    if args.edit is not None:
+        return roadmap_edit(main_root(), fam, trunk, args.edit)
     if args.write:
         if fam.reads_meta:
             die(f"the roadmap is {fam.meta_name}'s: its view is written there")
@@ -11175,15 +11180,7 @@ def cmd_roadmap(root: Path, args) -> int:
     text = fam.text if fam.reads_meta else snap.show(ROADMAP)
     if fam.reads_meta:
         print(f"{ROADMAP} is {fam.meta_name}'s, read from its trunk")
-    problems: list[str] = []
-    parsed = parse_roadmap(text, problems)
-    problems += ref_problems(parsed, parse_no_phase(text, problems))
-    problems += roadmap_label_problems(text, fam.glossary, fam.glossary_name)
-    have = set(snap.ls("docs/"))
-    problems += [f"{iid} touches {page}, which {fam.page_home(iid, trunk)} has no page for: re-point it"
-                 for iid, page in sorted(dead_touches(text, have, fam))]
-    problems += [f"product {pr}: its Owner: names {o}, which `jig repos` doesn't know"
-                 for pr, o in fam.unknown_owners()]
+    problems = roadmap_problems(text, fam, set(snap.ls("docs/")), trunk)
     for x in problems:
         print(f"{ROADMAP} {x}")
     for name in fam.unreachable:
@@ -11219,6 +11216,21 @@ def cmd_roadmap(root: Path, args) -> int:
     return 1 if problems else 0
 
 
+def roadmap_problems(text: str, fam: "Family", have: set[str], trunk: str) -> list[str]:
+    """Each thing in roadmap TEXT jig refuses or reports, by line: its shape, its refs, its
+    labels, a touched page HAVE (or the owning repo's trunk) lacks, an owner jig doesn't know.
+    `jig roadmap` prints them; `--edit` refuses a draft holding any."""
+    problems: list[str] = []
+    parsed = parse_roadmap(text, problems)
+    problems += ref_problems(parsed, parse_no_phase(text, problems))
+    problems += roadmap_label_problems(text, fam.glossary, fam.glossary_name)
+    problems += [f"{iid} touches {page}, which {fam.page_home(iid, trunk)} has no page for: re-point it"
+                 for iid, page in sorted(dead_touches(text, have, fam))]
+    problems += [f"product {pr}: its Owner: names {o}, which `jig repos` doesn't know"
+                 for pr, o in fam.unknown_owners()]
+    return problems
+
+
 def roadmap_by_label(fam: "Family", phases: list[dict], items: list[dict], label: str) -> int:
     """`jig roadmap --label <term>`: every scope and item carrying LABEL, across every product,
     each with its state, owning repo and specs, headed by the term's owner when it has one:
@@ -11241,6 +11253,318 @@ def roadmap_by_label(fam: "Family", phases: list[dict], items: list[dict], label
         known = fam.glossary is not None and not label_problems([label], fam.glossary, "")
         print(f"no scope or item carries the label {label}"
               + ("" if known else f": {fam.glossary_name} has no term for it"))
+    return 0
+
+
+# ------------------------------------------------------------- the edit command
+
+def draft_path() -> Path:
+    """The draft `jig roadmap --draft` writes: under the git common dir, outside every tree, so
+    no second copy of the roadmap is ever committed."""
+    return Path(git("rev-parse", "--path-format=absolute", "--git-common-dir")) / "jig" / "roadmap-draft.md"
+
+
+def roadmap_sections(text: str) -> list[tuple[str, int, str]]:
+    """(heading, line, text) for each `## ` section of TEXT, fences skipped, the lines before
+    the first as heading "": the units an edit is judged and written in."""
+    out, fence = [("", 1, [])], False
+    for n, line in enumerate(text.splitlines(keepends=True), 1):
+        if line.lstrip().startswith("```"):
+            fence = not fence
+        if not fence and (m := re.match(r"##\s+(.+?)\s*$", line)):
+            out.append((m.group(1), n, []))
+        out[-1][2].append(line)
+    return [(h, n, "".join(t)) for h, n, t in out]
+
+
+def heading_product(heading: str, owners: dict[str, str]) -> str:
+    """The product a roadmap heading, a phase's or a list's, belongs to; "" for the repo's own."""
+    if not heading or heading.strip().lower() == NO_PHASE.lower():
+        return ""
+    return product_of(heading.removesuffix(" " + NO_PHASE) if is_list_heading(heading) else heading, owners)
+
+
+def may_change(fam: "Family", heading: str) -> bool:
+    """Whether this repo may change the section under HEADING: a pararepo its products', the
+    metarepo its own and the products it owns as this repo, a stand-alone repo all of it."""
+    if fam.kind == "own":
+        return True
+    if fam.kind == "para" and not heading:
+        return False
+    return fam.ours(heading_product(heading, fam.owners))
+
+
+def heading_owner(fam: "Family", heading: str) -> str:
+    owner = fam.owners.get(heading_product(heading, fam.owners), THIS_REPO)
+    return (fam.meta_name or THIS_REPO) if owner == THIS_REPO else owner
+
+
+def roadmap_draft(root: Path, fam: "Family", trunk: str) -> int:
+    """`jig roadmap --draft`: the roadmap this repo plans from, live, as a draft to edit."""
+    if fam.kind == "para" and fam.meta_loc is None:
+        die(f"the roadmap is {fam.meta_name}'s, which can't be reached here (`jig repos`)")
+    base = roadmap_base(root, fam, trunk)
+    if not base:
+        die(f"no {ROADMAP} on {trunk}: this repo keeps no roadmap")
+    path = draft_path()
+    if path.exists() and path.read_text() != base:
+        die(f"{path} is a draft that differs from the roadmap: `jig roadmap --edit` it, or delete it")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(base)
+    print(f"wrote {path}")
+    heads = [h for h, _, _ in roadmap_sections(base) if h and may_change(fam, h)]
+    if fam.kind != "own":
+        # A product's list may be added though its heading isn't there yet.
+        mine = sorted({heading_product(h, fam.owners) for h in heads} - {""})
+        if fam.kind == "meta":
+            mine += [p for p, o in sorted(fam.owners.items()) if o == THIS_REPO and p not in mine]
+        if fam.kind == "para":
+            mine += [p for p in sorted(fam.owners) if p not in mine and fam.ours(p)]
+        heads += [f"{p} {NO_PHASE}" for p in mine if f"{p} {NO_PHASE}" not in heads]
+    print("this repo may change: " + ("all of it" if fam.kind == "own" else ", ".join(f"## {h}" for h in heads)
+                                      + (f", and its own phases and ## {NO_PHASE}" if fam.kind == "meta" else "")))
+    print(f"edit it, then `jig roadmap --edit`")
+    return 0
+
+
+def changed_ids(old: str, new: str) -> list[str]:
+    """`added <id>`, `changed <id>`, `removed <id>` for each scope and item NEW differs from OLD in."""
+    def ids(text: str) -> dict[str, str]:
+        out = {sid: what for p in parse_roadmap(text) for sid, what in p["scopes"]}
+        out.update({i["sid"]: i["text"] for i in parse_no_phase(text)})
+        return out
+    a, b = ids(old), ids(new)
+    return ([f"added {i}" for i in b if i not in a] + [f"changed {i}" for i in b if i in a and a[i] != b[i]]
+            + [f"removed {i}" for i in a if i not in b])
+
+
+def unknown_labels(text: str, fam: "Family", keep) -> dict[str, list[str]]:
+    """{label: [scope ids]} for each label TEXT's sections KEEP accepts name that the glossary
+    lacks, by label_problems' check."""
+    out: dict[str, list[str]] = {}
+    labelled = [(sid, labels) for p in parse_roadmap(text) if keep(p["name"])
+                for sid, (labels, _) in p["labels_of"].items()]
+    labelled += [(i["sid"], i["labels"]) for i in parse_no_phase(text) if i["labels"] and keep(i["list"])]
+    for sid, labels in labelled:
+        for l in labels or []:
+            if label_problems([l], fam.glossary, ""):
+                out.setdefault(l, []).append(sid)
+    return out
+
+
+def drop_labels(text: str, drop: set[str]) -> str:
+    """TEXT with each label in DROP left off the scope and item lines naming it; a line left
+    naming none loses its `(labels …)`."""
+    out = []
+    for line in text.splitlines(keepends=True):
+        m = SCOPE_LINE.fullmatch(line.rstrip("\n"))
+        body, after, needed, labels = split_waits((m.group(2) or "").strip()) if m else ("", None, None, None)
+        if not m or not labels or not set(labels) & drop:
+            out.append(line)
+            continue
+        what, pages = split_touches(body)
+        kept = [l for l in labels if l not in drop]
+        tail = (f" (labels {', '.join(kept)})" if kept else "") + (f" (after {', '.join(after)})" if after else "") \
+            + (f" (needed by {', '.join(needed)})" if needed else "") + (f" (touches {', '.join(pages)})" if pages else "")
+        out.append(f"- `{m.group(1)}`: {what}{tail}" + ("\n" if line.endswith("\n") else ""))
+    return "".join(out)
+
+
+def splice_sections(text: str, new: str, keep) -> str:
+    """TEXT with every section whose heading KEEP accepts replaced, whole, by NEW's: removed when
+    NEW lacks it, and NEW's own added after the last of them, or at the end."""
+    mine = [(h, t) for h, _, t in roadmap_sections(new) if h and keep(h)]
+    out, placed, last = [], set(), -1
+    for h, _, t in roadmap_sections(text):
+        if h and keep(h):
+            got = next((nt for nh, nt in mine if nh == h), None)
+            if got is not None:
+                out.append(got)
+                placed.add(h)
+            last = len(out) - 1 if got is not None else len(out)
+            continue
+        out.append(t)
+    extra = [t for h, t in mine if h not in placed]
+    at = last + 1 if last >= 0 else len(out)
+    out[at:at] = [x if x.endswith("\n") else x + "\n" for x in extra]
+    joined = [x if x.endswith("\n") or i == len(out) - 1 else x + "\n" for i, x in enumerate(out)]
+    return "".join(joined)
+
+
+def plumb_commit(loc: Path, branch: str, path: str, text: str, message: str) -> str:
+    """Commit TEXT as PATH on BRANCH in the checkout at LOC without moving any checkout: a
+    temporary index, `commit-tree`, and `update-ref` from the old tip, so a tip moved meanwhile
+    refuses rather than being lost."""
+    tip = git("rev-parse", f"refs/heads/{branch}", cwd=str(loc), check=True)
+    blob = subprocess.run(["git", "hash-object", "-w", "--stdin"], input=text, text=True, capture_output=True,
+                          cwd=str(loc), check=True).stdout.strip()
+    with tempfile.TemporaryDirectory() as d:
+        env = {**os.environ, "GIT_INDEX_FILE": str(Path(d) / "index")}
+        run = lambda *a: subprocess.run(["git", *a], cwd=str(loc), env=env, check=True,
+                                        capture_output=True, text=True).stdout.strip()
+        run("read-tree", tip)
+        run("update-index", "--add", "--cacheinfo", f"100644,{blob},{path}")
+        tree = run("write-tree")
+    new = git("commit-tree", tree, "-p", tip, "-m", message, cwd=str(loc), check=True)
+    git("update-ref", f"refs/heads/{branch}", new, tip, cwd=str(loc), check=True)
+    return new
+
+
+BUFFER_HEAD = ("# BUFFER\n\n| Id | Metarepo claim (`<meta>/<path> § section`, at the pin) | This repo now "
+               "(source, commit) | Decided (who, date) | State |\n|---|---|---|---|---|\n")
+
+
+def open_roadmap_proposal(root: Path, meta: str, loc: Path) -> tuple[Path | None, str]:
+    """(spec, branch) of this repo's open roadmap proposal: an unmerged
+    `propose/<repo>-roadmap-<date>` branch a `roadmap-<date>.md` spec here cites; (None, "")
+    for none. One at a time, so the owner merges a pararepo's roadmap edits in one step."""
+    trunk = Board.trunk_name(loc)
+    spec, branch = None, ""
+    for f in sorted((root / SPECS).glob("roadmap-*.md")) if (root / SPECS).is_dir() else []:
+        for m in PROPOSAL.finditer(f.read_text()):
+            b = m.group("branch") or ""
+            if m.group("meta") == meta and b.startswith(f"propose/{root.name}-roadmap-") and \
+                    git("rev-list", "-1", f"{trunk}..{b}", cwd=str(loc)):
+                spec, branch = f, b
+    return spec, branch
+
+
+def roadmap_base(root: Path, fam: "Family", trunk: str) -> str:
+    """The roadmap a draft starts from and an edit is judged against: trunk's, or in a pararepo
+    the metarepo's trunk with this repo's sections as its open roadmap proposal has them, so a
+    second edit never drops what the first wrote there."""
+    if fam.kind != "para":
+        return at_rev(trunk, ROADMAP)
+    _, branch = open_roadmap_proposal(root, fam.meta_name, fam.meta_loc)
+    on = git("show", f"refs/heads/{branch}:{ROADMAP}", cwd=str(fam.meta_loc)) if branch else ""
+    return splice_sections(fam.text, on, lambda h: bool(h) and may_change(fam, h)) if on else fam.text
+
+
+def roadmap_proposal(root: Path, para: dict, loc: Path, row: list[str]) -> tuple[str, Path]:
+    """This repo's open roadmap proposal, the branch and its spec, ROW added to both: the open
+    one, or a new one, opened as `jig propose` opens one. Its spec lists roadmap rows only, so a
+    buffer proposal, which leaves out rows a proposal carries, never sweeps them."""
+    meta = para["meta"]
+    spec, branch = open_roadmap_proposal(root, meta, loc)
+    if spec is None:
+        slug = f"roadmap-{time.strftime('%Y-%m-%d')}"
+        n = 1
+        while (root / SPECS / f"{slug}.md").exists() or \
+                git("rev-parse", "-q", "--verify", f"refs/heads/propose/{root.name}-{slug}", cwd=str(loc)):
+            n += 1
+            slug = f"roadmap-{time.strftime('%Y-%m-%d')}-{n}"
+        branch, spec = open_proposal(para, loc, slug), root / SPECS / f"{slug}.md"
+    ledger = root / BUFFER
+    text = ledger.read_text() if ledger.exists() else BUFFER_HEAD
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    ledger.write_text(text.rstrip("\n") + "\n| " + " | ".join(row) + " |\n")
+    rows = {r[0]: r for r in buffer_rows(ledger.read_text())}
+    ids = (listed_rows(spec.read_text()) if spec.exists() else []) + [row[0]]
+    head = [l for l in ledger.read_text().splitlines() if l.lstrip().startswith("|") and not buffer_rows(l)]
+    table = "\n".join(head + ["| " + " | ".join(rows[i]) + " |" for i in ids if i in rows])
+    spec.parent.mkdir(parents=True, exist_ok=True)
+    spec.write_text(
+        f"# Roadmap proposal: {spec.stem}\n\n"
+        f"Each row is a change to this repo's sections of {meta}'s {ROADMAP}, written on the branch "
+        f"below by `jig roadmap --edit`. {meta} merges it at the next sync its owner calls; this repo's "
+        f"sections there are replaced whole, and no other section changes.\n\n"
+        f"## Buffer rows\n" + "".join(f"- {i}\n" for i in ids) + f"\n{table}\n\n"
+        f"## Decisions\n- meta: {meta} proposal {branch}\n")
+    return branch, spec
+
+
+def stage_label(fam: "Family", label: str, sids: list[str], repo: str) -> Path:
+    """A new label term staged for the metarepo's hubnode, whose glossary it is: the term, the
+    scopes it labels, and the repo asking. A second edit naming it adds its scopes."""
+    path = fam.meta_loc / STAGING / f"label-{label_fold(label)}.md"
+    have = path.read_text().split("\n## Labels\n", 1)[1].split() if path.exists() and "\n## Labels\n" in path.read_text() else []
+    named = sorted(set(have) | {f"`{s}`" for s in sids}) if have else [f"`{s}`" for s in sids]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        f"---\nstaged: true\ntarget: {fam.meta_name}\nkind: doc\nchange: update\ndestination: {GLOSSARY}\n"
+        f"source: {repo}'s hubnode, {time.strftime('%Y-%m-%d')}\nstatus: staged\n---\n"
+        f"# Label: {label}\n\n{repo} labels its roadmap work `{label}`, a term {GLOSSARY} doesn't have. "
+        f"Add it as a `## ` term, with its `Owner:` line when a repo owns it; `jig roadmap --edit` in "
+        f"{repo} then adds the label.\n\n## Labels\n" + "\n".join(sorted(set(named))) + "\n")
+    return path
+
+
+def roadmap_edit(root: Path, fam: "Family", trunk: str, file: str) -> int:
+    """`jig roadmap --edit [<file>]`: check a draft against the roadmap read again, live, and
+    write it where this repo's roadmap changes land: trunk's checkout, or a pararepo's open
+    roadmap proposal. Nothing is written while anything is refused."""
+    draft = Path(file) if file else draft_path()
+    if not draft.is_file():
+        die(f"no draft at {draft}: `jig roadmap --draft` writes one")
+    new = draft.read_text()
+    if fam.kind == "para" and fam.meta_loc is None:
+        die(f"the roadmap is {fam.meta_name}'s, which can't be reached here (`jig repos`): nothing written")
+    trunk_text = fam.text if fam.kind == "para" else at_rev(trunk, ROADMAP)
+    base = roadmap_base(root, fam, trunk)
+    if not base:
+        die(f"no {ROADMAP} on {trunk}: this repo keeps no roadmap")
+    if fam.kind != "para" and (git("branch", "--show-current") != trunk or not is_main_worktree(root)):
+        die(f"edit the roadmap in the {trunk} checkout: R5 keeps {ROADMAP} on {trunk}")
+    if fam.kind != "para" and (root / ROADMAP).exists() and (root / ROADMAP).read_text() != base:
+        die(f"{ROADMAP} in the {trunk} checkout differs from {trunk}'s: commit or discard it first, "
+            "so nothing uncommitted is overwritten")
+    old_s = {h: (n, t) for h, n, t in roadmap_sections(base)}
+    new_s = {h: (n, t) for h, n, t in roadmap_sections(new)}
+    out = []
+    for h in list(old_s) + [h for h in new_s if h not in old_s]:
+        if old_s.get(h, (0, None))[1] == new_s.get(h, (0, None))[1] or may_change(fam, h):
+            continue
+        n = new_s[h][0] if h in new_s else old_s[h][0]
+        name = f"## {h}" if h else "the lines above the first heading"
+        if h not in old_s and fam.kind == "para":
+            out.append(f"line {n}: {name} names no product this repo owns: a new product is "
+                       f"{fam.meta_name}'s hubnode's, its glossary term and Owner: line first")
+        else:
+            out.append(f"line {n}: {name} is {heading_owner(fam, h)}'s: this repo changes only its own sections")
+    keep = lambda h: bool(h) and may_change(fam, h) and fam.kind == "para"
+    staged = unknown_labels(new, fam, lambda h: may_change(fam, h)) if fam.kind == "para" else {}
+    result = splice_sections(trunk_text, drop_labels(new, set(staged)), keep) if fam.kind == "para" else new
+    have = set(Snapshot(trunk).ls("docs/"))
+    out += roadmap_problems(result, fam, have, trunk)
+    dropped = dropped_scopes(trunk_text, roadmap_scopes(result), Snapshot(trunk), fam)
+    out += [f"{ROADMAP} drops {', '.join(gone)}, which {f} still takes: re-point its Scope: line first"
+            for f, gone in scope_holders(dropped, [(f, at_rev(trunk, f)) for f in Snapshot(trunk).ls(SPECS)
+                                                   + Snapshot(trunk).ls(HANDOFFS)])]
+    out += others_holding(dropped, fam)
+    if out:
+        for x in out:
+            print(f"{draft}: {x}" if x.startswith("line ") else x)
+        print("nothing written")
+        return 1
+    if fam.kind != "para":
+        (root / ROADMAP).write_text(result)
+        draft.unlink()
+        print(f"wrote {ROADMAP}: commit it on {trunk} on the owner's yes")
+        return 0
+    para = load_para(trunk)
+    # What this edit changes, against what the open proposal already holds.
+    ids = changed_ids(base, splice_sections(base, drop_labels(new, set(staged)), keep))
+    if not ids and not staged:
+        draft.unlink()
+        print("no change: nothing written")
+        return 0
+    heads = sorted({h for h in set(old_s) | set(new_s) if keep(h)
+                    and old_s.get(h, (0, None))[1] != new_s.get(h, (0, None))[1]})
+    num = max([int(r[0][1:]) for r in buffer_rows((root / BUFFER).read_text() if (root / BUFFER).exists() else "")
+               if re.fullmatch(r"B\d+", r[0])] or [0]) + 1
+    if ids:
+        row = [f"B{num}", ", ".join(f"{fam.meta_name}/{ROADMAP} § {h}" for h in heads), "; ".join(ids),
+               f"hubnode, {time.strftime('%Y-%m-%d')}", "Open"]
+        branch, spec = roadmap_proposal(root, para, fam.meta_loc, row)
+        on = git("show", f"refs/heads/{branch}:{ROADMAP}", cwd=str(fam.meta_loc))
+        plumb_commit(fam.meta_loc, branch, ROADMAP, splice_sections(on, drop_labels(new, set(staged)), keep),
+                     f"roadmap: {root.name}: {'; '.join(ids)}")
+        print(f"wrote {branch} in {fam.meta_name}: {'; '.join(ids)}")
+        print(f"added {BUFFER} row B{num} and {spec.relative_to(root)}: commit them here")
+    for label, sids in sorted(staged.items()):
+        path = stage_label(fam, label, sids, root.name)
+        print(f"staged {path} for {fam.meta_name}: the label {label} is added once the term lands")
+    draft.unlink()
     return 0
 
 
@@ -11776,6 +12100,31 @@ def moving_in(para: dict, staged: bool) -> list[str]:
     return out
 
 
+def dropped_scopes(old: str, known: set[str], snap: Snapshot, fam: "Family") -> set[str]:
+    """The scopes and items roadmap OLD has and KNOWN lacks. A built list item stays, shown
+    done, until the owner's roadmap change removes it: its notes keep naming it, so dropping a
+    done one is no drop."""
+    built = {s["id"] for s in roadmap_list(snap, fam) if s["state"] == "done"}
+    return roadmap_scopes(old) - known - built
+
+
+def scope_holders(dropped: set[str], files: list[tuple[str, str]]) -> list[tuple[str, list[str]]]:
+    """(file, the DROPPED scopes it takes) for each spec or note of FILES, (path, text), taking any."""
+    return [(f, gone) for f, text in files
+            if takes_scopes(f) and (gone := [s for s in scopes_in(f, text) if s in dropped])]
+
+
+def others_holding(dropped: set[str], fam: "Family") -> list[str]:
+    """A refusal for each spec or note of a pararepo planning from this roadmap that takes a
+    DROPPED scope: it takes the scopes in its own specs and notes."""
+    out = []
+    for label, sn in fam.others:
+        for f, gone in scope_holders(dropped, [(f, sn.show(f)) for f in sn.ls(SPECS) + sn.ls(HANDOFFS)]):
+            out.append(f"{ROADMAP} drops {', '.join(gone)}, which {label}:{f} still takes: "
+                       f"{label} re-points its Scope: line first")
+    return out
+
+
 def roadmap_rules(board: "Board", branch: str, staged: bool, paths: list[str],
                   guarded: list[str]) -> list[str]:
     """Scopes a spec cites must be the roadmap's. On trunk the commit's own roadmap counts, so
@@ -11833,21 +12182,13 @@ def roadmap_rules(board: "Board", branch: str, staged: bool, paths: list[str],
                 if GLOSSARY in guarded else "")
         out += [f"{ROADMAP} {x}{hint}" for x in roadmap_label_problems(text, in_index(GLOSSARY, staged) or None)]
     if on_trunk and ROADMAP in guarded:
-        # A built list item stays, shown done, until the owner's roadmap change removes it:
-        # its notes keep naming it, so dropping a done one is no drop.
-        built = {s["id"] for s in roadmap_list(Snapshot(trunk), fam) if s["state"] == "done"}
-        dropped = roadmap_scopes(old) - known - built
-        for f in git("-c", "core.quotePath=false", "ls-files", "--", SPECS, HANDOFFS).splitlines():
-            if takes_scopes(f) and (gone := [s for s in scopes_in(f, in_index(f, staged)) if s in dropped]):
-                named.add(f)
-                out.append(f"{ROADMAP} drops {', '.join(gone)}, which {f} still takes: re-point "
-                           f"the Scope: line in {f} in this commit")
-        # A pararepo planning from this roadmap takes its scopes in its own specs and notes.
-        for label, sn in fam.others:
-            for f in sn.ls(SPECS) + sn.ls(HANDOFFS):
-                if takes_scopes(f) and (gone := [s for s in scopes_in(f, sn.show(f)) if s in dropped]):
-                    out.append(f"{ROADMAP} drops {', '.join(gone)}, which {label}:{f} still takes: "
-                               f"{label} re-points its Scope: line first")
+        dropped = dropped_scopes(old, known, Snapshot(trunk), fam)
+        here = git("-c", "core.quotePath=false", "ls-files", "--", SPECS, HANDOFFS).splitlines()
+        for f, gone in scope_holders(dropped, [(f, in_index(f, staged)) for f in here]):
+            named.add(f)
+            out.append(f"{ROADMAP} drops {', '.join(gone)}, which {f} still takes: re-point "
+                       f"the Scope: line in {f} in this commit")
+        out += others_holding(dropped, fam)
         for name in fam.unreachable:
             print(f"jig: warning: {name} isn't reachable here (`jig repos`): a scope its specs take "
                   "may be dropped unseen", file=sys.stderr)
@@ -15884,6 +16225,10 @@ def main(argv: list[str] | None = None) -> int:
                    help="this chunk doesn't finish its spec: the roadmap keeps it taken")
     rm = sub.add_parser("roadmap", help="the roadmap's phases and scopes, and their states on trunk")
     rm.add_argument("--write", action="store_true", help=f"regenerate {ROADMAP_VIEW} in the trunk checkout")
+    rm.add_argument("--draft", action="store_true",
+                    help="write the roadmap this repo plans from to a draft outside the tree")
+    rm.add_argument("--edit", nargs="?", const="", metavar="FILE",
+                    help="check the draft (or FILE) and write it: trunk's checkout, or a pararepo's open proposal")
     rm.add_argument("--label", metavar="TERM",
                     help="only the scopes and items carrying this label, across every product")
     sub.add_parser("family", help="what a metarepo's family has let sit: staged files, proposals, "
