@@ -581,10 +581,13 @@ def check_rules(root: Path, board: Board, *, staged: bool) -> list[str]:
             out.append(f"R5 the roadmap is the owner's: {f} is edited on {trunk} only"
                        + (", or on a propose/ branch `jig propose` opened that isn't merged yet"
                           if meta is not None and f == ROADMAP else ""))
-    if meta is not None and GLOSSARY in paths and (branch == trunk or proposed_branch(branch, trunk)):
-        # A product's term and the phases it owns land in one merge (`jig move-in`): its
-        # headings are read by the commit's own glossary, as by the commit's own roadmap.
-        family(main_root(), trunk).owners = term_owners(in_index(GLOSSARY, staged))
+    if meta is not None and GLOSSARY in paths:
+        now = term_owners(in_index(GLOSSARY, staged))
+        if branch == trunk or proposed_branch(branch, trunk):
+            # A product's term and the phases it owns land in one merge (`jig move-in`): its
+            # headings are read by the commit's own glossary, as by the commit's own roadmap.
+            family(main_root(), trunk).owners = now
+        out += owner_dropped(trunk, staged, now, in_index(ROADMAP, staged) if ROADMAP in paths else at_rev(trunk, ROADMAP))
     out += roadmap_rules(board, branch, staged, paths, guarded)
     out += boundary_rules(trunk, branch, staged, paths, meta, board.data.get("not_docs") or [])
     out += page_form_rules(root, board, trunk, staged, guarded)
@@ -15510,6 +15513,20 @@ BUFFER_SEED = ("# BUFFER\n\n| Id | Metarepo claim (`<meta>/<path> § section`, a
                "(source, commit) | Decided (who, date) | State |\n|---|---|---|---|---|\n")
 
 
+def owner_dropped(trunk: str, staged: bool, now: dict[str, str], road: str) -> list[str]:
+    """A metarepo glossary change that takes a product's `Owner:` away while ROAD's headings
+    still name it: read by the commit's own glossary, those sections would turn the metarepo's own."""
+    out = []
+    heads = roadmap_headings(road)
+    for term in sorted(term_owners(at_rev(trunk, GLOSSARY))):
+        using = [h for h in heads if product_of(list_base(h), {term: ""}) and not product_of(list_base(h), now)]
+        if term not in now and using:
+            out.append(f"{GLOSSARY}: ## {term} loses its `Owner:` line, but {ROADMAP} still heads "
+                       f"{', '.join(f'## {h}' for h in using)} with it: keep its owner, or re-head those "
+                       "sections in this commit")
+    return out
+
+
 def log_with_line(text: str, group: str, line: str) -> str:
     """TEXT, a decision log, with LINE under ## Unreleased ### GROUP, the group made when it has none."""
     m = re.search(r"^## Unreleased[ \t]*\n", text, re.M)
@@ -15536,7 +15553,9 @@ def proposal_commit(loc: Path, branch: str, files: dict[str, str | None], subjec
     def run(*args: str, cwd: Path) -> subprocess.CompletedProcess:
         return subprocess.run(["git", *args], cwd=str(cwd), env=env, capture_output=True, text=True)
     try:
-        made = run("worktree", "add", "-q", str(wt), branch, cwd=loc)
+        # Hooks off for the checkout alone: a post-checkout setup.sh would run for a commit's
+        # sake. The commit below runs that repo's hooks as any commit there does.
+        made = run("-c", "core.hooksPath=/dev/null", "worktree", "add", "-q", str(wt), branch, cwd=loc)
         if made.returncode:
             return False, made.stderr
         for path, text in files.items():
@@ -15581,14 +15600,19 @@ def roadmap_headings(text: str) -> list[str]:
     return out
 
 
+def list_base(heading: str) -> str:
+    """A heading without the ` No phase` a product's list adds; `No phase` itself as it is."""
+    return heading[:-len(NO_PHASE)].rstrip() if is_list_heading(heading) and \
+        heading.strip().lower() != NO_PHASE.lower() else heading
+
+
 def move_in_map(text: str, product: str, owned: set[str]) -> dict[str, str]:
     """Each heading of a pararepo's roadmap to its heading in the metarepo's: under PRODUCT,
     unless its leading words are already a term OWNED (the glossary's for this repo)."""
     owners = {t: "me" for t in owned | {product}}
     out = {}
     for h in roadmap_headings(text):
-        base = h[:-len(NO_PHASE)].rstrip() if is_list_heading(h) and h.strip().lower() != NO_PHASE.lower() else h
-        out[h] = h if h.strip().lower() != NO_PHASE.lower() and product_of(base, owners) else f"{product} {h}"
+        out[h] = h if h.strip().lower() != NO_PHASE.lower() and product_of(list_base(h), owners) else f"{product} {h}"
     return out
 
 
@@ -15609,7 +15633,7 @@ def mapped_sections(text: str, hmap: dict[str, str]) -> str:
         parts = [re.sub(r"[^`\s,][^`,]*[^`\s,]|[^`\s,]", lambda r: map_ref(r.group(0), hmap), p, count=1)
                  for p in m.group(3).split(",")]
         return f"({m.group(1)}{m.group(2)}{','.join(parts)})"
-    out, fence, started = [], False, False
+    out, before, fence, started = [], [], False, False
     for line in text.splitlines():
         if line.lstrip().startswith("```"):
             fence = not fence
@@ -15618,8 +15642,18 @@ def mapped_sections(text: str, hmap: dict[str, str]) -> str:
             line = f"{m.group(1)}{hmap.get(m.group(2), m.group(2))}{m.group(3)}"
         elif not fence:
             line = waits.sub(refs, line)
-        if started:
-            out.append(line)
+        (out if started else before).append(line)
+    # The text above the first heading is kept too. Its `# ` title is the file's, and the
+    # metarepo's roadmap has its own; the rest becomes the first phase's note, the one place
+    # prose sits in a roadmap without reading as a scope or an item.
+    while before and (not before[0].strip() or re.match(r"#\s", before[0])):
+        before.pop(0)
+    if "".join(before).strip():
+        at = next((i for i, l in enumerate(out) if (m := re.match(r"##\s+(.+?)\s*$", l)) and not is_list_heading(m.group(1))), None)
+        if at is None:
+            die(f"{ROADMAP} has text above its first heading and no phase to keep it as a note: move it "
+                "into a section first", 2)
+        out[at + 1:at + 1] = [l for l in "\n".join(before).strip("\n").splitlines()] + [""]
     return "\n".join(out).strip("\n") + "\n"
 
 
@@ -15654,32 +15688,59 @@ def cmd_move_in(root: Path, args) -> int:
         die(f"can't reach {para['meta']}: run `jig repos add meta` in its checkout, then again", 2)
     if any(h.strip().lower() == UP_NEXT.lower() for h in roadmap_headings(own)):
         die(f"{ROADMAP} still has ## {UP_NEXT}: `jig update --apply` folds it into ## {NO_PHASE} first", 2)
-    if not args.product:
-        die("usage: jig move-in --product <Name> [--definition <text>] [--apply]", 2)
-    me, meta_name, product = name_in_family(loc), para["meta"], args.product.strip()
+    me, meta_name = name_in_family(loc), para["meta"]
     meta_trunk = Board.trunk_name(loc)
-    glossary = trunk_show(loc, GLOSSARY) or ""
+    branch = f"propose/{me_root.name}-{MOVE_IN}"
+    spec = root / SPECS / f"{MOVE_IN}.md"
+    # A withdrawn proposal's line no longer reads `proposal`, so it lists nothing here.
+    listed = spec.exists() and any(m.group("branch") == branch for m in PROPOSAL.finditer(spec.read_text()))
+    exists = bool(git("rev-parse", "-q", "--verify", f"refs/heads/{branch}", cwd=str(loc)))
+    merged = proposal_in(loc, branch, meta_trunk)
+    # Done only once the branch carries more than its opening, or the metarepo took it: a run
+    # stopped between opening the branch and its commit proposed nothing.
+    proposed = listed and (merged or (exists and not proposal_empty(loc, branch, meta_trunk)))
+    # Proposed, the product is the metarepo's to name, at its merge or on the branch before it:
+    # read where it now stands, never from the flag alone.
+    glossary = ((trunk_show(loc, GLOSSARY) if merged or not proposed else git("show", f"{branch}:{GLOSSARY}", cwd=str(loc)))
+                or "")
     owners = term_owners(glossary)
-    owner = next((o for t, o in owners.items() if t.casefold() == product.casefold()), None)
-    named = any(term_text(n).casefold() == product.casefold() for n, _ in page_sections(glossary)[1:])
-    if owner == THIS_REPO:
-        die(f"{product} is {meta_name}'s own term (its glossary's `Owner: this repo.`): name another product", 2)
-    if owner is not None and not (repo_path(owner) is not None and repo_path(owner).resolve() == me_root.resolve()):
-        die(f"{product} is {owner}'s product in {meta_name}'s {GLOSSARY}: name this repo's own", 2)
-    if owner is None and named:
-        die(f"{meta_name}'s {GLOSSARY} has ## {product} with no `Owner:` line: its hubnode names the owner first", 2)
-    carries = owner is None
     mine = {t for t, o in owners.items() if o != THIS_REPO and (p := repo_path(o)) is not None
             and p.resolve() == me_root.resolve()}
+    if proposed:
+        kept = {t for t in mine if any(product_of(list_base(h), {t: me}) for h in roadmap_headings(own))}
+        named_now = sorted(mine - kept)
+        want = (args.product or "").strip()
+        hit = [t for t in named_now if t.casefold() == want.casefold()]
+        if hit:
+            product = hit[0]
+        elif len(named_now) == 1:
+            product = named_now[0]
+            if want:
+                print(f"jig: note: {meta_name} names the product {product} now, not {want}: moving in as {product}",
+                      file=sys.stderr)
+        elif not named_now:
+            die(f"{meta_name}'s {GLOSSARY}{'' if merged else f' on {branch}'} names no product of {me}: "
+                "its hubnode decides the term at the proposal's merge", 2)
+        else:
+            die(f"{meta_name} names {', '.join(named_now)} as {me}'s: say which, --product <Name>", 2)
+        carries = False
+    else:
+        if not args.product:
+            die("usage: jig move-in --product <Name> [--definition <text>] [--apply]", 2)
+        product = args.product.strip()
+        owner = next((o for t, o in owners.items() if t.casefold() == product.casefold()), None)
+        named = any(term_text(n).casefold() == product.casefold() for n, _ in page_sections(glossary)[1:])
+        if owner == THIS_REPO:
+            die(f"{product} is {meta_name}'s own term (its glossary's `Owner: this repo.`): name another product", 2)
+        if owner is not None and not (repo_path(owner) is not None and repo_path(owner).resolve() == me_root.resolve()):
+            die(f"{product} is {owner}'s product in {meta_name}'s {GLOSSARY}: name this repo's own", 2)
+        if owner is None and named:
+            die(f"{meta_name}'s {GLOSSARY} has ## {product} with no `Owner:` line: its hubnode names the owner first", 2)
+        carries = owner is None
     hmap = move_in_map(own, product, mine)
     sid_map = {s: map_ref(s, hmap) for s in roadmap_scopes(own)}
     meta_road = trunk_show(loc, ROADMAP) or ""
     taken = [h for h in hmap.values() if h in roadmap_headings(meta_road)]
-    branch = f"propose/{me_root.name}-{MOVE_IN}"
-    spec = root / SPECS / f"{MOVE_IN}.md"
-    proposed = spec.exists() and any(m.group("branch") == branch for m in PROPOSAL.finditer(spec.read_text()))
-    exists = bool(git("rev-parse", "-q", "--verify", f"refs/heads/{branch}", cwd=str(loc)))
-    merged = exists and proposal_in(loc, branch, meta_trunk)
     staged_out = not in_index(ROADMAP, True)
     print(f"jig move-in: {me}'s roadmap into {meta_name}'s, as {product}")
     for old, new in hmap.items():
@@ -15723,8 +15784,16 @@ def cmd_move_in(root: Path, args) -> int:
                 "a heading both have is no move; rename the phase here first", 2)
         if carries and not (args.definition or "").strip():
             die(f"{meta_name} has no {product} term: give its definition, --definition \"<one sentence>\"", 2)
+        if not (trunk_show(loc, f"{DIR}/jig.py") or "").count("def cmd_move_in("):
+            # Older, its hook reads product headings by trunk's glossary alone, so the term and
+            # the phases it owns could never merge together there.
+            die(f"{meta_name}'s jig on its {meta_trunk} predates `jig move-in`: run /jig:update in {meta_name} first", 2)
+        if exists and not proposal_empty(loc, branch, meta_trunk):
+            die(f"{branch} already exists in {meta_name}, with a change on it: its hubnode decides it first", 2)
         if exists:
-            die(f"{branch} already exists in {meta_name}", 2)
+            drop_proposal(loc, branch)   # opened by a run stopped before its commit: nothing on it
+        if spec.exists():
+            spec.unlink()
         return move_in_propose(root, para, loc, product, me, own, hmap, carries, (args.definition or "").strip())
     if not merged or staged_out:
         print("Nothing to apply: the next step waits on a yes.")
@@ -15756,30 +15825,46 @@ def move_in_propose(root: Path, para: dict, loc: Path, product: str, me: str, ow
     ledger = root / BUFFER
     before = ledger.read_text() if ledger.exists() else None
     text = before or BUFFER_SEED
+    claim = f"{para['meta']}/{ROADMAP} § {product}: none yet"
+    # A run stopped part way left its row Open: it is this one, never a second.
+    again = next((r[0] for r in buffer_rows(text) if r[1] == claim and r[-1] == "Open"), None)
     nums = [int(r[0][1:]) for r in buffer_rows(text) if re.fullmatch(r"B\d+", r[0])]
-    rid = f"B{max(nums, default=0) + 1}"
-    row = (f"| {rid} | {para['meta']}/{ROADMAP} § {product}: none yet | its phases and list, moving in | "
-           f"owner, {date.today().isoformat()} | Open |\n")
-    ledger.parent.mkdir(parents=True, exist_ok=True)
-    ledger.write_text(text.rstrip("\n") + "\n" + row)
-    made = buffer_proposal(root, para, loc, MOVE_IN, only={rid})
-    spec, branch = made
-    meta_road = trunk_show(loc, ROADMAP) or "# Roadmap\n"
-    files: dict[str, str | None] = {ROADMAP: meta_road.rstrip("\n") + "\n\n" + mapped_sections(own, hmap)}
-    if carries:
-        files[GLOSSARY] = ((trunk_show(loc, GLOSSARY) or "# Glossary\n").rstrip("\n")
-                           + f"\n\n## {product}\n\n{definition}\n\nOwner: `{me}`.\n")
-        files[LOG] = log_with_line(trunk_show(loc, LOG) or LOG_SEED, "Added",
-                                   f"- {GLOSSARY} § {product}: {me}'s product, its plan moving in.")
-    subject = f"{'GLOSSARY' if carries else 'ROADMAP'}: {product} moves in from {me}"
-    ok, out = proposal_commit(loc, branch, files, subject)
-    if not ok:
-        drop_proposal(loc, branch)
-        spec.unlink()
+    rid = again or f"B{max(nums, default=0) + 1}"
+    if not again:
+        ledger.parent.mkdir(parents=True, exist_ok=True)
+        ledger.write_text(text.rstrip("\n") + "\n" + f"| {rid} | {claim} | its phases and list, moving in | "
+                          f"owner, {date.today().isoformat()} | Open |\n")
+    spec, branch = root / SPECS / f"{MOVE_IN}.md", ""
+
+    def undo() -> None:
+        if branch:
+            drop_proposal(loc, branch)
+        spec.unlink(missing_ok=True)
         if before is None:
-            ledger.unlink()
+            ledger.unlink(missing_ok=True)
         else:
             ledger.write_text(before)
+    try:
+        made = buffer_proposal(root, para, loc, MOVE_IN, only={rid})
+        if made is None:
+            undo()
+            die(f"{rid} in {BUFFER} is already proposed as it stands: `jig propose --withdraw` its proposal first", 2)
+        spec, branch = made
+        meta_road = trunk_show(loc, ROADMAP) or "# Roadmap\n"
+        files: dict[str, str | None] = {ROADMAP: meta_road.rstrip("\n") + "\n\n" + mapped_sections(own, hmap)}
+        if carries:
+            files[GLOSSARY] = ((trunk_show(loc, GLOSSARY) or "# Glossary\n").rstrip("\n")
+                               + f"\n\n## {product}\n\n{definition}\n\nOwner: `{me}`.\n")
+            files[LOG] = log_with_line(trunk_show(loc, LOG) or LOG_SEED, "Added",
+                                       f"- {GLOSSARY} § {product}: {me}'s product, its plan moving in.")
+        subject = f"{'GLOSSARY' if carries else 'ROADMAP'}: {product} moves in from {me}"
+        ok, out = proposal_commit(loc, branch, files, subject)
+    except BaseException:
+        # Stopped part way (a crash, Ctrl-C): nothing proposed, so nothing left on either side.
+        undo()
+        raise
+    if not ok:
+        undo()
         die(f"{para['meta']}'s hook refused the proposal's commit, so nothing was proposed:\n{out}", 1)
     git("add", "--", str(ledger), str(spec), check=True)
     print(f"made {branch} in {para['meta']}: {', '.join(f'## {h}' for h in hmap.values())}"

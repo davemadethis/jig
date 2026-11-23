@@ -9998,10 +9998,16 @@ expect_pass sh -c "test \"\$(git -C '$MM' rev-parse main)\" = '$mhead' && test -
 git commit -qm "specs: move-in" >/dev/null 2>&1
 msg="movein: before M merges the proposal, step 2 waits on M's owner"
 expect_pass sh -c "$J move-in --product Delta | grep -q '^2. roadmap leaves: waiting on M'"
-( cd "$MM" && git switch -q propose/pd-move-in && sed -i.bak 's/^- `y`: the y/- `y2`: the y/' .jig/roadmap.md && rm .jig/roadmap.md.bak \
-  && git add -A && git commit -qm "ROADMAP: y is y2" && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-edit propose/pd-move-in )
-msg="movein: M merges the proposal in one merge, Delta No phase/u's docs/p.md read as pd's page by the merge's own glossary, and jig roadmap in M lists Delta's sections"
-expect_pass sh -c "cd '$MM' && git log -1 --format=%P | grep -q ' ' && test ! -e docs/p.md && grep -qx 'Owner: \`pd\`.' docs/glossary.md && $J roadmap | grep -q '^Delta alpha '"
+# M takes the proposal as a job, renaming y to y2 on it; jig merge deletes the branch.
+( cd "$MM" && $J open mj --branch propose/pd-move-in --owns docs/glossary.md >/dev/null && git add -A && git commit -qm "TOOL: open mj" \
+  && cd .git/jig/worktrees/propose/pd-move-in && sed -i.bak 's/^- `y`: the y/- `y2`: the y/' .jig/roadmap.md && rm .jig/roadmap.md.bak \
+  && git add -A && git commit -qm "ROADMAP: y is y2" && $J reviewed >/dev/null && $J handoff >/dev/null 2>&1 && pcfold \
+  && git add -A && git commit -qm "TOOL: note mj" && cd "$MM" && gated mj && $J merge mj >/dev/null ) >/dev/null 2>&1
+msg="movein: M's job merges the proposal in one merge, its branch deleted, Delta No phase/u's docs/p.md read as pd's page by the merge's own glossary"
+expect_pass sh -c "cd '$MM' && git log -1 --format=%P | grep -q ' ' && ! git rev-parse -q --verify refs/heads/propose/pd-move-in && test ! -e docs/p.md \
+  && grep -qx 'Owner: \`pd\`.' docs/glossary.md && $J roadmap | grep -q '^Delta alpha '"
+msg="movein: with the branch deleted by that merge, step 2 is next"
+expect_pass sh -c "$J move-in --product Delta | grep -q '^2. roadmap leaves: next'"
 msg="movein: after the merge, --apply stages the removal and the Scope: lines, naming alpha/y and the spec that takes it"
 out=$($J move-in --product Delta --apply 2>&1); rc=$?
 expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q 'alpha/y → Delta alpha/y .*sy.md' && git diff --cached --name-status | grep -q '^D	.jig/roadmap.md' \
@@ -10015,6 +10021,22 @@ sed -i.bak 's|^Scope: alpha/y$|Scope: Delta alpha/y2|' .jig/specs/sy.md && rm .j
 out=$(git commit -qm "move in" 2>&1); rc=$?; expect_pass test $rc = 0; [ $rc = 0 ] || echo "$out"
 msg="movein: then jig move-in says pd has moved in, and rig in pd offers Delta alpha/…, read from M"
 expect_pass sh -c "$J move-in | grep -q 'pd has moved in' && $J rig | grep -q 'Delta alpha/'"
+msg="movein: in M, a glossary change dropping Delta's Owner: while ## Delta alpha still heads the roadmap is refused"
+out=$(cd "$MM" && git switch -q -c noowner && sed -i.bak '/^Owner: `pd`.$/d' docs/glossary.md && rm docs/glossary.md.bak && git add -A && git commit -qm "GLOSSARY: no owner" 2>&1); rc=$?
+(cd "$MM" && git reset -q --hard && git switch -q main && git branch -q -D noowner)
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '## Delta loses its .Owner:. line, but .jig/roadmap.md still heads ## Delta alpha'" "$out"
+# The product renamed at the merge: step 2 reads the name M gave it; the text above the first heading rides along.
+mpara pr '# Roadmap\n\nThe plan for rex.\n\n## alpha\nScopes:\n- `r`: the r\n'
+mspec sr alpha/r && mplant "sr"
+$J move-in --product Rex --definition "The rex." --apply >/dev/null 2>&1 && git commit -qm "specs: move-in" >/dev/null 2>&1
+msg="movein: the text above pr's first heading is kept, as ## Rex alpha's note, its # title left to M's roadmap"
+expect_pass sh -c "git -C '$MM' show propose/pr-move-in:.jig/roadmap.md | grep -A1 -x '## Rex alpha' | grep -qx 'The plan for rex.' && test \"\$(git -C '$MM' show propose/pr-move-in:.jig/roadmap.md | grep -c '^# ')\" = 1"
+( cd "$MM" && git switch -q propose/pr-move-in && sed -i.bak -e 's/^## Rex$/## Rover/' docs/glossary.md && sed -i.bak 's/^## Rex alpha$/## Rover alpha/' .jig/roadmap.md \
+  && sed -i.bak 's/§ Rex:/§ Rover:/' .jig/decisions.md && rm -f docs/*.bak .jig/*.bak && git add -A && git commit -qm "GLOSSARY: Rex is Rover" && $J reviewed >/dev/null \
+  && git switch -q main && git merge -q --no-ff --no-edit propose/pr-move-in ) >/dev/null 2>&1
+msg="movein: renamed Rover at M's merge, step 2 with no --product re-points to Rover alpha/r, and --product Rex says the new name"
+out=$($J move-in --product Rex 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -q 'names the product Rover now, not Rex' && $J move-in --apply >/dev/null 2>&1 && grep -qx 'Scope: Rover alpha/r' .jig/specs/sr.md && git commit -qm 'move in' >/dev/null 2>&1" "$out"
 # A pararepo whose product M already names, with a heading under a term it owns.
 ( cd "$MM" && printf '\n## Foxy\n\nThe fox app.\n\nOwner: `pf`.\n\n## Gadget\n\nThe gadget.\n\nOwner: `pf`.\n' >> docs/glossary.md && mplant "Foxy and Gadget" )
 mpara pf '# Roadmap\n\n## beta\nScopes:\n- `b`: the b\n\n## Gadget beta\nScopes:\n- `g`: the g (after beta/b)\n'

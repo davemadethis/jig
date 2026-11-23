@@ -185,7 +185,7 @@ same path.
 
 Every command runs in throwaway repos with `JIG_CONFIG=<dir>/repos.json
 XDG_CONFIG_HOME=<dir>/config`. The fixture:
-- metarepo `M` (`E-`), whose `pararepos` lists `L` (`D-`) and `K` (`C-`);
+- metarepo `M` (`E-`), whose `pararepos` lists `L` and `K` (both `D-`, as every pararepo's log is);
 - all three are registered;
 - `M`'s glossary has `## Walyt` with `` Owner: `L` `` and `## Kite` with `` Owner: `K` ``;
 - a pararepo `pd` keeps its own roadmap: `## alpha` with `x` and `y (after alpha/x)`, and
