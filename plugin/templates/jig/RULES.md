@@ -933,6 +933,15 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
   roadmap changes, the hook refuses, by line, a ref naming nothing the roadmap has, a ref to
   itself (a scope naming its own phase too), and a ring, named once with all its members;
   `jig roadmap` reports the same.
+- **Types**: each phase is a *Prototype*, a *Pilot* or a *Production* phase, read from its name
+  after any product term, case folded: a Greek letter (`alpha`, `beta`, `gamma`, …) is
+  Prototype, `Pilot <letter>` is Pilot, and any other name (`Launch`) is Production. There is
+  no marker and no config. Within one product, and among the repo's own phases, types run
+  Prototype, then Pilot, then Production, in file order: on trunk, when the roadmap changes,
+  the hook refuses, by line, a phase whose type comes before the type of a phase above it in
+  the same product, and `jig roadmap` reports it. `jig roadmap` prints each phase's type beside
+  its state, and the view shows it in the phase line and each phase's heading
+  (`## alpha (Prototype, current)`).
 - **No phase**, the one reserved section that isn't a phase, and the one list for work with
   no phase, in no order, on the owner's word: work parked mid-build and work not started, one
   place for both. Each item reads `` - `<id>`: <what it is> ``, unindented, optionally ending
