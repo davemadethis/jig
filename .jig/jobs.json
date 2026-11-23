@@ -1,7 +1,7 @@
 {
   "readme-and-docs": {
     "spec": ".jig/specs/readme-and-docs.md",
-    "state": "claimed",
+    "state": "gated",
     "after": [],
     "owns": [
       "README.md",
