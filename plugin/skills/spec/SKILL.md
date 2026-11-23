@@ -26,7 +26,7 @@ grouped>.
 
 Before anything is built:
 
-1. Restate the intent in one sentence. If you can't, ask — one question, the hard one, not the obvious one.
+1. Restate the intent in one sentence. If you can't, ask — one question, the hard one, not the obvious one — but only one the owner's own words leave open, checked as `/jig:decision-cards` (Is it open?) says.
 2. Copy the spec template to `.jig/specs/<kebab-task-name>.md` (create `.jig/specs/` if it isn't there yet) and fill it: the repo's `.jig/specs/_template.md` if it has one, else `${CLAUDE_PLUGIN_ROOT}/templates/specs/_template.md`. "Done when" must be checkable by running something.
 3. If the repo has a roadmap, replace the template's comment under `Source:` with a
    `Scope:` line naming the scopes this task takes, as `<phase>/<scope>` from it
@@ -64,7 +64,10 @@ Before anything is built:
    task. A task that needs others is the owner's change to `.jig/config.json`.
 7. Show the spec. Proceed unless told otherwise.
 
-A file in `.jig/staging/` is context, not a decision: never cite it as decided.
+A file in `.jig/staging/` is context, not a decision: never cite it as decided. The owner's
+quoted words in it (`The owner, <date>: "…"`) are the exception: they are the owner's ruling,
+as in an inbox message (`.jig/RULES.md`, Inbox), within the limits `/jig:decision-cards`
+(Is it open?) sets, and the rest is context from the stager.
 
 Keep it short. A spec longer than the diff it describes is a smell.
 

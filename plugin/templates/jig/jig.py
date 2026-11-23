@@ -2943,7 +2943,7 @@ LINK_STOP = re.compile(r"[)\s]")
 
 
 def link_spans(line: str, blank_ends: bool = True) -> list[tuple[int, int, int, int, str]]:
-    """(start, end, text start, text end, target) of each Markdown link in LINE, in order: the
+    r"""(start, end, text start, text end, target) of each Markdown link in LINE, in order: the
     matches re.finditer(r"\[([^\]]*)\]\(([^)\s]*)\)") gives, or without BLANK_ENDS, the target
     `[^)]*`, found in one pass. That regex retries every `[` and rescans to the next `]` or `)`
     from each, so a minified line of brackets takes it minutes. A try from a `[` is settled by
@@ -11595,7 +11595,9 @@ def cmd_inbox(root: Path, args) -> int:
         print(f.read_text(errors="replace").rstrip("\n") + "\n")
         f.rename(free_name(read, f))
     print(f"{len(msgs)} message{'s' if len(msgs) != 1 else ''} read: quoted owner words with "
-          "their date are the owner's ruling; check the state each answers before acting on it")
+          "their date are the owner's ruling, except a fixed rule's word (merge, push, publish, "
+          "release, a roles or config yes), which only his reply in the hubnode's conversation "
+          "gives; check the state each answers before acting on it")
     return 0
 
 

@@ -32,15 +32,21 @@ is `open` (a next-step item whose `state` is `taken` is already under way, and o
 listed under Waiting on, and gets no judgment and no question):
 
 - **A staged file:** read it whole. Call it `ready` when a spec can be written from it as it
-  is, with no answer from the owner; `open` when it can't. An open file gets the questions the
-  owner must answer, each with two to four options, one recommended, from what the file and
-  the repo say. A ready file gets its recommendation: the spec it becomes, in one line.
+  is, with no answer from the owner; `open` when it can't. An open file gets only the questions
+  its owner's words leave open, checked as `/jig:decision-cards` (Is it open?) says: the quoted
+  words settle what they say, over any note in the file that asks it again, and a fact about
+  the repo is read, not asked. Each question has two to four options, one recommended, from
+  what the file and the repo say, and a `because`: the context line its block draws, quoting
+  the owner's sentence that leaves it open, or "the owner's words say nothing on this". A
+  file whose every question its owner's words answer is `ready`. A ready file gets its
+  recommendation: the spec it becomes, in one line. A judgment handed to a subagent gets this
+  paragraph and Is it open? in its brief.
 - **The next step** (the open one): a `## No phase` item naming pages, or a roadmap scope. Its
   question: take it now (a spec for it, whose `Scope:` line takes it, `No phase/<id>` for an
   item, so it reads done once built), or leave it where it is, with one recommended and why.
 
 Store each: `jig rig --store-put <path>` with a JSON object on stdin,
-`{"call": "ready"|"open", "about": "…", "context": "…", "questions": [{"ask": "…", "options": ["…"], "recommended": 0}], "recommend": "…"}`.
+`{"call": "ready"|"open", "about": "…", "context": "…", "questions": [{"ask": "…", "options": ["…"], "recommended": 0, "because": "…"}], "recommend": "…"}`.
 An item whose `judged` isn't null is replayed as stored: never judge it again in this run.
 Then `jig rig --json` once more: ready staged files now sit in its groups.
 
@@ -116,6 +122,11 @@ Nothing is ever dropped for it.
 
 - **An open file's answers:** append them to the staged file under `## Owner's answers`, dated,
   in the owner's words. The file changed, so the next run judges it again.
+- **Start on an open file with unanswered questions** (the owner says to write its spec
+  anyway): re-check each question as `/jig:decision-cards` (Is it open?) says. What the owner's
+  words answer goes under the spec's Decisions, in those words, quoted and dated. Each one still open is built as its recommended option,
+  with an `Interpreted:` line under the spec's Decisions naming it unanswered. Show the spec
+  before `resolve`, as `/jig:stage` says.
 - **Write a spec:** resolve the staged file as `/jig:stage` says (a request or story is
   interpreted into a spec, with the spec role where the hubnode's rules say), carrying
   `Source: <source> (staged as <file>)` for each staged file, a decisions file included. Its
