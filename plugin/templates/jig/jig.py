@@ -576,7 +576,7 @@ def check_rules(root: Path, board: Board, *, staged: bool) -> list[str]:
         # A pararepo's change to its products' sections reaches a metarepo only by its
         # `propose/` branch, merged on trunk on the owner's yes: the one other place it may be.
         if f in guarded and branch != trunk and not (f == ROADMAP and meta is not None
-                                                     and branch.startswith("propose/")):
+                                                     and proposed_branch(branch, trunk)):
             out.append(f"R5 the roadmap is the owner's: {f} is edited on {trunk} only"
                        + (", or on a pararepo's propose/ branch" if meta is not None and f == ROADMAP else ""))
     out += roadmap_rules(board, branch, staged, paths, guarded)
@@ -10138,13 +10138,15 @@ def split_after(what: str) -> tuple[str, list[str] | None]:
 
 
 def split_waits(what: str) -> tuple[str, list[str] | None, list[str] | None]:
-    """(text, after refs, needed-by refs): the trailing `(after …)` and `(needed by …)`, in
-    either order before any `(touches …)`, split off; None for one not written."""
-    m = TOUCHES.search(what)
-    head, tail = (what[:m.start()], what[m.start():]) if m else (what, "")
-    after = needed = None
+    """(text, after refs, needed-by refs): the trailing `(after …)`, `(needed by …)` and
+    `(touches …)`, in any order, split off, the `(touches …)` written back at the end of the
+    text, where its readers look; None for one not written. Peeled in a loop, so no order of
+    the three can hide a wait as plain text."""
+    head, after, needed, touches = what, None, None, None
     while True:
-        if after is None and (a := AFTER.search(head)):
+        if touches is None and (t := TOUCHES.search(head)):
+            touches, head = t.group(1), head[:t.start()]
+        elif after is None and (a := AFTER.search(head)):
             after, head = refs_of(a.group(1)), head[:a.start()]
         elif needed is None and (n := NEEDED.search(head)):
             needed, head = refs_of(n.group(1)), head[:n.start()]
@@ -10152,7 +10154,7 @@ def split_waits(what: str) -> tuple[str, list[str] | None, list[str] | None]:
             break
     if after is None and needed is None:
         return what, None, None
-    return head.rstrip() + tail, after, needed
+    return head.rstrip() + (f" (touches {touches})" if touches is not None else ""), after, needed
 
 
 def refs_of(text: str | None) -> list[str]:
@@ -11418,6 +11420,15 @@ def page_form_rules(root: Path, board: "Board", trunk: str, staged: bool, guarde
             if e["named"] and e["path"] not in old]
 
 
+def proposed_branch(branch: str, trunk: str) -> bool:
+    """A `propose/` branch `jig propose` made: its first commit past trunk is the proposal's
+    opening, so a branch merely named so carries no roadmap change."""
+    if not branch.startswith("propose/"):
+        return False
+    first = git("rev-list", "--reverse", f"{trunk}..HEAD").split("\n", 1)[0]
+    return bool(first) and git("log", "-1", "--format=%s", first).startswith(OPENING)
+
+
 def moving_in(para: dict, staged: bool) -> list[str]:
     """The pararepo's commit removing its own roadmap, once its phases and lists are the
     metarepo's: every `Scope:` line it keeps names the metarepo's ids, read on its trunk."""
@@ -11426,7 +11437,18 @@ def moving_in(para: dict, staged: bool) -> list[str]:
         print(f"jig: warning: {para.get('meta', 'the metarepo')} isn't reachable here (`jig repos`), so "
               f"the Scope: lines this commit keeps pass unchecked", file=sys.stderr)
         return []
-    known = roadmap_scopes(trunk_show(loc, ROADMAP) or "")
+    text = trunk_show(loc, ROADMAP) or ""
+    owners = term_owners(trunk_show(loc, GLOSSARY) or "")
+    here = main_root().resolve()
+    heads = [p["name"] for p in parse_roadmap(text)] + [i["list"].removesuffix(" " + NO_PHASE)
+                                                       for i in parse_no_phase(text)]
+    mine = {pr for pr in {product_of(h, owners) for h in heads} - {""}
+            if (o := owners[pr]) != THIS_REPO and (l := repo_path(o)) is not None and l.resolve() == here}
+    if not mine:
+        return [f"{ROADMAP}: this commit removes it, but {para['meta']}'s roadmap holds none of this repo's "
+                f"products yet, so its phases would be on no trunk: name the product in {para['meta']}'s "
+                f"glossary with its `Owner:` line, and propose its phases there first ({BUFFER}, `jig propose`)"]
+    known = roadmap_scopes(text)
     out = []
     for f in git("-c", "core.quotePath=false", "ls-files", "--", SPECS, HANDOFFS).splitlines():
         if takes_scopes(f) and (bad := [sc for sc in scopes_in(f, in_index(f, staged)) if sc not in known]):
@@ -11454,7 +11476,7 @@ def roadmap_rules(board: "Board", branch: str, staged: bool, paths: list[str],
     para = load_para(trunk) if on_trunk and old and not in_index(ROADMAP, staged) else None
     if para is not None:
         return moving_in(para, staged)
-    if load_meta(trunk) is not None and branch.startswith("propose/") and ROADMAP in paths:
+    if load_meta(trunk) is not None and proposed_branch(branch, trunk) and ROADMAP in paths:
         # A pararepo's proposal: its merge is judged on trunk; what it says is checked here too.
         text = in_index(ROADMAP, staged)
         problems: list[str] = []
@@ -14424,9 +14446,16 @@ def project_review(root: Path, files: list[str], reviewed: list[str]) -> list[tu
     product's (a heading, "phase 3", "launch") aren't searched for."""
     sids = scope_ids(at_rev(Board.trunk_name(root), ROADMAP))
     out = []
-    for s in undefined_sweep(root, files, at_rev(Board.trunk_name(root), ROADMAP)):
-        out += [(s["page"], f"## Undefined entry → {ROADMAP} ## {NO_PHASE}, on a yes "
-                 f"(`jig update --sweep`): {i['line']}") for i in s["items"]]
+    roadmap, moved = sweep_roadmap(root, Board.trunk_name(root))
+    for s in undefined_sweep(root, files, roadmap):
+        if moved:
+            out += [(s["page"], f"## Undefined entry, held by {moved[0]}'s roadmap: `jig update --apply --sweep` "
+                     f"removes the section: {i['line']}" if i["there"] else
+                     f"## Undefined entry → {moved[0]}'s {ROADMAP} ## {moved[1]} {NO_PHASE}, proposed by a "
+                     f"{BUFFER} row and `jig propose`: {i['line']}") for i in s["items"]]
+        else:
+            out += [(s["page"], f"## Undefined entry → {ROADMAP} ## {NO_PHASE}, on a yes "
+                     f"(`jig update --sweep`): {i['line']}") for i in s["items"]]
         if s["prose"]:
             out.append((s["page"], "## Undefined holds text besides its entries: move it by hand"))
     for f in product_pages(root, files):
@@ -14524,6 +14553,17 @@ def with_list(text: str, items: list[str]) -> str:
     return "\n".join(lines[:end] + items + lines[end:]) + "\n"
 
 
+def sweep_roadmap(root: Path, trunk: str) -> tuple[str, tuple[str, str] | None]:
+    """The roadmap a sweep matches pages' entries against, and (metarepo, product) when it is
+    the metarepo's: a pararepo moved in, its products in the metarepo's roadmap, proposes its
+    entries there and writes no roadmap of its own (the hook's 15.4 test)."""
+    fam = family(root, trunk)
+    own = [p for p in fam.products_in() if fam.ours(p)] if fam.reads_meta else []
+    if own:
+        return fam.text, (fam.meta_name, own[0])
+    return git_raw("show", f"{trunk}:{ROADMAP}", errors="surrogateescape").strip(), None
+
+
 def cmd_sweep(root: Path, apply: bool) -> int:
     """`jig update --sweep`: each page's ## Undefined entries to No phase items, on the owner's
     yes. The roadmap is written on trunk (R5); the pages wherever they may change, which in a
@@ -14532,7 +14572,7 @@ def cmd_sweep(root: Path, apply: bool) -> int:
         die("run `jig update --apply` first: the sweep runs on the current layout", 2)
     trunk = Board.trunk_name(root)
     on_trunk_now = git("branch", "--show-current") == trunk
-    roadmap = git_raw("show", f"{trunk}:{ROADMAP}", errors="surrogateescape").strip()  # written back below
+    roadmap, moved = sweep_roadmap(root, trunk)
     found = undefined_sweep(root, tracked(root), roadmap)
     if not found:
         print("no ## Undefined section on any page: nothing to sweep")
@@ -14543,8 +14583,10 @@ def cmd_sweep(root: Path, apply: bool) -> int:
     for s in found:
         print(f"{s['page']}: ## Undefined" + (", kept: it holds text besides its entries, to move by hand"
                                                if s["prose"] else ", removed" if pages_here else ""))
+        where = f"{moved[0]}'s {ROADMAP} ## {moved[1]} {NO_PHASE}" if moved else f"{ROADMAP} ## {NO_PHASE}"
         for i in s["items"]:
-            print(f"  → {ROADMAP} ## {NO_PHASE}: {i['line']}" + ("  (already there)" if i["there"] else ""))
+            print(f"  → {where}: {i['line']}" + ("  (already there)" if i["there"] else
+                                                 f"  (to propose: {BUFFER} row, `jig propose`)" if moved else ""))
     job = (f"open a job for the pages on {trunk} (`jig open project-sweep --shares "
            f"{' '.join(dict.fromkeys(s['page'] for s in movable))}`), and run `jig update --apply --sweep` in its "
            "worktree: it removes the sections whose entries the roadmap holds")
@@ -14555,16 +14597,19 @@ def cmd_sweep(root: Path, apply: bool) -> int:
         return 0
     if git("status", "--porcelain", "--untracked-files=no"):
         die("commit or stash tracked changes first: the sweep edits pages by name", 2)
+    if new and moved:
+        # A roadmap here would be a second copy of the plan, and the hook refuses one. A section
+        # whose items meta already holds goes once they are all there.
+        die(f"this repo plans from {moved[0]}'s roadmap: propose these items under ## {moved[1]} "
+            f"{NO_PHASE} there, by a {BUFFER} row and `jig propose`, then sweep again to remove the "
+            f"sections; nothing is written here", 2)
     if new and not on_trunk_now:
         die(f"{ROADMAP} is edited on {trunk} only (R5): run `jig update --apply --sweep` there "
             "first; it writes the items, then this run removes the sections", 2)
     fam = family(root, trunk)
     if new and fam.reads_meta:
-        # A roadmap here would be a second copy of the plan, and the hook refuses one.
-        own = [p for p in fam.products_in() if fam.ours(p)]
-        die(f"this repo plans from {fam.meta_name}'s roadmap: propose these items under "
-            f"## {own[0] if own else '<Product>'} {NO_PHASE} there, by a {BUFFER} row and `jig propose`; "
-            f"nothing is written here", 2)
+        print(f"note: {fam.meta_name}'s glossary names no product of this repo yet, so the items go to "
+              f"a {ROADMAP} of its own here; once it does, they move up by a proposal (moving in)")
     written = []
     if new:
         if not roadmap and (root / ROADMAP_VIEW).is_file():

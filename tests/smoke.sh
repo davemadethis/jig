@@ -5073,10 +5073,32 @@ expect_pass sh -c "git log -1 --format=%s | grep -qx sv && $J reading-list src/x
 msg="family D: a new .jig/roadmap.md in pd is refused: its plan is meta's"
 printf '# Roadmap\n\n## beta\nScopes:\n- `b`: b\n' > .jig/roadmap.md && git add -A; out=$(git commit -qm again 2>&1); rc=$?; git reset -q --hard
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'plans from meta.s roadmap, which holds its products (Delta)'" "$out"
+msg="family D: a hand-made propose/ branch in meta carries no roadmap change: it doesn't start with jig propose's opening"
+out=$(cd "$FM" && git switch -q -c propose/hand && printf '\n## Hand\nScopes:\n- `h`: h\n' >> .jig/roadmap.md && git add -A && git commit -qm "GLOSSARY: hand" 2>&1); rc=$?
+(cd "$FM" && git reset -q --hard && git switch -q main && git branch -q -D propose/hand)
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'R5 the roadmap is the owner.s'" "$out"
 msg="family D: the sweep in pd writes no roadmap of its own, and says to propose"
 printf '# Q\n\nQ is.\n\n## Undefined\n\n- Sync — stops at x; parked 2026-11-01.\n' > docs/q.md && plant "planted q"
 out=$($UP --apply --sweep 2>&1); rc=$?
 expect_pass sh -c "test $rc != 0 && test ! -e .jig/roadmap.md && echo \"\$0\" | grep -q 'plans from meta.s roadmap: propose these items under ## Delta No phase'" "$out"
+msg="family D: once meta holds the item, proposed and merged, pd's sweep removes the section and writes no roadmap"
+printf '| B2 | meta/.jig/roadmap.md § Delta No phase: none | q sync, parked | owner, 2026-11-23 | Open |\n' >> .jig/ledgers/BUFFER.md && git add -A && git commit -qm "buffer: B2"
+$J propose --buffer q-sync >/dev/null 2>&1 && git add -A && git commit -qm "specs: q-sync"
+fland propose/pd-q-sync "GLOSSARY: q sync" "s = s.replace('- \`v\`: later v', '- \`v\`: later v\n- \`q-sync\`: Sync; stops at x; parked 2026-11-01 (touches docs/q.md)', 1)"
+cd "$FD"; out=$($UP 2>&1)
+$UP --apply --sweep >/dev/null 2>&1; rc=$?
+expect_pass sh -c "test $rc = 0 && test ! -e .jig/roadmap.md && ! grep -q Undefined docs/q.md && echo \"\$0\" | grep -q 'held by meta.s roadmap'" "$out"
+git commit -qm sweep >/dev/null 2>&1
+# A pararepo with no roadmap and no product in meta yet keeps one of its own, and says why.
+fnew pe && mkdir -p docs && printf '# Q\n\nQ is.\n\n## Undefined\n\n- Sync — stops at x; parked 2026-11-01.\n' > docs/q.md && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
+$J init --para meta --location "$FM" >/dev/null 2>&1 && git add -A && git commit -qm para-init && python3 .jig/jig.py repos add para "$T/pe" --name pe >/dev/null
+msg="family D: in a pararepo meta names no product of, the sweep writes its own roadmap, saying the glossary names none yet"
+out=$($UP --apply --sweep 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && grep -q 'q-sync' .jig/roadmap.md && echo \"\$0\" | grep -q 'names no product of this repo yet'" "$out"
+git commit -qm sweep >/dev/null 2>&1
+msg="family D: removing that roadmap is refused while meta holds none of its products: its phases would be on no trunk"
+git rm -q .jig/roadmap.md; out=$(git commit -qm "move in" 2>&1); rc=$?; git reset -q --hard
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'holds none of this repo.s products yet'" "$out"
 # Unconfirmed cross-product waits are flagged for the owner, never blocking.
 cd "$FM"
 msg="family D: Walyt alpha/pairing's wait on Familiar App alpha/host, unconfirmed, is listed by jig roadmap and rig in meta"
@@ -5643,6 +5665,13 @@ expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'line 3: alpha/a wait
 msg="after: jig roadmap reports a ring the trunk already holds"
 printf '## alpha\nScopes:\n- `a`: x (after alpha/b)\n- `b`: y (after alpha/a)\n' > .jig/roadmap.md && git add -A && git -c core.hooksPath=/dev/null commit -qm ring
 expect_pass sh -c "$J roadmap | grep -q 'a ring: alpha/a, alpha/b'"
+# (after …), (needed by …) and (touches …) end a scope in any order: none hides a wait as text.
+for order in '(after alpha/b) (touches docs/x.md) (needed by beta/c)' '(needed by beta/c) (after alpha/b) (touches docs/x.md)' '(touches docs/x.md) (after alpha/b)' '(after alpha/b) (needed by beta/c) (touches docs/x.md)'; do
+  ordn=$(( ${ordn:-0} + 1 )); ranew "ord$ordn"
+  printf '# Roadmap\n\n## alpha\nScopes:\n- `a`: x %s\n- `b`: y\n' "$order" > .jig/roadmap.md && git add -A && git commit -qm order
+  msg="after: a scope ending $order waits on alpha/b, its page kept"
+  expect_pass sh -c "test '$(rnext)' = 'alpha/a:blocked alpha/b:open' && $J roadmap --write >/dev/null && grep -q 'x (touches docs/x.md)<br>after alpha/b' ROADMAP.md"
+done
 }
 
 # ---------------------------------------------------------------- project and product
