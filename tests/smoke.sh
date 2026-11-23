@@ -4780,7 +4780,7 @@ printf '# t\n\nSource: smoke\nScope: alpha/screen\n\n## Intent\nx\n' > .jig/spec
 msg="up next: a roadmap with ## No phase parses, the list is no phase, and an item names its pages"
 git add -A && expect_pass git commit -qm roadmap
 msg="up next: jig roadmap lists No phase apart from the phases, each item with its state and pages"
-expect_pass sh -c "$J roadmap | grep -qx 'No phase' && ! $J roadmap | grep -q '^No phase  current' && $J roadmap | grep -qE '^  No phase/offline +open +\\(touches docs/ui/ui.md\\)'"
+expect_pass sh -c "$J roadmap | grep -qx 'No phase' && ! $J roadmap | grep -q '^No phase  ' && $J roadmap | grep -qE '^  No phase/offline +open +\\(touches docs/ui/ui.md\\)'"
 msg="up next: ROADMAP.md shows No phase after the phases, a board of its items with their pages"
 $J roadmap --write >/dev/null
 expect_pass python3 -c "
@@ -5756,8 +5756,15 @@ done
 cd "$PM"
 msg="phase types: per product, Familiar App beta after its own Pilot A is refused, and Walyt alpha never is"
 printf '# Roadmap\n\n## Walyt alpha\nScopes:\n- `w1`: x\n\n## Familiar App Pilot A\nScopes:\n- `f1`: x\n\n## Walyt Launch\nScopes:\n- `w2`: x\n\n## Familiar App beta\nScopes:\n- `f2`: x\n' > .jig/roadmap.md
-git add -A; out=$(git commit -qm 'roadmap: out of order' 2>&1); rc=$?; git reset -q --hard
+git add -A; out=$(git commit -qm 'GLOSSARY: out of order' 2>&1); rc=$?; git reset -q --hard
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'phase Familiar App beta (Prototype) comes after Familiar App Pilot A (Pilot)' && ! echo \"\$0\" | grep -q 'phase Walyt alpha'" "$out"
+msg="phase types: the order is per product, not one order: Familiar App alpha after Walyt Launch commits"
+printf '# Roadmap\n\n## Walyt Launch\nScopes:\n- `w2`: x\n\n## Familiar App alpha\nScopes:\n- `f1`: x\n' > .jig/roadmap.md
+git add -A && expect_pass git commit -qm 'GLOSSARY: two products'
+msg="phase types: the metarepo's own phases are one product: alpha after Demos is refused"
+printf '\n## Demos\nScopes:\n- `d`: x\n\n## alpha\nScopes:\n- `a`: x\n' >> .jig/roadmap.md
+git add -A; out=$(git commit -qm 'GLOSSARY: own phases out of order' 2>&1); rc=$?; git reset -q --hard
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'phase alpha (Prototype) comes after Demos (Production)' && ! echo \"\$0\" | grep -q 'Familiar App alpha (Prototype) comes'" "$out"
 }
 
 sec_boundary() {
