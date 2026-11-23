@@ -1380,6 +1380,10 @@ git add -f .jig/meta-cache/.jig/decisions.md; expect_refuse git commit -qm cache
 msg="para P3: staging the metarepo checkout is refused"
 git add -f mrclone 2>/dev/null; expect_refuse git commit -qm clone; git reset -q
 
+msg="propose: with no git identity in the metarepo checkout, git's own message stops it before the spec or a branch is written"
+specbefore=$(shasum .jig/specs/x.md); branchesbefore=$(git -C mrclone branch --list 'propose/*')
+out=$(GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=user.useConfigOnly GIT_CONFIG_VALUE_0=true $J propose .jig/specs/x.md noid 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'Author identity unknown' && test \"\$(shasum .jig/specs/x.md)\" = '$specbefore' && test \"\$(git -C mrclone branch --list 'propose/*')\" = '$branchesbefore'" "$out"
 msg="propose: a branch on the metarepo, the id in the spec, the metarepo's main untouched"
 mainbefore=$(git -C mrclone rev-parse main)
 $J propose .jig/specs/x.md fmt >/dev/null
@@ -8208,8 +8212,12 @@ out=$($J checked --trace 'test ! -f broken' 2>&1)
 expect_pass sh -c "echo \"\$0\" | grep -A3 'oldest first' | sed -n '2,4p' | sed 's/^ *[0-9a-f]* //' | tr '\n' ' ' | grep -qx 'merge L merge M merge N '" "$out"
 msg="checked --trace: the printed first-parent bisect, running only the failing command, names the second merge"
 bis=$(echo "$out" | sed -n 's/^  \(git bisect .*\)$/\1/p' | grep -v reset)
-first_bad=$(eval "$bis" 2>&1 | sed -n 's/^\([0-9a-f]\{40\}\) is the first bad commit$/\1/p'); git bisect reset >/dev/null 2>&1
+bisout=$(eval "$bis" 2>&1); git bisect reset >/dev/null 2>&1
+# git 2.56 quotes the term ("the first 'bad' commit"); older git doesn't.
+first_bad=$(echo "$bisout" | sed -n "s/^\([0-9a-f]\{40\}\) is the first '\{0,1\}bad'\{0,1\} commit\$/\1/p")
 expect_pass sh -c "git log -1 --format=%s $first_bad | grep -qx 'merge M'"
+# On a failure the log carries what ran and what it said, so a runner's failure names its cause.
+git log -1 --format=%s $first_bad 2>/dev/null | grep -qx 'merge M' || printf '%s\n' "bisect commands:" "$bis" "bisect output:" "$bisout"
 msg="checked --trace: in a detached checkout of trunk's tip, as a check session runs it, it lists the same merges"
 wt --detach .git/jig/worktrees/check-main main
 out=$(cd .git/jig/worktrees/check-main && $J checked --trace 'test ! -f broken' 2>&1)
@@ -9943,8 +9951,6 @@ if [ "${1:-}" = --unit ]; then        # --unit <run folder> <unit>: one unit, it
   # Before any jig command, so every case and any fragment copied out of this file writes
   # user-level state into the section's own folder. Sections still set their own lists.
   export JIG_CONFIG="$T/repos.json" XDG_CONFIG_HOME="$T/config"
-  # Python's __pycache__ writes into a .jig/ that a parallel section may be copying.
-  export PYTHONDONTWRITEBYTECODE=1
   exec > "$2/$3.out" 2>&1 < /dev/null
   for s in $(echo "$3" | tr , ' '); do
     declare -F "sec_$s" >/dev/null || { bad "no section $s"; continue; }
@@ -9965,6 +9971,11 @@ done
 real_before=$(cfg_state "$REAL_CFG")
 RUN=$(mktemp -d "${TMPDIR:-/tmp}/jig-smoke.XXXXXX")
 echo "smoke: sections run in $RUN"
+# Smoke's own git and Python, not the machine's: a clone copies no local identity, so without
+# this its commits take ~/.gitconfig's, or fail on a runner that has none; and bytecode written
+# beside plugin/templates/jig/ is copied into every .jig/ a section makes.
+printf '[user]\n\tname = t\n\temail = t@t\n' > "$RUN/gitconfig"
+export GIT_CONFIG_GLOBAL="$RUN/gitconfig" GIT_CONFIG_NOSYSTEM=1 PYTHONDONTWRITEBYTECODE=1
 jobs=${JIG_SMOKE_JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)}
 order=$(for u in $SLOW $pick; do echo $u; done | awk -v p=" $pick " 'index(p, " " $0 " ") && !seen[$0]++')
 # Its own process group, so a stopped run takes its units with it and no caller's processes.
