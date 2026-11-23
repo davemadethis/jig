@@ -295,11 +295,11 @@ mkdir -p "$I" && cd "$I" && git init -q -b main && git config user.email t@t && 
 cp -r "$P/jig" .jig && cp "$P/AGENTS.md" "$P/CLAUDE.md" .
 git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
 
-msg="init: root holds only AGENTS.md, CLAUDE.md and .jig/"
-expect_pass test "$(ls -A | grep -v '^\.git$' | LC_ALL=C sort | tr '\n' ' ')" = ".jig AGENTS.md CLAUDE.md "
+msg="init: root holds only AGENTS.md, CLAUDE.md, ROADMAP.md (the roadmap's view) and .jig/"
+expect_pass test "$(ls -A | grep -v '^\.git$' | LC_ALL=C sort | tr '\n' ' ')" = ".jig AGENTS.md CLAUDE.md ROADMAP.md "
 
-msg="init: .jig/ holds jig.py, RULES.md, docs-page.md, config.json, jobs.json, decisions.md, the five scripts, staging/.gitignore and inbox/.gitignore, nothing else"
-expect_pass test "$(find .jig -type f | LC_ALL=C sort | tr '\n' ' ')" = ".jig/RULES.md .jig/config.json .jig/decisions.md .jig/docs-page.md .jig/inbox/.gitignore .jig/jig.py .jig/jobs.json .jig/scripts/check.sh .jig/scripts/derive.sh .jig/scripts/format.sh .jig/scripts/publish.sh .jig/scripts/release.sh .jig/scripts/setup.sh .jig/staging/.gitignore "
+msg="init: .jig/ holds jig.py, RULES.md, docs-page.md, config.json, jobs.json, decisions.md, roadmap.md, the five scripts, staging/.gitignore and inbox/.gitignore, nothing else"
+expect_pass test "$(find .jig -type f | LC_ALL=C sort | tr '\n' ' ')" = ".jig/RULES.md .jig/config.json .jig/decisions.md .jig/docs-page.md .jig/inbox/.gitignore .jig/jig.py .jig/jobs.json .jig/roadmap.md .jig/scripts/check.sh .jig/scripts/derive.sh .jig/scripts/format.sh .jig/scripts/publish.sh .jig/scripts/release.sh .jig/scripts/setup.sh .jig/staging/.gitignore "
 
 msg="init: the spec template and both ledgers stay in the plugin until first use"
 expect_pass sh -c "test ! -e .jig/specs -a ! -e .jig/ledgers -a ! -e '$P/jig/specs' -a ! -e '$P/jig/ledgers' && test -f '$P/specs/_template.md' -a -f '$P/ledgers/WORKAROUNDS.md' -a -f '$P/ledgers/DEFERRED.md'"
@@ -494,7 +494,8 @@ for layout in "eaec973 dot" "66a044c dot" "62c8d9f jig" "eaec973 aidev" "5d955a2
   expect_pass python3 -c "
 import subprocess
 allowed = {'$board', '.jig/config.json', '.jig/jobs.json', '.aidev/aidev.py', 'jig/jig.py', '.jig/jig.py',
-           '.aidev/RULES.md', 'jig/RULES.md', '.jig/RULES.md', '.jig/docs-page.md', '.gitignore', '.jig/scripts/setup.sh', '.jig/scripts/derive.sh', '.jig/scripts/release.sh', '.jig/scripts/publish.sh', '.jig/staging/.gitignore', '.jig/inbox/.gitignore', '.jig/decisions.md'}
+           '.aidev/RULES.md', 'jig/RULES.md', '.jig/RULES.md', '.jig/docs-page.md', '.gitignore', '.jig/scripts/setup.sh', '.jig/scripts/derive.sh', '.jig/scripts/release.sh', '.jig/scripts/publish.sh', '.jig/staging/.gitignore', '.jig/inbox/.gitignore', '.jig/decisions.md',
+           '.jig/roadmap.md', 'ROADMAP.md'}
 for line in subprocess.check_output(['git', 'diff', '--cached', '-M', '--name-status'], text=True).splitlines():
     status, *paths = line.split('\t')
     assert status == 'R100' or set(paths) <= allowed | {'AGENTS.md'}, line
@@ -724,7 +725,8 @@ EOF
 import subprocess, sys
 removed = set(sys.argv[1].split())
 jig = {'.jig/config.json', '.jig/jobs.json', '.jig/jig.py', '.jig/RULES.md', '.jig/docs-page.md', '.jig/scripts/setup.sh', '.jig/scripts/derive.sh', '.jig/scripts/release.sh', '.jig/scripts/publish.sh',
-       '.jig/ledgers/DEFERRED.md', '.jig/staging/.gitignore', '.jig/inbox/.gitignore', '.gitignore', '.jig/decisions.md'}
+       '.jig/ledgers/DEFERRED.md', '.jig/staging/.gitignore', '.jig/inbox/.gitignore', '.gitignore', '.jig/decisions.md',
+       '.jig/roadmap.md', 'ROADMAP.md'}
 for line in subprocess.check_output(['git', 'diff', '--cached', '-M', '--name-status'], text=True).splitlines():
     status, *paths = line.split('\t')
     assert status == 'R100' or (status == 'D' and paths[0] in removed) or paths[-1] in jig, line" "$removed $board"
@@ -5361,14 +5363,13 @@ msg="roadmap: with no roadmap on trunk, a spec's Scope: line is refused, naming 
 rspec s1 alpha/whatever && git add -A; out=$(git commit -qm s1 2>&1); rc=$?; undo
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 's1.md takes alpha/whatever, but main has no .jig/roadmap.md: .jig roadmap. in the main checkout'" "$out"
 msg="roadmap: with no roadmap on trunk, a spec's Later: line is refused the same way"
-printf '# s1\n\nSource: smoke\nLater: No phase/whatever\n' > .jig/specs/s1.md && git add -A; out=$(git commit -qm s1 2>&1); rc=$?; undo
+mkdir -p .jig/specs && printf '# s1\n\nSource: smoke\nLater: No phase/whatever\n' > .jig/specs/s1.md && git add -A; out=$(git commit -qm s1 2>&1); rc=$?; undo
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 's1.md leaves No phase/whatever for later, but main has no .jig/roadmap.md: .jig roadmap.'" "$out"
 mkdir -p .jig/specs && printf '# s1\n\nSource: smoke\n\n## Intent\nx\n' > .jig/specs/s1.md && git add -A && git commit -qm s1
 $J open N --spec .jig/specs/s1.md >/dev/null && git add -A && git commit -qm "open N"
-rl=$($J reading-list n.txt >/dev/null 2>&1; echo $?)
-msg="roadmap: jig reading-list in a job's worktree writes nothing, says where the roadmap is written, and exits as in the trunk checkout"
+msg="roadmap: jig reading-list in a job's worktree writes nothing, says where the roadmap is written, and exits 0 as before"
 out=$(cd .git/jig/worktrees/N && $J reading-list n.txt 2>&1); rc=$?
-expect_pass sh -c "test $rc = $rl && echo \"\$0\" | grep -q 'main has no .jig/roadmap.md: .jig roadmap. in the main checkout writes it' && test ! -e .git/jig/worktrees/N/.jig/roadmap.md && git log -1 --format=%s | grep -qx 'open N' && test -z \"\$(git status --porcelain)\"" "$out"
+expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q 'main has no .jig/roadmap.md: .jig roadmap. in the main checkout writes it' && test ! -e .git/jig/worktrees/N/.jig/roadmap.md && git log -1 --format=%s | grep -qx 'open N' && test -z \"\$(git status --porcelain)\"" "$out"
 msg="roadmap: in the trunk checkout on trunk, jig rig commits the empty structure as its own commit, says so, then prints its picture"
 out=$($J rig 2>&1); rc=$?
 expect_pass sh -c "test $rc = 0 && git log -1 --format=%s | grep -qx 'roadmap: the empty structure jig init writes' && test \"\$(git show --name-only --format= HEAD | sort | tr '\\n' ' ')\" = '.jig/roadmap.md ROADMAP.md ' && echo \"\$0\" | grep -q 'committed .jig/roadmap.md and ROADMAP.md on main' && echo \"\$0\" | grep -q '^Can start now:' && ! $J roadmap | grep -q 'stale\\|missing'" "$out"
@@ -6011,6 +6012,7 @@ expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'names .exits/capital
 BM="$T/boundary-meta"; mkdir -p "$BM" && cd "$BM" && git init -q -b main && git config user.email t@t && git config user.name t
 cp -r "$P/jig" .jig && cp "$P/AGENTS.md" "$P/CLAUDE.md" . && git add -A && git commit -qm init && $J init --meta >/dev/null 2>&1 && git add -A && git commit -qm "GLOSSARY: board"
 setentry .jig/decisions.md README.md 'products/**' ROADMAP.md && git add -A && git commit -qm "GLOSSARY: entry files"
+git rm -q .jig/roadmap.md ROADMAP.md && git -c core.hooksPath=/dev/null commit -qm "GLOSSARY: no roadmap, from before the rule"
 msg="boundary: in a metarepo, the hook refuses products/roadmap.md when entry_files match it"
 mkdir -p products && printf '# Plan\n' > products/roadmap.md && git add -A && refused "GLOSSARY: plan"
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'products/roadmap.md is a roadmap.*.jig/roadmap.md only'" "$out"
@@ -7123,6 +7125,7 @@ printf '# P\n\nP keeps the list.\n\nBuilt as .jig/specs/x.md says, in phase 3.\n
 printf -- '- [ ] ship it\n' > TODO.md && printf '| Feature | Why |\n| x | y |\n' > FEATURES.md
 printf '# HAL\n\nThe HAL is the board API.\n\n## Status\n\n`hal_status` returns `EVT_*` bits.\n' > docs/hal.md
 printf '# R\n\nR is.\n\nIn Phase 5 the wallet is a TEE.\n' > docs/r.md
+git rm -q .jig/roadmap.md ROADMAP.md    # a repo from before every repo kept a roadmap: the sweep creates it
 git add -A && git -c core.hooksPath=/dev/null commit -qm planted
 out=$($UP 2>&1)
 msg="sweep: update lists each ## Undefined entry as the No phase item it would be, naming the page"
@@ -7131,6 +7134,9 @@ msg="sweep: a page line naming a spec is under Repo files to review; phase 3, Ph
 expect_pass sh -c "echo \"\$0\" | grep -q '^  docs/p.md: line 5: \".jig/specs/\" names the plan' && ! echo \"\$0\" | grep -qi 'phase [35]\\|Status is the project' && echo \"\$1\" | grep -q '^  docs/p.md: line 5: \".jig/specs/\" names the plan' && ! echo \"\$1\" | grep -qi 'phase [35]\\|Status is the project'" "$out" "$($J survey 2>&1)"
 msg="sweep: tracked TODO.md and FEATURES.md are each listed with their destination"
 expect_pass sh -c "echo \"\$0\" | grep -q '^  TODO.md: the project.s plan: its items go to .jig/roadmap.md' && echo \"\$0\" | grep -q '^  FEATURES.md: the product: each feature goes to its system.s page'" "$out"
+msg="sweep: survey in the trunk checkout committed the roadmap's empty structure, as every reader of it does"
+expect_pass sh -c "git log -1 --format=%s | grep -qx 'roadmap: the empty structure jig init writes' && grep -qx '## No phase' .jig/roadmap.md"
+git rm -q .jig/roadmap.md ROADMAP.md && git -c core.hooksPath=/dev/null commit -qm "no roadmap again, for the sweep to create"
 msg="sweep: --sweep alone is a dry run that changes nothing"
 before=$(git status --porcelain); out=$($UP --sweep 2>&1)
 expect_pass sh -c "echo \"\$0\" | grep -q 'Dry run' && test ! -e .jig/roadmap.md && test -z \"\$1\"" "$out" "$before"
@@ -9646,7 +9652,7 @@ expect_pass test "$(grep -c 'finished_specs(' .jig/jig.py)" -ge 3
 # until a spec takes it. The repro: before this, nothing printed "labels" after the merge.
 LL="$T/later"; pcnew "$LL" && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
 printf -- '- `labels`: labels on each item\n' >> .jig/roadmap.md
-printf '# lt\n\nSource: chat lt\nLater: No phase/labels\n\n## Intent\nx\n\n## Out of scope\n- the export: the export job does it\n' > .jig/specs/lt.md
+mkdir -p .jig/specs && printf '# lt\n\nSource: chat lt\nLater: No phase/labels\n\n## Intent\nx\n\n## Out of scope\n- the export: the export job does it\n' > .jig/specs/lt.md
 cspec ln && $J roadmap --write >/dev/null && git add -A && git commit -qm "labels and specs"
 cjob LT lt && cjob LN ln
 msg="close: jig gate on a spec with Later: and an Out of scope line prints Closes with the spec at merge:, the id with its text, then the line"
