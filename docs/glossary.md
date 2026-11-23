@@ -80,7 +80,7 @@ is traced to the merge that caused it. A batch isn't a release.
 
 ## Workaround
 
-A patch for a symptom when the cause isn't fixed yet. It carries a `WORKAROUND:` comment in
+A patch for a symptom when the cause isn't fixed yet. It gets a `WORKAROUND:` comment in
 the code and a row in a ledger, or the commit is refused. It isn't a bug fix.
 
 ## Page contract

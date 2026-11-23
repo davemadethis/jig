@@ -5,11 +5,12 @@ through, and step on each other when two of them share a repo. A woodworker solv
 problem with a jig: clamp the work in place once, and every cut lands where it should.
 
 So that's what this is. A short written [spec](docs/glossary.md#spec) before building, a bug
-looked into before it's fixed, and one review per [handoff](docs/glossary.md#handoff) from a reader who never saw your
-reasoning. Parallel sessions each get a [job](docs/glossary.md#job) with its own files, and a
-git hook refuses a commit outside them. The hooks run [trunk](docs/glossary.md#trunk)'s copy of the rules, so no branch
-can weaken them. I built it for prototyping software and firmware with Claude Code, but the
-checker runs fine without it.
+looked into before it's fixed, and one review per [handoff](docs/glossary.md#handoff) from a
+reader who never saw your reasoning. Parallel sessions each get a [job](docs/glossary.md#job)
+with its own files, and a git hook refuses a commit outside them. The hooks run
+[trunk](docs/glossary.md#trunk)'s copy of the rules, so no branch can weaken them. I built it
+for prototyping software and firmware with Claude Code, but the checker runs fine without
+Claude Code.
 
 ## 📦 Install
 
@@ -25,7 +26,7 @@ To try it for one session without installing, clone this repo and run
 
 ## 🧭 A first job
 
-Here's one small job, start to finish, in a repo with a `src/app.py` and a `src/other.py`.
+We'll walk one small job from start to finish, in a repo with a `src/app.py` and a `src/other.py`.
 
 **1. Set up.** You run `/jig:init` in the repo. It writes a hidden `.jig/` folder (the checker,
 the rulebook, the [board](docs/glossary.md#board)) and installs the git hooks. Your root gets a
@@ -84,8 +85,8 @@ Every step above belongs to a [workflow](docs/glossary.md#workflow), and each su
 
 After init, `.jig/RULES.md` in your repo holds every rule the hooks enforce.
 
-**On trust.** jig's plugin hooks run your repo's own scripts, and only in a repo that opted in
-with a marker inside `.git/`, which git never clones. [Hooks](docs/hooks.md) has the details.
+**On trust.** jig's plugin hooks run only your repo's own scripts, in a repo that opted in with a
+marker inside `.git/`. Git never clones `.git/`, so a fetched repo can't opt itself in. [More](docs/hooks.md).
 
 ## 💬 Feedback and working on jig
 

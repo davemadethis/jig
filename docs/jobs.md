@@ -30,8 +30,8 @@ whole history.
 ## Owns and shares
 
 Owns and shares are the job's two file lists. Keep owns narrow.
-Before a job opens, `python3 .jig/jig.py open` checks every open branch, and it refuses to give
-this job a file that another branch has already touched. Those files go in shares from the start.
+Before a job opens, `python3 .jig/jig.py open` checks every open branch. It refuses to give this
+job a file that another branch has already touched. Those files go in shares from the start.
 
 A file that's new to the repo belongs to whoever makes it. A few paths are common to every job,
 listed in `common` in the config. Any job may add to the [decision log](glossary.md#decision-log).

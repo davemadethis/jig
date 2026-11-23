@@ -5,13 +5,13 @@ Every session in a jig repo is a node, and every step it takes belongs to a
 `jig.py`, so jig knows each [job](glossary.md#job)'s next step and who takes it. It refuses a
 step taken out of order.
 
-
 ## Nodes
 
 There are two kinds of node. The [hubnode](glossary.md#hubnode) is yours. It owns
 [trunk](glossary.md#trunk), writes a [spec](glossary.md#spec) only when one comes straight
 from your conversation, and runs every [gate](glossary.md#gate) and merge. A
-[subnode](glossary.md#subnode) is every other session.
+[subnode](glossary.md#subnode) is every other session. Each node runs at a model
+[tier](glossary.md#tier) and an [effort](glossary.md#effort), two numbers explained below.
 
 | Node | Settings | What it does | Roles it may load |
 |---|---|---|---|
@@ -20,8 +20,7 @@ from your conversation, and runs every [gate](glossary.md#gate) and merge. A
 
 ## Roles
 
-A subnode takes one of five roles. Each runs at its own [tier](glossary.md#tier) and
-[effort](glossary.md#effort). The work role builds and makes each
+A subnode takes one of five roles. Each runs at its own tier and effort. The work role builds and makes each
 [handoff](glossary.md#handoff). The check role runs the complete suite, once per gate or per
 [batch](glossary.md#batch).
 

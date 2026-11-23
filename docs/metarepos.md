@@ -39,7 +39,7 @@ release broke, with the list of rewrites.
 ## Proposals
 
 A pararepo changes the metarepo by proposal, written up first as a [spec](glossary.md#spec). `python3 .jig/jig.py propose <spec> <slug>` opens a
-`propose/<repo>-<slug>` branch on the metarepo, carrying the change. The metarepo's owner
+`propose/<repo>-<slug>` branch on the metarepo with the change on it. The metarepo's owner
 merges it and releases. A [job](glossary.md#job) whose spec waits on a proposal doesn't pass its [gate](glossary.md#gate) until the
 pinned release holds it.
 
