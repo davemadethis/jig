@@ -10025,18 +10025,50 @@ msg="movein: in M, a glossary change dropping Delta's Owner: while ## Delta alph
 out=$(cd "$MM" && git switch -q -c noowner && sed -i.bak '/^Owner: `pd`.$/d' docs/glossary.md && rm docs/glossary.md.bak && git add -A && git commit -qm "GLOSSARY: no owner" 2>&1); rc=$?
 (cd "$MM" && git reset -q --hard && git switch -q main && git branch -q -D noowner)
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '## Delta loses its .Owner:. line, but .jig/roadmap.md still heads ## Delta alpha'" "$out"
-# The product renamed at the merge: step 2 reads the name M gave it; the text above the first heading rides along.
-mpara pr '# Roadmap\n\nThe plan for rex.\n\n## alpha\nScopes:\n- `r`: the r\n'
+# The product renamed at the merge, the old term kept: step 2 reads the name M's roadmap holds the
+# phases under; the text above the first heading rides along, item-shaped lines and all.
+mpara pr '# Roadmap\n\nThe plan for rex.\n- `z`: not a scope\n\n## alpha\nScopes:\n- `r`: the r\n'
 mspec sr alpha/r && mplant "sr"
 $J move-in --product Rex --definition "The rex." --apply >/dev/null 2>&1 && git commit -qm "specs: move-in" >/dev/null 2>&1
 msg="movein: the text above pr's first heading is kept, as ## Rex alpha's note, its # title left to M's roadmap"
-expect_pass sh -c "git -C '$MM' show propose/pr-move-in:.jig/roadmap.md | grep -A1 -x '## Rex alpha' | grep -qx 'The plan for rex.' && test \"\$(git -C '$MM' show propose/pr-move-in:.jig/roadmap.md | grep -c '^# ')\" = 1"
-( cd "$MM" && git switch -q propose/pr-move-in && sed -i.bak -e 's/^## Rex$/## Rover/' docs/glossary.md && sed -i.bak 's/^## Rex alpha$/## Rover alpha/' .jig/roadmap.md \
-  && sed -i.bak 's/§ Rex:/§ Rover:/' .jig/decisions.md && rm -f docs/*.bak .jig/*.bak && git add -A && git commit -qm "GLOSSARY: Rex is Rover" && $J reviewed >/dev/null \
+expect_pass sh -c "git -C '$MM' show propose/pr-move-in:.jig/roadmap.md | grep -A2 -x '## Rex alpha' | grep -qx -- '- \`z\`: not a scope' && git -C '$MM' show propose/pr-move-in:.jig/roadmap.md | grep -A1 -x '## Rex alpha' | grep -qx 'The plan for rex.' && test \"\$(git -C '$MM' show propose/pr-move-in:.jig/roadmap.md | grep -c '^# ')\" = 1"
+( cd "$MM" && git branch -q behind main )   # cut before the merge below brings in Rex and Rover
+( cd "$MM" && git switch -q propose/pr-move-in && printf '\n## Rover\n\nThe rex, renamed.\n\nOwner: `pr`.\n' >> docs/glossary.md && sed -i.bak 's/^## Rex alpha$/## Rover alpha/' .jig/roadmap.md \
+  && rm -f .jig/*.bak && git add -A && git commit -qm "GLOSSARY: Rex is Rover" && $J reviewed >/dev/null \
   && git switch -q main && git merge -q --no-ff --no-edit propose/pr-move-in ) >/dev/null 2>&1
-msg="movein: renamed Rover at M's merge, step 2 with no --product re-points to Rover alpha/r, and --product Rex says the new name"
+msg="movein: M keeps Rex and adds Rover at the merge; the item-shaped preamble line is no scope in M's roadmap"
+expect_pass sh -c "cd '$MM' && grep -qx '## Rex' docs/glossary.md && grep -qx '## Rover alpha' .jig/roadmap.md && ! $J roadmap | grep -q 'alpha/z'"
+msg="movein: step 2 with no --product reads Rover from M's roadmap, re-points to Rover alpha/r, and --product Rex says the new name"
 out=$($J move-in --product Rex 2>&1)
 expect_pass sh -c "echo \"\$0\" | grep -q 'names the product Rover now, not Rex' && $J move-in --apply >/dev/null 2>&1 && grep -qx 'Scope: Rover alpha/r' .jig/specs/sr.md && git commit -qm 'move in' >/dev/null 2>&1" "$out"
+msg="movein: in M, an unrelated glossary edit on a branch cut before Rex and Rover reached trunk passes: only what the commit drops counts"
+out=$(cd "$MM" && git switch -q behind && printf '\n## Foo\n\nA foo.\n' >> docs/glossary.md && ulog '- docs/glossary.md § Foo: added.' && git add -A && git commit -qm "GLOSSARY: Foo" 2>&1); rc=$?
+(cd "$MM" && git reset -q --hard && git switch -q main)
+expect_pass test $rc = 0; [ $rc = 0 ] || echo "$out"
+msg="movein: in M, Rover renamed Rocket over two commits on a propose/ branch, headings first, passes"
+out=$(cd "$MM" && git branch -q propose/pr-rename "$(git commit-tree 'main^{tree}' -p main -m 'propose: pr: nothing written yet')" && git switch -q propose/pr-rename \
+  && sed -i.bak 's/^## Rover alpha$/## Rocket alpha/' .jig/roadmap.md && rm .jig/roadmap.md.bak && git add -A && git commit -qm "ROADMAP: Rocket alpha" \
+  && sed -i.bak 's/^## Rover$/## Rocket/' docs/glossary.md && rm docs/glossary.md.bak && ulog '- docs/glossary.md § Rocket: Rover renamed.' && git add -A && git commit -qm "GLOSSARY: Rover is Rocket" 2>&1); rc=$?
+(cd "$MM" && git reset -q --hard && git switch -q main)
+expect_pass test $rc = 0; [ $rc = 0 ] || echo "$out"
+# A pararepo whose product is a term it already heads its sections with.
+( cd "$MM" && printf '\n## Widget\n\nThe widget.\n\nOwner: `pg`.\n' >> docs/glossary.md && mplant "Widget" )
+mpara pg '# Roadmap\n\n## Widget beta\nScopes:\n- `w`: the w\n'
+mspec sw 'Widget beta/w' && mplant "sw"
+msg="movein: the plan refuses text above the first heading with no phase to keep it"
+printf '# Roadmap\n\nIntro.\n\n## No phase\n- `n`: n\n' > .jig/roadmap.md && mplant "lists only"
+out=$($J move-in --product Widget 2>&1); rc=$?; git reset -q --hard HEAD~1
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'no phase to keep it'" "$out"
+msg="movein: with M's jig older than jig move-in, step 1 is refused, saying to /jig:update M first"
+( cd "$MM" && sed -i.bak 's/def cmd_move_in(/def cmd_move_in_was(/' .jig/jig.py && rm .jig/jig.py.bak && mplant "old jig" )
+out=$($J move-in --product Widget --apply 2>&1); rc=$?
+( cd "$MM" && git -c core.hooksPath=/dev/null revert --no-edit HEAD >/dev/null )
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '/jig:update in M first' && ! git -C '$MM' rev-parse -q --verify refs/heads/propose/pg-move-in" "$out"
+$J move-in --product Widget --apply >/dev/null 2>&1 && git commit -qm "specs: move-in" >/dev/null 2>&1
+( cd "$MM" && git switch -q propose/pg-move-in && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-edit propose/pg-move-in ) >/dev/null 2>&1
+msg="movein: pg's ## Widget beta, already its term, moves in unchanged, and step 2 runs, its Scope: line kept"
+out=$($J move-in --product Widget --apply 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && grep -qx 'Scope: Widget beta/w' .jig/specs/sw.md && git diff --cached --name-status | grep -q '^D	.jig/roadmap.md' && git commit -qm 'move in' >/dev/null 2>&1" "$out"
 # A pararepo whose product M already names, with a heading under a term it owns.
 ( cd "$MM" && printf '\n## Foxy\n\nThe fox app.\n\nOwner: `pf`.\n\n## Gadget\n\nThe gadget.\n\nOwner: `pf`.\n' >> docs/glossary.md && mplant "Foxy and Gadget" )
 mpara pf '# Roadmap\n\n## beta\nScopes:\n- `b`: the b\n\n## Gadget beta\nScopes:\n- `g`: the g (after beta/b)\n'
