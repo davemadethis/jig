@@ -83,9 +83,9 @@ a rename changes both of its paths: R3–R5, P1, P2 and P4 count each.
 - **R2** A job is built in its own worktree. Off trunk, a branch on no job is refused while
   jobs are open, except a `propose/` branch in a metarepo (Metarepo and pararepos, rule 1).
 - **R3** A job changes only its `owns`, its `shares`, `common`, or files new to the repo, and
-  adds to `.jig/decisions.md` (Decision log), whatever its lists say. There it changes lines in
-  place only under `## Open`, and a line it added itself, and removes an entry only in adding
-  the accepted one that supersedes it.
+  adds to `.jig/decisions.md` (Decision log), whatever its lists say. There it changes in place
+  only a line it added itself, and removes an entry only in adding the accepted one that
+  supersedes it. It may add to `.jig/ideas.md` (Decision log, Ideas) and change it in place.
 - **R4** Another open job's `owns` is refused even if this job also lists it.
 - **R5** The board is the hubnode's: `config.json` and `jobs.json` are edited on trunk only.
   So is the roadmap, the owner's: `.jig/roadmap.md`, and `ROADMAP.md` where trunk has a
@@ -280,7 +280,7 @@ says decides, not its heading: a `## Status` or `## Current state` describing th
 thing (a status call, a state machine's states) is product. Work with no phase yet, parked
 mid-build (naming the pages it will touch) or not started, is an item under `## No phase` in
 `.jig/roadmap.md` (Roadmap), written only on the owner's word. An open
-product question is an `## Open` entry in `.jig/decisions.md`, which the page may cite. Review
+product question is an idea in `.jig/ideas.md`, which the page may cite. Review
 findings not taken go in `.jig/ledgers/DEFERRED.md`. `jig survey` lists a `## Undefined`
 heading, jig's own retired one, with where its content goes; it searches no other heading,
 since a heading's word alone says nothing. A page that still carries a project section works as
@@ -1059,9 +1059,8 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
 
 Every repo keeps one log, `.jig/decisions.md`, which `jig init` writes: what was decided and
 why, and what changed, grouped by release. Its format is Keep a Changelog's, plus decision
-entries; it opens with two lines saying so, that versions are MILESTONE.FEATURE.PATCH (Versioning), and what breaking means here. Then three kinds of section, top to bottom:
+entries; it opens with two lines saying so, that versions are MILESTONE.FEATURE.PATCH (Versioning), and what breaking means here. Then two kinds of section, top to bottom:
 
-- `## Open`: open and proposed decisions. An entry's status changes here in place.
 - `## Unreleased`: accepted entries and change lines since the last release.
 - `## vX.Y.Z - YYYY-MM-DD`: one per release, newest first, with a plain hyphen.
 
@@ -1117,10 +1116,25 @@ first; `<repo>/<id>` picks the log when the id is in more than one. In a metarep
 two pararepos' entries touch while none of its own does: that ruling is probably the
 metarepo's.
 
-The status is `Accepted (who, date).`, or under `## Open`, `Open (date).` or `Proposed (date).`.
-Only decision entries say who decided. A rejected entry is removed; git and its spec's
-Alternatives keep it. A question that binds others gets its entry when it is asked, under
-`## Open`, so it can be cited before it is answered.
+The status is `Accepted (who, date).` The log holds decisions only. Only decision entries say
+who decided. A rejected entry is removed; git and its spec's Alternatives keep it.
+
+**Ideas.** What is still to be researched before it can be decided, scoped, built and
+documented is an idea, in `.jig/ideas.md` beside the log, which `jig init` writes. It opens
+with `# Ideas` and a line saying what it holds; then its entries, one after another, with no
+sections. An idea is an entry in the decision entry's form, with an id from the log's counter
+(a branch writes `D-?<slug>`, `jig merge` numbers it in either file, one id names one thing
+across both), and the status `Open (date).` or `Proposed (date).`, optionally ending
+`Supersedes <id>.`. `Proposed` means an answer is put forward. An idea changes in place, and
+leaves in one of three ways: decided, its block moves with its id to the log's `## Unreleased`
+as `Accepted (who, date).`; dropped, removed with no line, as a rejected entry is; or, in a
+metarepo, moved down with a move line (Released sections). A question that binds others is
+written as an idea when it is asked, so it can be cited before it is answered. `jig decision`,
+`jig reading-list` and peers read both files; `jig reading-list <paths>` shows each page's
+ideas. A log from before the ideas file kept them under `## Open`: `jig update --apply` folds
+that section into `.jig/ideas.md`, ids and blocks byte for byte (in a metarepo, `jig update
+--apply --fold-ideas` in a job), and then the hook refuses an `## Open` heading or an open or
+proposed entry the log adds.
 
 **Change lines** follow the entries, in Keep a Changelog's groups and order: `### Added`,
 `### Changed`, `### Deprecated`, `### Removed`, `### Fixed`, `### Security`, an empty group
@@ -1167,8 +1181,10 @@ commit removing it adds, under `## Unreleased` `### Removed`, a line naming its 
 handed down to the pararepo that owns it (Metarepo and pararepos, What the metarepo holds), whose
 line is its forwarding address, a pointer to its new home: `- D-040: moved to
 app/.jig/decisions.md § D-016.`, and for a page or a section `- docs/ui.md: moved to
-app/docs/ui.md.` or `- docs/ui.md § Build: moved to app/docs/ui.md § Build.`. An Open entry or a
-page needs no line to leave, but takes it all the same, so readers see it moved, not removed.
+app/docs/ui.md.` or `- docs/ui.md § Build: moved to app/docs/ui.md § Build.`. An idea moves down
+the same way, its target the pararepo's `.jig/ideas.md § <id>`, or its log when it lands
+decided, and the hook looks the target id up in either file there. An idea or a page needs no
+line to leave, but takes it all the same, so readers see it moved, not removed.
 These are the only two reasons a `### Removed` line lets a released entry go; any other text
 lets nothing go, and the refusal names both lines. The hook checks a move line the commit adds:
 the line is under `## Unreleased` (a move line anywhere else is refused, and nothing reads
@@ -1210,7 +1226,7 @@ on its own. `jig update --merge-log` shows the log they would make; on the owner
 
 - each release section keeps its lines as written, its heading in the log's form, and an
   `## [Unreleased]` is the log's one `## Unreleased`;
-- an open or proposed row becomes an entry under `## Open`, keeping who proposed it;
+- an open or proposed row becomes an idea in `.jig/ideas.md`, keeping who proposed it;
 - an accepted row becomes an entry in the oldest release whose lines name its id, ranges
   (`D-029–D-044`) included, or under `## Unreleased` when none does, a row superseded by
   another becoming the one the newer entry supersedes, dated when it was accepted;
@@ -1251,7 +1267,7 @@ every one the log has named, never its own number:
 
 - `accepted`, `in force` and `approved` become `Accepted (<who>, <date>).`, the who from a
   `decision-makers` or `Deciders` field or `not recorded`; `proposed` and `draft` become
-  `Proposed (<date>).` and `open` `Open (<date>).`, under `## Open`; `superseded by N` (or
+  `Proposed (<date>).` and `open` `Open (<date>).`, as ideas in `.jig/ideas.md`; `superseded by N` (or
   `superceded`) is accepted, and N's entry supersedes it; `rejected` and `deprecated` are left
   out and listed. Any other status, two records with one number, a superseder that is no record
   or is left out, and a numbered file with no status are refused before anything is written;
@@ -1261,8 +1277,8 @@ every one the log has named, never its own number:
   becomes a bold label paragraph, relative links are rebased to the log's folder, and a last line
   names the record (`Record 0001 before this log.`), so a citation left in history can be
   followed. A date missing takes the day git added the file, and the run lists it;
-- accepted entries go after `## Unreleased`'s last entry, before its change lines, the others
-  after `## Open`'s. Into a log in use too: its entries and lines stay byte for byte, and the
+- accepted entries go after `## Unreleased`'s last entry, before its change lines, the ideas
+  at the end of `.jig/ideas.md`. Into a log in use too: its entries and lines stay byte for byte, and the
   run says which ids it appends. A `CHANGELOG.md` or a register still goes only into an empty
   log, since their ids are the log's own form, and the run names each it leaves;
 - in the same change, every tracked Markdown file's citation of a record (a path or link to its file,
@@ -1294,8 +1310,8 @@ standing exception Fixed names. Each file's header names its `target` (a repo na
 (`new` or `update`), `destination` inside the target, and `source`. A destination is a bare
 path, with no space and no `:`, `,` or `;`: a spec, doc or decisions file whose destination
 carries anything else (`.jig/decisions.md, on branch x`, `see docs/x.md`) is refused, never
-guessed at. Decisions land only in `.jig/decisions.md`: an open or proposed entry under
-`## Open`, an accepted one under `## Unreleased`. The `target` is the repo that owns the subject, as
+guessed at. Decisions land in `.jig/decisions.md`'s repo: an open or proposed entry as an idea
+in `.jig/ideas.md` beside it, an accepted one under `## Unreleased`. The `target` is the repo that owns the subject, as
 a claim's home is chosen (What the metarepo holds), never the repo the chat happens to run in.
 
 `jig staging resolve <file>` lands it: a new spec or doc is written with its source, new
@@ -1459,9 +1475,12 @@ The metarepo's decisions are its `.jig/decisions.md` (Decision log), cited as
 `<meta>/.jig/decisions.md § D-012`. A superseded entry, and a released section's change lines,
 are history: their paths aren't pointers, and this repo's own released lines aren't checked as
 citations. `jig sync` and the release say when the pinned release has been yanked, with its
-line. A question that binds the pararepos gets its entry under
-`## Open` when it is asked, so it can be cited before it is answered; it moves to `Proposed`,
-then is accepted (moved to `## Unreleased`) or removed. A reversed decision is a new entry that
+line. A question that binds the pararepos is an idea in the metarepo's `.jig/ideas.md` when it
+is asked, cited as `<meta>/.jig/ideas.md § E-012` or by its id before it is answered; it moves to
+`Proposed`, then is accepted (its block moved, id kept, to the log's `## Unreleased`) or removed.
+The ideas file is an entry file always, as the log is, and recorded by itself: M3 asks no
+change line for it. A citation of an id reads it in either file at the pin, so an idea folded or
+decided keeps every citation; `jig sync` reads one decided `<id> (accepted)`. A reversed decision is a new entry that
 supersedes the old. A pararepo's own entry that touches a contract cites
 its BUFFER row or proposal; once the metarepo accepts it, a new entry here supersedes it and
 points to the metarepo's id without restating it.
@@ -1489,7 +1508,7 @@ and every other Markdown file outside `docs/` that isn't a root document or a de
 (a file named `DECISIONS.md`, or holding decision rows), with `docs/<its top folder>/<name>.md`
 as where it goes; `/jig:redocument` moves them. `entry_files` never makes a page's home.
 There, a claim's source is a decision row or the pararepo file a pointer names; an Invariant's
-holder is an accepted decision id; an open question is an `## Open` entry in its log. A dated state
+holder is an accepted decision id; an open question is an idea in its repo's ideas log. A dated state
 section is checked against the pararepo's trunk and folded into the body or dropped.
 
 `entry_files` in `meta.json` lists what pararepos cite: what a release counts, what M3 asks a
@@ -1510,7 +1529,7 @@ bump with the term's new home, `<meta>/docs/glossary.md § <term>`.
 | Gate | Refuses |
 |---|---|
 | M1 | a source file outside `.jig/` in the metarepo |
-| M2 | in every repo, a `.jig/decisions.md` entry with a status in its heading, no status line (`Accepted (who, YYYY-MM-DD).`, `Open (YYYY-MM-DD).`, `Proposed (YYYY-MM-DD).`), a supersedes link to no entry in the log or in trunk's history of it, an id used twice, or an open or proposed entry outside `## Open`, or an entry added or changed with no `Touches:` line, or one naming what is no docs page there, a `§` that is no term of that glossary, or a `none` line not written `none — <reason>`, or beside pages (Decision log) |
+| M2 | in every repo, a `.jig/decisions.md` entry with a status in its heading, no status line (`Accepted (who, YYYY-MM-DD).`, `Open (YYYY-MM-DD).`, `Proposed (YYYY-MM-DD).`), a supersedes link to no entry in the log or in trunk's history of it, an id used twice, an `## Open` heading or an open or proposed entry the log adds (an idea goes in `.jig/ideas.md`), a `.jig/ideas.md` entry with a status in its heading, no `Open` or `Proposed` status line, a decided status, an id the log also has, or a section, or an entry or idea added or changed with no `Touches:` line, or one naming what is no docs page there, a `§` that is no term of that glossary, or a `none` line not written `none — <reason>`, or beside pages (Decision log) |
 | M3 | an entry file changed without a line or entry in `.jig/decisions.md` (of a `README.md` still listed, only its `## Glossary` section), judged on the branch since it left trunk: a line an earlier commit on the branch added covers this one, and a commit that drops the branch's only line is refused |
 | M4 | a commit on trunk that isn't a merge (jig's own files under `.jig/` excepted, but not `.jig/decisions.md`: a decision is reviewed work); a detached HEAD at trunk, or behind it, is trunk |
 | M5 | a merge into trunk of a commit `jig reviewed` never recorded. A commit counts as reviewed when a recorded one is its first-parent ancestor and nothing of the job's changed since: handoff notes and the rows they add to `.jig/ledgers/DEFERRED.md` (committed after the review by design) and syncs of trunk that `jig sync` would make don't count. A job's sync of trunk and the gate's scratch merge aren't merges into trunk; a merge on a detached HEAD at trunk, or behind it, is |
@@ -1541,7 +1560,7 @@ previous tag and dangles at the new one, or a decision id the release removed or
 cited as `<metarepo>/<path> § <id>`, or as a bare whole word where the pararepo's own decisions
 use another prefix (with the same prefix, only the qualified citation counts: a bare id is the
 pararepo's own).
-A rewording, an Open entry accepted or a glossary term reworded doesn't select it: its own
+A rewording, an idea accepted or a glossary term reworded doesn't select it: its own
 `jig sync` reports those. The request is `.jig/staging/pin-bump-<metarepo>.md`, `kind:
 pin-bump`, `destination: .jig/para.json`, with `from`, `pin` and `release` in its header and,
 from the pin to the new tag, the `**Breaking:**` lines, the citations to rewrite with each new

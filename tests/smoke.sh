@@ -6173,8 +6173,8 @@ Touches: docs/shared.md
 Ids are numbers.'
   git add -A && git commit -qm "board, D-001" && $J open tj >/dev/null && git add -A && git commit -qm "open tj"
   ( cd .git/jig/worktrees/tj && ulog '### D-?tj-slug the job decides
-Open (2026-11-13).
-Touches: docs/shared.md' Open && { [ "$2" = clean ] || printf -- '| 2026-11-13 | tj | job finding | should-fix | deferred | why [seen] |\n' >> .jig/ledgers/DEFERRED.md; } \
+Accepted (owner, 2026-11-13).
+Touches: docs/shared.md' && { [ "$2" = clean ] || printf -- '| 2026-11-13 | tj | job finding | should-fix | deferred | why [seen] |\n' >> .jig/ledgers/DEFERRED.md; } \
     && git add -A && git commit -qm "tj: D-?tj-slug" && $J reviewed >/dev/null && $J handoff >/dev/null 2>&1 && pcfold && git add -A && git commit -qm "note tj" )
   sed -i.bak 's/^Ids are numbers\.$/Ids are numbers, never reused./' .jig/decisions.md && rm .jig/decisions.md.bak
   [ "$2" = clean ] || printf -- '| 2026-11-13 | other | trunk finding | should-fix | deferred | why [seen] |\n' >> .jig/ledgers/DEFERRED.md
@@ -6185,7 +6185,7 @@ out=$(cd .git/jig/worktrees/tj && $J sync 2>&1); rc=$?
 expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q 'append conflicts resolved automatically' && ! echo \"\$0\" | grep -q 'R3 .jig/decisions.md' && ! git -C .git/jig/worktrees/tj rev-parse -q --verify MERGE_HEAD && git -C .git/jig/worktrees/tj rev-parse -q --verify HEAD^2" "$out"
 msg="decisions R3: after that sync, jig merge merges with no new handoff, keeping trunk's line and numbering the job's entry"
 gated tj; out=$($J merge tj 2>&1); rc=$?
-expect_pass sh -c "test $rc = 0 && grep -qx 'Ids are numbers, never reused.' .jig/decisions.md && grep -q '^### D-002 the job decides' .jig/ideas.md && ! grep -q 'D-?' .jig/decisions.md .jig/ideas.md" "$out"
+expect_pass sh -c "test $rc = 0 && grep -qx 'Ids are numbers, never reused.' .jig/decisions.md && grep -q '^### D-002 the job decides' .jig/decisions.md && ! grep -q 'D-?' .jig/decisions.md" "$out"
 dlsync "$T/dl-sync-clean" clean >/dev/null 2>&1
 msg="decisions R3: the same sync with nothing to resolve (pre-merge-commit) commits too"
 out=$(cd .git/jig/worktrees/tj && $J sync 2>&1); rc=$?
@@ -6266,6 +6266,19 @@ expect_pass sh -c "echo \"\$0\" | grep -q 'its home is .jig/ideas.md:5' && echo 
 msg="ideas: peers of an accepted entry list the idea, marked as one"
 out=$($J decision D-002 --peers 2>&1)
 expect_pass sh -c "echo \"\$0\" | grep -q '.jig/ideas.md § D-001 Does the adapter emulate a HID? (docs/x.md, an idea)'" "$out"
+msg="ideas: jig decision on the log's last entry prints none of the ideas file's header"
+out=$($J decision D-002 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -qx 'When x runs, it rules.' && ! echo \"\$0\" | grep -q '# Ideas\|Questions and ideas'" "$out"
+msg="ideas: with two ideas added, the second's bad Touches is named in .jig/ideas.md, not in the page it cites"
+uidea '### D-004 first of two
+Open (2026-11-23).
+Touches: docs/x.md' && uidea '### D-005 second of two
+Open (2026-11-23).
+Touches: docs/missing.md' && git add -A; out=$(git commit -qm two 2>&1); rc=$?; undo
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'M2 .jig/ideas.md:[0-9]* D-005 touches docs/missing.md' && ! echo \"\$0\" | grep -q 'M2 docs/'" "$out"
+msg="ideas: the log can't hold the heading jig joins the ideas file under"
+ulog '## .jig/ideas.md' && git add -A; out=$(git commit -qm join 2>&1); rc=$?; undo
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'the log can.t hold it'" "$out"
 msg="ideas: a commit moving D-001 to the log's ## Unreleased as accepted passes, and jig decision reads it there"
 python3 -c "import re; f='.jig/ideas.md'; s=open(f).read(); open(f,'w').write(re.sub(r'(?ms)^### D-001 .*?(?=^### |\Z)', '', s))"
 ulog '### D-001 The adapter emulates a HID
@@ -6287,12 +6300,12 @@ git add -A; expect_pass git commit -qm "drop D-003"
 sec_ideas_fold() {
 IF="$T/if"; pcnew "$IF" && mkdir -p docs && printf '# X\n\nThe x page.\n' > docs/x.md && git add -A && git commit -qm init && $J init >/dev/null
 rm .jig/ideas.md
-python3 -c "f='.jig/decisions.md'; s=open(f).read(); open(f,'w').write(s.replace('## Unreleased\n', '## Open\n\n### D-003 which wire?\nOpen (2026-11-01).\nTouches: docs/x.md\n\nNo one knows.\n\n### D-004 maybe json\nProposed (2026-11-02).\nTouches: docs/x.md\n\n## Unreleased\n', 1))"
+python3 -c "f='.jig/decisions.md'; s=open(f).read(); open(f,'w').write(s.replace('## Unreleased\n', '## Open\n\n### D-003 which wire?\nOpen (2026-11-01).\nTouches: docs/x.md\n\nNo one knows.\n\n### D-004 maybe json\nProposed (2026-11-02).\nTouches: docs/x.md\n\n### D-006 asked before Touches\nOpen (2026-10-01).\n\n### D-007 on a page since gone\nOpen (2026-10-02).\nTouches: docs/gone.md\n\n## Unreleased\n', 1))"
 git add -A && git -c core.hooksPath=/dev/null commit -qm "an old log"
 msg="ideas fold: jig update lists the log's ## Open for folding"
 out=$($UP 2>&1)
 expect_pass sh -c "echo \"\$0\" | grep -q 'fold .jig/decisions.md.s ## Open into .jig/ideas.md'" "$out"
-msg="ideas fold: --apply writes both blocks byte for byte into .jig/ideas.md, removes ## Open, and its trunk commit passes"
+msg="ideas fold: --apply writes every block byte for byte into .jig/ideas.md, removes ## Open, and its trunk commit passes, an entry with no Touches or a gone page included"
 $UP --apply >/dev/null 2>&1
 expect_pass sh -c "python3 -c \"
 import subprocess
@@ -6368,6 +6381,8 @@ emerge acc "E-001: decided" .jig/ideas.md .jig/decisions.md
 msg="ideas meta: accepting E-001 in place releases with no removal for L, and L's sync reads it as accepted"
 out=$($J release 2>&1); rc=$?; out2=$(cd "$L" && $J sync 2>&1)
 expect_pass sh -c "test $rc = 0 && ! echo \"\$0\" | grep -q 'removed' && test ! -e '$L/.jig/staging/pin-bump-M.md' && echo \"\$1\" | grep -q 'E-001 (accepted): used in .jig/specs/l.md' && ! echo \"\$1\" | grep -q 'E-001 (removed)'" "$out" "$out2"
+msg="ideas meta: across releases that only added ideas beside it, the log's last entry E-002 reads as unchanged"
+expect_pass sh -c "! echo \"\$0\" | grep -q 'E-002'" "$out2"
 # Moved down: an idea leaves M with a move line naming L's ideas file.
 cd "$L" && printf '\n### D-001 does L wake?\nOpen (2026-11-05).\nTouches: none — a question for L.\n' >> .jig/ideas.md && git add -A && git -c core.hooksPath=/dev/null commit -qm "L: D-001"
 cd "$M" && E3=E-003
@@ -6400,8 +6415,8 @@ out=$(git commit -qm edit 2>&1); undo; expect_pass sh -c "echo \"\$0\" | grep -q
 msg="supersede: a proposed entry naming Supersedes D-001 removes nothing: removing D-001 with it is refused"
 ulog '### D-002 maybe strings
 Proposed (2026-11-02). Supersedes D-001.
-Touches: docs/shared.md' Open && rment D-001 && git add -A; out=$(git commit -qm proposal 2>&1); undo
-expect_pass sh -c "echo \"\$0\" | grep -q 'D-001 is removed from release v0.1.0, and no entry in the log supersedes it'" "$out"
+Touches: docs/shared.md' Open && rment D-001 && git add -A; held=$(git show :.jig/ideas.md | grep -cx '### D-002 maybe strings'); out=$(git commit -qm proposal 2>&1); undo
+expect_pass sh -c "test \"\$1\" = 1 && echo \"\$0\" | grep -q 'D-001 is removed from release v0.1.0, and no entry in the log supersedes it'" "$out" "$held"
 msg="supersede: one commit adding D-002 that supersedes D-001 and removing D-001 from v0.1.0 is accepted, change lines kept"
 ulog '### D-002 ids are strings
 Accepted (owner, 2026-11-02). Supersedes D-001.
@@ -6457,8 +6472,9 @@ Touches: docs/shared.md' && ulog '### D-007 maybe go back
 Proposed (2026-11-06). Supersedes D-004.
 Touches: docs/shared.md' Open && git add -A && git commit -qm "D-005, D-006, D-007"
 out=$($J update 2>&1); expect_pass sh -c "echo \"\$0\" | grep -A9 'Repo files to review' | grep -q 'D-005 is superseded by D-006: remove it; the entry superseding it names it'" "$out"
-msg="supersede: jig update doesn't list an entry only a proposal supersedes"
-expect_pass sh -c "! echo \"\$0\" | grep -q 'D-004 is superseded'" "$out"
+msg="supersede: jig update doesn't list an entry only a proposal supersedes, the proposal an idea it reads"
+expect_pass sh -c "grep -qx '### D-007 maybe go back' .jig/ideas.md && ! echo \"\$0\" | grep -q 'D-004 is superseded'" "$out"
+
 
 SM2="$T/sm"; mkdir -p "$SM2" && cd "$SM2" && git init -q -b main && git config user.email t@t && git config user.name t
 cp -r "$P/jig" .jig && cp "$P/AGENTS.md" "$P/CLAUDE.md" . && git add -A && git commit -qm init

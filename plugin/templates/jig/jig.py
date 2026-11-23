@@ -711,8 +711,8 @@ def check_rules(root: Path, board: Board, *, staged: bool) -> list[str]:
                 break
         else:
             # Any job may record a decision or a change, whatever its lists say, since M3 asks
-            # a metarepo job for its line. It only adds, outside ## Open where an open entry's
-            # status changes in place: a rewrite would take what others recorded with it.
+            # a metarepo job for its line. It only adds (a log not folded yet still lets its open
+            # entries change in place): a rewrite would take what others recorded with it.
             # Ideas change in place and leave when decided or dropped, so any job may edit them.
             if p == IDEAS:
                 continue
@@ -5930,6 +5930,9 @@ def log_entries(text: str, prefix: str) -> list[dict]:
     base = None
     for n, line in enumerate(lines):
         if line == IDEAS_JOIN and base is None:
+            # The log's last entry ends here: the ideas file's header is none of its text.
+            if out and out[-1]["end"] is None:
+                out[-1]["end"] = n
             base, section = n, IDEAS
             continue
         if line.startswith("## ") and base is None:
@@ -6060,7 +6063,8 @@ def open_problems(old: str, new: str, prefix: str) -> list[str]:
     """The log keeps only decisions: a `## Open` heading it didn't have, and an Open or
     Proposed entry added under one, are refused by line. A log not folded yet keeps what it
     has, so its entries can still change in place until `jig update` folds them."""
-    out = []
+    out = [f"M2 {LOG}:{n} `{IDEAS_JOIN}` is the heading jig joins the ideas file under when it reads "
+           f"both: the log can't hold it" for n, l in enumerate(new.splitlines(), 1) if l == IDEAS_JOIN]
     if not any(OPEN_HEADING.match(l) for l in old.splitlines()):
         out += [f"M2 {LOG}:{n} `## Open`: the log holds decisions only; an open question is an "
                 f"idea in {IDEAS}" for n, l in enumerate(new.splitlines(), 1) if OPEN_HEADING.match(l)]
@@ -6116,13 +6120,16 @@ def ideas_problems(text: str, log: str, prefix: str, trunk: str = "", trunk_side
 
 def ideas_rules(trunk: str, staged: bool, trunk_side: bool = False) -> list[str]:
     """M2 for the ideas file, whenever a change touches it or the log beside it."""
+    since = since_trunk(trunk)
     new = in_index(IDEAS, staged)
-    old = at_rev(since_trunk(trunk), IDEAS)
+    old = at_rev(since, IDEAS)
     if not new:
         return [f"{IDEAS} is the repo's ideas log: it is never deleted"] if old else []
     prefix = log_prefix(trunk)
+    # An entry the fold brings from the log's ## Open is as trunk had it, not new: its Touches
+    # line is judged when it changes, as it would have been in the log.
     return (ideas_problems(new, in_index(LOG, staged), prefix, trunk, trunk_side)
-            + touches_problems(old, new, prefix, trunk, staged, path=IDEAS))
+            + touches_problems(with_ideas(at_rev(since, LOG), old), new, prefix, trunk, staged, home=IDEAS))
 
 
 def replaced(e: dict, prefix: str) -> list[str]:
@@ -6154,8 +6161,9 @@ def in_log_history(want: str, rev: str) -> bool:
 
 
 def removed_entries(old: str, new: str) -> tuple[str, list[dict]]:
-    """OLD with each entry block NEW no longer has taken out, and those of them outside
-    ## Open that no accepted entry in NEW supersedes: only that removes one."""
+    """OLD with each entry block NEW no longer has taken out, and those of them that were
+    decided (outside a not-yet-folded log's open section) and that no accepted entry in NEW
+    supersedes: only that removes one."""
     prefix = log_prefix_of(old)
     now = log_entries(new, prefix)
     gone = [e for e in log_entries(old, prefix) if e["id"] not in {n["id"] for n in now}]
@@ -6438,7 +6446,8 @@ def frozen_problems(old: str, new: str, trunk: str, only: set[str] | None = None
 
 
 def outside_open_deleted(old: str, new: str) -> bool:
-    """Whether NEW drops or rewrites a line of OLD outside ## Open: elsewhere the log only grows,
+    """Whether NEW drops or rewrites a line of OLD outside a not-yet-folded log's open section,
+    where its open entries change in place: elsewhere the log only grows,
     but for an entry NEW supersedes, which it removes, and an entry's Touches line, which may
     change. The swap of the old versioning header for the new one, word for word, is no rewrite."""
     if OLD_LOG_HEAD in old and OLD_LOG_HEAD not in new and LOG_HEAD in new:
@@ -7106,7 +7115,7 @@ def touched_term(path: str, term: str, repo: str, cache: Path | None, staged: bo
 
 
 def touches_problems(old: str, new: str, prefix: str, trunk: str, staged: bool,
-                     path: str = LOG) -> list[str]:
+                     home: str = LOG) -> list[str]:
     """M2: an entry added or changed names the pages it touches, and each is a docs page. An
     entry as trunk has it is left alone until it changes. `jig update --merge-log` converting a
     register writes entries decided before Touches; they are backfilled from update's list. Only
@@ -7114,7 +7123,7 @@ def touches_problems(old: str, new: str, prefix: str, trunk: str, staged: bool,
     root = Path.cwd()
     # A register's open rows and open records convert into the ideas file, decided before
     # Touches as the log's entries were: the log's own text says whether this is that merge.
-    log_old = old if path == LOG else at_rev(since_trunk(trunk), LOG)
+    log_old = old if home == LOG else at_rev(since_trunk(trunk), LOG)
     migrating = not log_entries(log_old, prefix) and migrating_log(trunk, staged)
     converted = migrated_ids(trunk, (load_meta(trunk) or {}).get("decision_prefix")) if migrating else set()
     converted |= records_converted(old, new, prefix, trunk, staged)
@@ -7127,7 +7136,7 @@ def touches_problems(old: str, new: str, prefix: str, trunk: str, staged: bool,
     for e in log_entries(new, prefix):
         if was.get(e["id"]) == e["block"] or e["id"] in converted:
             continue
-        at = f"{path}:{e['line']} {e['id']}"
+        at = f"{home}:{e['line']} {e['id']}"
         ptrs = entry_touches(e["block"])
         reason = touches_none(e["block"])
         if reason is not None:
@@ -8965,7 +8974,7 @@ def buffer_copy(listed: set[str], line: str) -> bool:
 def used_in(text: str, whole: bool = False) -> list[str]:
     """This repo's files that use TEXT. Of jig's own files only specs and ledgers count: the
     rulebook's examples and the cache aren't the repo's use, but a spec or an Open BUFFER row is."""
-    keep = (f"{DIR}/specs/", f"{DIR}/ledgers/", LOG, PROCESS)
+    keep = (f"{DIR}/specs/", f"{DIR}/ledgers/", LOG, IDEAS, PROCESS)
     return list(dict.fromkeys(f for f, _, line in grep_hits("-I", "-F", *(["-w"] if whole else []), "--", text)
                               if (not f.startswith(f"{DIR}/") or f.startswith(keep)) and not closed_row(f, line)))
 
@@ -12209,20 +12218,28 @@ def fold_open(log: str, ideas: str) -> tuple[str, str]:
     """LOG with its `## Open` sections gone, and IDEAS with what they held appended, entry
     blocks byte for byte: the log keeps only decisions."""
     lines = log.split("\n")
-    moved, keep, inside = [], [], False
+    moved, keep, inside, cuts = [], [], False, []
     for l in lines:
         if l.startswith("## ") or l.startswith("##\t"):
             inside = bool(OPEN_HEADING.match(l.rstrip("\r")))
             if inside:
+                cuts.append(len(keep))
                 continue
         (moved if inside else keep).append(l)
     body = "\n".join(trimmed(moved))
     ideas = ideas or IDEAS_SEED
     if body.strip():
         ideas = ideas.rstrip("\r\n") + "\n\n" + body + "\n"
-    # Squeeze the blank lines the section left between the header and ## Unreleased to one.
-    new = re.sub(r"\n{3,}", "\n\n", "\n".join(keep))
-    return new, ideas
+    # Where a section left, the blank lines on either side become one; the rest stays as written.
+    for c in reversed(cuts):
+        a = c
+        while a > 0 and not keep[a - 1].strip():
+            a -= 1
+        b = c
+        while b < len(keep) and not keep[b].strip():
+            b += 1
+        keep[a:b] = [""] if 0 < a and b < len(keep) else []
+    return "\n".join(keep), ideas
 
 
 def has_open(root: Path) -> bool:
@@ -12678,7 +12695,8 @@ def left_behind(root: Path, files: list[str], plan: dict, handled: list[str]) ->
 def superseded_kept(root: Path) -> list[tuple[str, str]]:
     """Each entry the log still holds that another supersedes: a log from when released sections
     were frozen kept it, and now the superseding commit removes it."""
-    text = (root / LOG).read_text(errors="replace") if (root / LOG).is_file() else ""
+    # The ideas too: an idea's Supersedes is a proposal's, which retires nothing, as in the log.
+    text = read_entries_text(root)
     prefix = log_prefix_of(text)
     entries = log_entries(text, prefix)
     have = {e["id"] for e in entries}
@@ -15100,7 +15118,7 @@ def glossary_plan(root: Path) -> dict:
     gtext = "# Glossary\n\n" + "\n".join(body) + "\n"
     plan["write"][GLOSSARY] = gtext
     plan["terms"] = glossary_terms(gtext)
-    keep = (f"{DIR}/specs/", f"{DIR}/ledgers/", LOG, PROCESS)
+    keep = (f"{DIR}/specs/", f"{DIR}/ledgers/", LOG, IDEAS, PROCESS)
     for f in [*files, GLOSSARY]:
         if f.startswith(f"{DIR}/handoffs/") and (root / f).is_file():
             # A handoff records its day: a pointer in it is history, named and left.
