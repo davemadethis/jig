@@ -933,6 +933,24 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
   roadmap changes, the hook refuses, by line, a ref naming nothing the roadmap has, a ref to
   itself (a scope naming its own phase too), and a ring, named once with all its members;
   `jig roadmap` reports the same.
+- **Labels**: a scope or a `No phase` item may end with `(labels <term>, …)`, the features it
+  touches, peeled with its `(after …)`, `(needed by …)` and `(touches …)` in any order; a second
+  `(labels …)` on one line is refused, as a second of the others is. Labels sit on scopes and
+  items, never on a phase: a `(labels …)` line of its own in a phase is refused by line. Each
+  label is a term of the glossary: in a family the metarepo's `docs/glossary.md`, read where the
+  roadmap is (on its trunk, live from there in a pararepo); in a stand-alone repo its own. It
+  matches in any case and spacing: both, case folded with each run of spaces, `-` and `_` read
+  as one `-`, are equal, so `walyt-compatibility` names `## Walyt compatibility`. On trunk, when
+  the roadmap changes, the hook refuses by line a label naming no term, and a `(labels)` naming
+  nothing; with no glossary, any label is refused, naming it. On the metarepo's or a
+  stand-alone repo's trunk, a commit removing or renaming a term a label names is refused,
+  naming each scope: re-point the label in the same commit. A label is never a ref: it orders
+  nothing, changes no state and blocks nothing, so a ref naming one is a ref to nothing.
+  `jig roadmap` prints each scope's labels after its state, the view shows them in its cell,
+  and `jig roadmap --label <term>` lists only the scopes and items carrying it, across every
+  product, each with its state, owning repo and specs, headed by the term's `Owner:`: what
+  touches a feature, and which other repo's work leans on one this repo owns. A new term is the
+  metarepo hubnode's; a repo labels its own scopes freely.
 - **No phase**, the one reserved section that isn't a phase, and the one list for work with
   no phase, in no order, on the owner's word: work parked mid-build and work not started, one
   place for both. Each item reads `` - `<id>`: <what it is> ``, unindented, optionally ending
@@ -1731,6 +1749,7 @@ jig next [<job>]            a job's next step, the node or role that does it, an
 jig workflow                the older command: the roles under the old step names, then the flows
 jig handoff [--spec path] [--partial]   write the note for HEAD; --partial: it doesn't finish the spec
 jig roadmap [--write]       the roadmap's states on trunk; --write regenerates ROADMAP.md
+jig roadmap --label <term>  only the scopes and items carrying that label, across every product
 jig gate <name>             hubnode: verify, set up the scratch checkout, print its check
 jig propose <spec> <slug>   pararepo: open a proposal branch on the metarepo
 jig propose <spec> <slug> --pointers  the same, recorded as pointer rewrites worked ahead of

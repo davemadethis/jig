@@ -115,6 +115,12 @@ sprint.
 A named piece of a phase, written `<phase>/<scope>`. A spec takes one or more scopes, and a scope
 is done when every spec taking it has landed. A scope isn't a ticket, and nobody marks it done.
 
+## Label
+
+A feature a scope or a `No phase` item touches, written `(labels <term>, …)` at its end. Each
+label is a glossary term, matched in any case and spacing, so work can be read by feature. A
+label isn't a dependency and orders nothing.
+
 ## Staging
 
 A folder, `.jig/staging/`, where a file written in another chat waits for a session in the repo

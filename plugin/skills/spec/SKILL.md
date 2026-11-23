@@ -53,7 +53,9 @@ Before anything is built:
    takes it with its `Scope:` line, `No phase/<id>` for an item, so it reads done when the job
    lands), **depart** (the task goes another way, and why), or **leave** (out of scope). Work
    with no phase yet, parked mid-build (naming its pages) or not started, is a `## No phase`
-   item, added on the owner's word as a roadmap change (`/jig:stage`), never written on a page. The spec is where project
+   item, added on the owner's word as a roadmap change (`/jig:stage`), never written on a page.
+   An item's or a scope's labels, `(labels <term>, …)`, are the features it touches, each a
+   glossary term. The spec is where project
    meets product: of each decision entry and page change it plans, ask is this about the product, about when and in what order we build it, or about how the
    repository is worked? What is the project stays in the spec or the roadmap, and how the repo is
    worked goes to its home by the test in `.jig/RULES.md` (Homes), never a page; the pages and entries it writes describe the

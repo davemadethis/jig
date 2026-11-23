@@ -5126,6 +5126,78 @@ gated R; out=$($J merge R 2>&1); rc=$?
 msg="family D: meta's merge renaming its own page re-points its Demos scope, and leaves the Walyt scope's touch, pa's page"
 expect_pass sh -c "test $rc = 0 && grep -q '^- .ov.: overview (touches docs/intro.md)' .jig/roadmap.md && grep -q '^- .ov.: its overview (touches docs/overview.md)' .jig/roadmap.md" "$out"
 [ $rc = 0 ] || echo "$out" | tail -5
+# Labels name the metarepo's glossary terms, read live from its trunk in a pararepo.
+cd "$FM"
+printf '\n## Teleport\n\nMoving a session between devices.\n\nOwner: `pb`.\n' >> docs/glossary.md && git add -A && git commit -qm "GLOSSARY: teleport"
+sed -i.bak 's/^- `pairing`: pairing/- `pairing`: pairing (labels teleport)/' .jig/roadmap.md && rm .jig/roadmap.md.bak
+msg="family labels: Walyt alpha/pairing labelled teleport commits on meta's trunk"
+git add -A && expect_pass git commit -qm "GLOSSARY: label pairing"
+msg="family labels: in pa, jig roadmap --label teleport lists it, headed by the term's owner, pb"
+cd "$FA"; out=$($J roadmap --label teleport)
+expect_pass sh -c "echo \"\$0\" | sed -n 1p | grep -qx 'Teleport: owned by pb' && echo \"\$0\" | grep -qE '^  Walyt alpha/pairing +[a-z]+ +pa'" "$out"
+msg="family labels: a label meta's glossary lacks is refused on meta's trunk, naming its glossary"
+cd "$FM"; sed -i.bak 's/(labels teleport)/(labels walyt-mesh)/' .jig/roadmap.md && rm .jig/roadmap.md.bak && git add -A
+out=$(git commit -qm "GLOSSARY: mesh" 2>&1); rc=$?; git reset -q --hard
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'labels walyt-mesh, which docs/glossary.md has no term for'" "$out"
+}
+
+# ---------------------------------------------------------------- labels
+sec_labels() {
+lspec() { mkdir -p .jig/specs && printf '# %s\n\nSource: smoke\nScope: %s\n\n## Intent\nx\n' "$1" "$2" > ".jig/specs/$1.md"; }
+lrefused() { git add -A; out=$(git commit -qm "$1" 2>&1); rc=$?; git reset -q --hard; test $rc != 0 && echo "$out" | grep -q "$2"; }
+lstate() { $J roadmap | grep -E "^  $1 " | awk '{print $2}'; }
+LB="$T/lb"; pcnew "$LB" && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
+mkdir -p docs && printf '# Glossary\n\n## Teleport\n\nMoving a session between devices.\n\n## Walyt compatibility\n\nWorking with the Walyt wallet.\n' > docs/glossary.md && git add -A && git commit -qm "GLOSSARY: terms"
+printf '# Roadmap\n\n## alpha\nScopes:\n- `pairing`: pair two devices (labels teleport, walyt-compatibility) (after alpha/host)\n- `host`: the host (touches docs/glossary.md) (labels Teleport)\n\n## No phase\n- `q`: a later q (labels teleport)\n- `r`: unlabelled\n' > .jig/roadmap.md
+msg="labels: scopes with (labels …), in any order with (after …) and (touches …), commit on trunk"
+git add -A && expect_pass git commit -qm "GLOSSARY: roadmap"
+msg="labels: jig roadmap prints a scope's labels beside it, and its after still"
+expect_pass sh -c "$J roadmap | grep -E '^  alpha/pairing ' | grep -q 'labels teleport, walyt-compatibility  after alpha/host' && $J roadmap | grep -E '^  alpha/host ' | grep -q 'labels Teleport'"
+msg="labels: the view shows both labels in pairing's cell, and host's touch is no text"
+$J roadmap --write >/dev/null
+expect_pass sh -c "grep -q '\*\*pairing\*\*: pair two devices<br>labels teleport, walyt-compatibility' ROADMAP.md && grep -q '\*\*host\*\*: the host (touches docs/glossary.md)<br>labels Teleport' ROADMAP.md"
+git add -A && git commit -qm "roadmap view"
+msg="labels: a label naming no glossary term is refused by line, naming docs/glossary.md"
+sed -i.bak 's/(labels Teleport)/(labels telport)/' .jig/roadmap.md && rm .jig/roadmap.md.bak
+expect_pass lrefused "GLOSSARY: typo" 'line 5: scope alpha/host labels telport, which docs/glossary.md has no term for'
+msg="labels: (labels) naming nothing is refused"
+sed -i.bak 's/(labels Teleport)/(labels)/' .jig/roadmap.md && rm .jig/roadmap.md.bak
+expect_pass lrefused "GLOSSARY: empty" 'scope alpha/host has (labels) naming nothing'
+msg="labels: a second (labels …) on one line is refused"
+sed -i.bak 's/(labels Teleport)/(labels Teleport) (labels teleport)/' .jig/roadmap.md && rm .jig/roadmap.md.bak
+expect_pass lrefused "GLOSSARY: twice" 'scope alpha/host has a second (labels …)'
+msg="labels: a (labels …) line of its own in a phase is refused: labels sit on scopes"
+sed -i.bak 's/^## alpha$/## alpha\n(labels teleport)/' .jig/roadmap.md && rm .jig/roadmap.md.bak
+expect_pass lrefused "GLOSSARY: phase labels" 'phase alpha has a (labels …) line of its own'
+msg="labels: a label is no ref: (after teleport) is refused as a ref to nothing"
+sed -i.bak 's/- `r`: unlabelled/- `r`: unlabelled (after teleport)/' .jig/roadmap.md && rm .jig/roadmap.md.bak
+expect_pass lrefused "GLOSSARY: after a label" 'No phase/r waits on teleport'
+msg="labels: states and rig's next step are what they are with the labels removed"
+with=$(lstate alpha/pairing)/$(lstate alpha/host)/$($J rig | grep -i 'next' | head -3)
+sed -i.bak 's/ (labels [^)]*)//g' .jig/roadmap.md && rm .jig/roadmap.md.bak && git add -A && git -c core.hooksPath=/dev/null commit -qm nolabels
+without=$(lstate alpha/pairing)/$(lstate alpha/host)/$($J rig | grep -i 'next' | head -3)
+git reset -q --hard HEAD~1
+expect_pass test "$with" = "$without"
+msg="labels: a glossary commit removing a term labels name is refused, naming each scope and item"
+python3 -c "p='docs/glossary.md'; s=open(p).read(); open(p,'w').write(s.replace('## Teleport\n\nMoving a session between devices.\n\n', ''))"
+git add -A; out=$(git commit -qm "GLOSSARY: no teleport" 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'scope alpha/pairing labels teleport' && echo \"\$0\" | grep -q 'scope alpha/host labels Teleport' && echo \"\$0\" | grep -q 'No phase/q labels teleport' && echo \"\$0\" | grep -q 're-point or drop the label in it'" "$out"
+msg="labels: with the labels re-pointed or dropped in that commit, it passes"
+sed -i.bak -e 's/(labels teleport, walyt-compatibility)/(labels walyt compatibility)/' -e 's/ (labels Teleport)//' -e 's/ (labels teleport)//' .jig/roadmap.md && rm .jig/roadmap.md.bak
+git add -A && expect_pass git commit -qm "GLOSSARY: no teleport"
+git reset -q --hard HEAD~1
+msg="labels: jig roadmap --label Teleport lists pairing, host and the No phase item q, with their states, and nothing else"
+lspec s1 alpha/host && git add -A && git commit -qm s1
+out=$($J roadmap --label Teleport)
+expect_pass sh -c "echo \"\$0\" | grep -qE '^  alpha/pairing +open' && echo \"\$0\" | grep -qE '^  alpha/host +taken +.jig/specs/s1.md' && echo \"\$0\" | grep -qE '^  No phase/q +open' && test \$(echo \"\$0\" | wc -l) = 3" "$out"
+msg="labels: --label of a term no glossary holds says so"
+expect_pass sh -c "$J roadmap --label nope | grep -q 'no scope or item carries the label nope: docs/glossary.md has no term for it'"
+msg="labels: one reader: LABELS is compiled once, and no other pattern in jig.py reads (labels"
+expect_pass sh -c "test \$(grep -c '^LABELS = re.compile' .jig/jig.py) = 1 && test \$(grep -c 'compile(r.*(labels' .jig/jig.py) = 1"
+msg="labels: in a repo with no docs/glossary.md, any label is refused, naming the missing glossary"
+git rm -q docs/glossary.md && git -c core.hooksPath=/dev/null commit -qm "no glossary"
+printf '\n- `t`: t (labels teleport)\n' >> .jig/roadmap.md
+expect_pass lrefused "GLOSSARY: t" 'No phase/t labels teleport, but there is no docs/glossary.md'
 }
 
 # ---------------------------------------------------------------- roadmap
@@ -9943,7 +10015,7 @@ msg="queue config: the overflow key with the owner's words commits"
 expect_pass setq '{"width": "all", "overflow": {"to": "github", "reason": "the owner: keep the standing yes"}}'
 }
 
-UNITS="rules merge_derived update board_split worktree_setup metarepo,staging pararepo release r6_takes,r6_ints merge_after_sync repos workflow init_old_board ledger_rows hardware update_per_file pararepo_commands entry_globs report_fixes sync_buffer buffer_answered pointers removals feedback slash_names homes structure meta_docs agents_lines page_contract roadmap family boundary decisions supersede touches,touches_terms sweep staging_batches merge_log findings glossary headings check_levels role_line consolidate cheaper_rounds next svg update_roles holders rig rig_batch close versioning pin_bump moves claims inbox rigger queue"
+UNITS="rules merge_derived update board_split worktree_setup metarepo,staging pararepo release r6_takes,r6_ints merge_after_sync repos workflow init_old_board ledger_rows hardware update_per_file pararepo_commands entry_globs report_fixes sync_buffer buffer_answered pointers removals feedback slash_names homes structure meta_docs agents_lines page_contract roadmap labels family boundary decisions supersede touches,touches_terms sweep staging_batches merge_log findings glossary headings check_levels role_line consolidate cheaper_rounds next svg update_roles holders rig rig_batch close versioning pin_bump moves claims inbox rigger queue"
 
 if [ "${1:-}" = --list ]; then echo $UNITS | tr ' ,' '\n\n'; exit 0; fi
 if [ "${1:-}" = --unit ]; then        # --unit <run folder> <unit>: one unit, its output to a file

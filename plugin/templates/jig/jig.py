@@ -10137,19 +10137,60 @@ def split_after(what: str) -> tuple[str, list[str] | None]:
     """A scope's text without its `(after …)` and `(needed by …)`, `(touches …)` kept, and the
     refs its `(after …)` names: None when it names no wait, [] when the parentheses hold
     nothing."""
-    body, after, _ = split_waits(what)
+    body, after, _, _ = split_waits(what)
     return body, after
 
 
-def split_waits(what: str) -> tuple[str, list[str] | None, list[str] | None]:
-    """(text, after refs, needed-by refs): the trailing `(after …)`, `(needed by …)` and
-    `(touches …)`, in any order, split off, the `(touches …)` written back at the end of the
-    text, where its readers look; None for one not written. Peeled in a loop, so no order of
-    the three can hide a wait as plain text; one written twice is read whole, refs and pages
-    joined, and repeated_waits names it for the hook to refuse."""
-    head, after, needed, touches, lists = what, None, None, None, 0
+# `(labels teleport, walyt-compatibility)` on a scope or a `No phase` item: the features it
+# touches, each a glossary term (R1–R3, R7). Never a ref: a label orders nothing. Read only by
+# split_labels and checked only by label_problems, so every reader of labels (the roadmap, the
+# ideas log) reads and checks them one way.
+LABELS = re.compile(r"\s*\(labels(?:\s+([^()]*))?\)\s*$")
+
+
+def split_labels(what: str) -> tuple[str, list[str] | None]:
+    """WHAT without the `(labels …)` that ends it, and the labels it names: None when it ends in
+    none, [] when the parentheses hold nothing."""
+    m = LABELS.search(what)
+    if not m:
+        return what, None
+    return what[:m.start()].rstrip(), refs_of(m.group(1))
+
+
+def label_fold(name: str) -> str:
+    """A label or a term as it is compared: case folded, each run of spaces, `-` and `_` one
+    `-`, so the scope-style `walyt-compatibility` names the heading `Walyt compatibility`."""
+    return re.sub(r"[\s_-]+", "-", name.casefold()).strip("-")
+
+
+def label_problems(labels: list[str] | None, glossary_text: str | None, where: str,
+                   glossary: str = GLOSSARY) -> list[str]:
+    """Each way LABELS, written at WHERE (`line <n>: scope <id>`), fails the glossary
+    GLOSSARY_TEXT (None when there is none): a label naming no term, after label_fold, or a
+    `(labels)` naming nothing. GLOSSARY is the file as a refusal names it."""
+    if labels is None:
+        return []
+    if not labels:
+        return [f"{where} has (labels) naming nothing"]
+    if glossary_text is None:
+        return [f"{where} labels {', '.join(labels)}, but there is no {glossary}: a label is a term "
+                "of it, so it goes in first"]
+    terms = {label_fold(t) for t in glossary_terms(glossary_text)}
+    return [f"{where} labels {l}, which {glossary} has no term for: a label is a term of it, any "
+            "case and spacing" for l in labels if label_fold(l) not in terms]
+
+
+def split_waits(what: str) -> tuple[str, list[str] | None, list[str] | None, list[str] | None]:
+    """(text, after refs, needed-by refs, labels): the trailing `(after …)`, `(needed by …)`,
+    `(labels …)` and `(touches …)`, in any order, split off, the `(touches …)` written back at
+    the end of the text, where its readers look; None for one not written. Peeled in a loop, so
+    no order of the four can hide a wait or a label as plain text; one written twice is read
+    whole, refs, labels and pages joined, and repeated_waits names it for the hook to refuse."""
+    head, after, needed, touches, lists, labels = what, None, None, None, 0, None
     while True:
-        if t := TOUCHES.search(head):
+        if (lb := split_labels(head))[1] is not None:
+            head, labels = lb[0], lb[1] + (labels or [])
+        elif t := TOUCHES.search(head):
             touches, head = (t.group(1) if touches is None else f"{t.group(1)}, {touches}"), head[:t.start()]
             lists += 1
         elif a := AFTER.search(head):
@@ -10159,32 +10200,44 @@ def split_waits(what: str) -> tuple[str, list[str] | None, list[str] | None]:
         else:
             break
     # Unchanged unless something was split off or joined: one `(touches …)` stays as written.
-    if after is None and needed is None and lists < 2:
-        return what, None, None
-    return head.rstrip() + (f" (touches {touches})" if touches is not None else ""), after, needed
+    if after is None and needed is None and labels is None and lists < 2:
+        return what, None, None, None
+    return head.rstrip() + (f" (touches {touches})" if touches is not None else ""), after, needed, labels
 
 
 def phase_waits(line: str) -> tuple[list[str] | None, list[str] | None] | None:
     """(after refs, needed-by refs) when LINE is nothing but `(after …)` and `(needed by …)`, in
     either order, as a phase writes its own: None for any other line, which is note prose."""
-    head, after, needed = split_waits(line.strip())
+    head, after, needed, _ = split_waits(line.strip())
     return (after, needed) if not head.strip() and (after is not None or needed is not None) else None
 
 
+def phase_labels(line: str) -> bool:
+    """Whether LINE is nothing but trailing parentheses, one of them `(labels …)`: a phase's
+    own labels, which R6 doesn't have (labels sit on scopes), so the hook refuses it rather
+    than keep it as note prose."""
+    head, _, _, labels = split_waits(line.strip())
+    return not head.strip() and labels is not None
+
+
 def repeated_waits(what: str) -> list[str]:
-    """Each of `(after …)`, `(needed by …)` and `(touches …)` that WHAT's tail writes twice:
-    one names all it holds, so a second is refused rather than half-read."""
+    """Each of `(after …)`, `(needed by …)`, `(labels …)` and `(touches …)` that WHAT's tail
+    writes twice: one names all it holds, so a second is refused rather than half-read."""
     head, seen, out = what, set(), []
     while True:
-        for kind, rx in (("touches", TOUCHES), ("after", AFTER), ("needed by", NEEDED)):
-            if m := rx.search(head):
-                if kind in seen and kind not in out:
-                    out.append(kind)
-                seen.add(kind)
-                head = head[:m.start()]
-                break
+        kind = ""
+        if (lb := split_labels(head))[1] is not None:
+            kind, head = "labels", lb[0]
         else:
+            for k, rx in (("touches", TOUCHES), ("after", AFTER), ("needed by", NEEDED)):
+                if m := rx.search(head):
+                    kind, head = k, head[:m.start()]
+                    break
+        if not kind:
             return out
+        if kind in seen and kind not in out:
+            out.append(kind)
+        seen.add(kind)
 
 
 def refs_of(text: str | None) -> list[str]:
@@ -10234,7 +10287,7 @@ def parse_section(text: str, section: str, problems: list[str] | None = None) ->
             problems.append(f"line {n}: not a {at} item (- `<id>`: {shape}, "
                             f"unindented): {line.strip()}")
             continue
-        body, refs, needed = split_waits((m.group(2) or "").strip())
+        body, refs, needed, labels = split_waits((m.group(2) or "").strip())
         for kind in repeated_waits((m.group(2) or "").strip()):
             problems.append(f"line {n}: {at} item {m.group(1)} has a second ({kind} …): one names all it holds")
         what, pages = split_touches(body)
@@ -10243,7 +10296,8 @@ def parse_section(text: str, section: str, problems: list[str] | None = None) ->
         if refs == []:
             problems.append(f"line {n}: {at} item {m.group(1)} has (after …) naming nothing")
         items.append({"id": m.group(1), "sid": f"{at}/{m.group(1)}", "what": what, "text": body,
-                      "touches": pages, "after": refs or [], "needed": needed or [], "line": n, "list": at})
+                      "touches": pages, "after": refs or [], "needed": needed or [], "line": n, "list": at,
+                      "labels": labels})
     return items
 
 
@@ -10329,10 +10383,17 @@ def parse_roadmap(text: str, problems: list[str] | None = None) -> list[dict]:
                 problems.append(f"line {n}: phase {m.group(1)} appears twice")
             phases.append({"name": m.group(1), "exit": [], "scopes": [], "line": n, "headed": False,
                            "note": [], "noting": True, "after": [], "after_line": 0, "after_of": {},
-                           "needed": [], "needed_of": {}})
+                           "needed": [], "needed_of": {}, "labels_of": {}})
             part = ""
         elif skip or not phases:
             continue
+        elif phase_labels(line):
+            # R6: a phase has scopes, and the scopes have labels. Kept as prose, a label would
+            # name a feature nothing reads.
+            problems.append(f"line {n}: phase {phases[-1]['name']} has a (labels …) line of its own: "
+                            "labels sit on its scopes, each scope naming its own")
+            if in_note:
+                phases[-1]["note"].append(line)
         elif part != "scopes" and (w := phase_waits(line)):
             # The phase's waits, read wherever they sit outside Scopes:, `(after …)` and
             # `(needed by …)` on one line or two, so none is ever dropped as note prose and its
@@ -10375,9 +10436,11 @@ def parse_roadmap(text: str, problems: list[str] | None = None) -> list[dict]:
             if sid in ids:
                 problems.append(f"line {n}: scope {sid} appears twice")
             ids.add(sid)
-            what, refs, needed = split_waits((m.group(2) or "").strip())
+            what, refs, needed, labels = split_waits((m.group(2) or "").strip())
             for kind in repeated_waits((m.group(2) or "").strip()):
                 problems.append(f"line {n}: scope {sid} has a second ({kind} …): one names all it holds")
+            if labels is not None:
+                phases[-1]["labels_of"][sid] = (labels, n)
             if refs is not None:
                 phases[-1]["after_of"][sid] = (refs, n)
                 if not refs:
@@ -10392,6 +10455,17 @@ def parse_roadmap(text: str, problems: list[str] | None = None) -> list[dict]:
             problems.append(f"line {p['line']}: phase {p['name']} has neither `Exit when:` nor "
                             f"`Scopes:` (every `## ` heading but ## {NO_PHASE} is a phase)")
     return phases
+
+
+def roadmap_label_problems(text: str, glossary_text: str | None, glossary: str = GLOSSARY) -> list[str]:
+    """Each label of TEXT's scopes and items that label_problems refuses, by line."""
+    out = []
+    for p in parse_roadmap(text):
+        for sid, (labels, n) in p["labels_of"].items():
+            out += label_problems(labels, glossary_text, f"line {n}: scope {sid}", glossary)
+    for i in parse_no_phase(text):
+        out += label_problems(i["labels"], glossary_text, f"line {i['line']}: {i['sid']}", glossary)
+    return out
 
 
 def waits_of(p: dict, sid: str) -> list[str]:
@@ -10743,6 +10817,9 @@ class Family:
         self.root, self.trunk = root, trunk
         self.kind, self.meta_loc, self.meta_name = "own", None, ""
         self.text = at_rev(trunk, ROADMAP)
+        # The glossary labels name terms of: the metarepo's in a family, read where the roadmap
+        # is; a repo's own otherwise. None when there is none, or it can't be reached.
+        self.glossary: str | None = at_rev(trunk, GLOSSARY) or None
         self.owners: dict[str, str] = {}
         self.others: list[tuple[str, Snapshot]] = []   # the other reachable repos' trunks
         self.unreachable: list[str] = []
@@ -10758,9 +10835,11 @@ class Family:
             self.meta_loc = meta_checkout(root, para)
             if self.meta_loc is None:
                 self.unreachable.append(self.meta_name)
+                self.glossary = None
                 return
             self.text = trunk_show(self.meta_loc, ROADMAP) or ""
-            self.owners = term_owners(trunk_show(self.meta_loc, GLOSSARY) or "")
+            self.glossary = trunk_show(self.meta_loc, GLOSSARY) or None
+            self.owners = term_owners(self.glossary or "")
             self.others.append((self.meta_name, Snapshot(Board.trunk_name(self.meta_loc), cwd=self.meta_loc)))
             try:
                 paras = list(json.loads(trunk_show(self.meta_loc, META) or "{}").get("pararepos") or [])
@@ -10780,6 +10859,11 @@ class Family:
             if trunk_show(loc, ROADMAP):
                 continue
             self.others.append((name, Snapshot(Board.trunk_name(loc), cwd=loc)))
+
+    @property
+    def glossary_name(self) -> str:
+        """The glossary as a refusal names it: the metarepo's, prefixed, when read from there."""
+        return f"{self.meta_name}'s {GLOSSARY}" if self.kind == "para" else GLOSSARY
 
     @property
     def reads_meta(self) -> bool:
@@ -10969,7 +11053,7 @@ def _roadmap_full(snap: Snapshot, fam: "Family | None" = None) -> tuple[list[dic
     for p in phases + [lp]:
         p["scopes"] = [{"id": sid, "what": what, "specs": takes.get(sid, []),
                         "notes": {f: closed[f] for f, _ in takes.get(sid, []) if f in closed},
-                        "after": waits_of(p, sid)}
+                        "after": waits_of(p, sid), "labels": p.get("labels_of", {}).get(sid, ([], 0))[0]}
                        for sid, what in p["scopes"]]
         for s in p["scopes"]:
             s["product"] = p.get("product", "")
@@ -10980,7 +11064,7 @@ def _roadmap_full(snap: Snapshot, fam: "Family | None" = None) -> tuple[list[dic
         p["empty"] = not p["scopes"] and not p["exit"]
         p["done"] = not p["empty"] and all(s["state"] == "done" for s in p["scopes"]) and all(t for t, _ in p["exit"])
     for s, i in zip(lp["scopes"], items):
-        s.update(item=i["id"], plain=i["what"], touches=i["touches"], line=i["line"],
+        s.update(item=i["id"], plain=i["what"], touches=i["touches"], line=i["line"], labels=i["labels"] or [],
                  product=product_of(i["list"].rsplit(" ", 2)[0] if i["list"] != NO_PHASE else "", owners))
     # Specs and notes are read from every repo reached; a product's owner out of reach may hold
     # the one that takes a scope, so its state is unknown rather than open.
@@ -11052,6 +11136,8 @@ def render_roadmap(phases: list[dict], items: list[dict] | None = None) -> str:
 def scope_cell(s: dict) -> str:
     name = s["id"].split("/", 1)[1]
     cell = f"**{name}**" + (f": {s['what']}" if s["what"] else "")
+    if s.get("labels"):
+        cell += f"<br>labels {', '.join(s['labels'])}"
     if s["state"] == "open" and s.get("waits"):
         cell += f"<br>after {', '.join(s['waits'])}"
     # A closed spec is gone from the tree: its link is the note that completed it.
@@ -11084,12 +11170,15 @@ def cmd_roadmap(root: Path, args) -> int:
         print(f"no roadmap: {trunk} has no {ROADMAP}")
         return 0
     phases, items = full
+    if args.label:
+        return roadmap_by_label(fam, phases, items, args.label)
     text = fam.text if fam.reads_meta else snap.show(ROADMAP)
     if fam.reads_meta:
         print(f"{ROADMAP} is {fam.meta_name}'s, read from its trunk")
     problems: list[str] = []
     parsed = parse_roadmap(text, problems)
     problems += ref_problems(parsed, parse_no_phase(text, problems))
+    problems += roadmap_label_problems(text, fam.glossary, fam.glossary_name)
     have = set(snap.ls("docs/"))
     problems += [f"{iid} touches {page}, which {fam.page_home(iid, trunk)} has no page for: re-point it"
                  for iid, page in sorted(dead_touches(text, have, fam))]
@@ -11113,19 +11202,46 @@ def cmd_roadmap(root: Path, args) -> int:
         for s in p["scopes"]:
             specs = ", ".join(f"{f} ({'complete' if ok else 'in progress'})" for f, ok in s["specs"])
             after = f"after {', '.join(s['waits'])}" if s["state"] == "open" and s["waits"] else ""
-            print(f"  {s['id']:<24} {s['state']:<6} {'  '.join(x for x in (after, specs) if x)}".rstrip())
+            labels = f"labels {', '.join(s['labels'])}" if s["labels"] else ""
+            print(f"  {s['id']:<24} {s['state']:<6} {'  '.join(x for x in (labels, after, specs) if x)}".rstrip())
     if items:
         print(NO_PHASE)
         for s in items:
             specs = ", ".join(f"{f} ({'complete' if ok else 'in progress'})" for f, ok in s["specs"])
             after = f"after {', '.join(s['waits'])}" if s["state"] == "open" and s["waits"] else ""
             pages = f"(touches {', '.join(s['touches'])})" if s["touches"] else ""
-            print(f"  {s['id']:<24} {s['state']:<6} {'  '.join(x for x in (after, pages, specs) if x)}".rstrip())
+            labels = f"labels {', '.join(s['labels'])}" if s["labels"] else ""
+            print(f"  {s['id']:<24} {s['state']:<6} {'  '.join(x for x in (labels, after, pages, specs) if x)}".rstrip())
     view = git("show", f"{trunk}:{ROADMAP_VIEW}")
     if not fam.reads_meta and view != render_roadmap(phases, items).strip():
         print(f"\n{ROADMAP_VIEW} on {trunk} is {'stale' if view else 'missing'}: "
               f"`jig roadmap --write` in the {trunk} checkout, then commit it")
     return 1 if problems else 0
+
+
+def roadmap_by_label(fam: "Family", phases: list[dict], items: list[dict], label: str) -> int:
+    """`jig roadmap --label <term>`: every scope and item carrying LABEL, across every product,
+    each with its state, owning repo and specs, headed by the term's owner when it has one:
+    what touches a feature, and which other repo's work leans on one this repo owns (R2)."""
+    want = label_fold(label)
+    meta = fam.meta_name if fam.kind == "para" else THIS_REPO
+
+    def repo(owner: str) -> str:
+        return meta if owner == THIS_REPO else owner
+    term = next((t for t in fam.owners if label_fold(t) == want), "")
+    if term:
+        print(f"{term}: owned by {repo(fam.owners[term])}")
+    hits = [s for p in phases for s in p["scopes"] if want in {label_fold(l) for l in s["labels"]}]
+    hits += [s for s in items if want in {label_fold(l) for l in s["labels"]}]
+    for s in hits:
+        owner = repo(fam.owners.get(s["product"], THIS_REPO)) if fam.kind != "own" else ""
+        specs = ", ".join(f"{f} ({'complete' if ok else 'in progress'})" for f, ok in s["specs"])
+        print(f"  {s['id']:<24} {s['state']:<6} {'  '.join(x for x in (owner, specs) if x)}".rstrip())
+    if not hits:
+        known = fam.glossary is not None and not label_problems([label], fam.glossary, "")
+        print(f"no scope or item carries the label {label}"
+              + ("" if known else f": {fam.glossary_name} has no term for it"))
+    return 0
 
 
 # The project's files: a page or a decision entry that names one goes stale whenever the plan
@@ -11531,6 +11647,7 @@ def roadmap_rules(board: "Board", branch: str, staged: bool, paths: list[str],
         problems: list[str] = []
         parsed = parse_roadmap(text, problems)
         problems += ref_problems(parsed, parse_no_phase(text, problems))
+        problems += roadmap_label_problems(text, in_index(GLOSSARY, staged) or None)
         return [f"{ROADMAP} {x}" for x in problems]
     if fam.reads_meta and not old and not adds:
         # The roadmap is the metarepo's, read live from its trunk: no release carries it.
@@ -11555,6 +11672,12 @@ def roadmap_rules(board: "Board", branch: str, staged: bool, paths: list[str],
         parsed = parse_roadmap(text, problems)
         problems += ref_problems(parsed, parse_no_phase(text, problems))
         out += [f"{ROADMAP} {x}" for x in problems]
+    if on_trunk and (ROADMAP in paths or GLOSSARY in guarded):
+        # Checked on either file's change: a glossary commit dropping or renaming a term a
+        # label names re-points the label in the same commit, as a dropped scope's specs are.
+        hint = (f" ({GLOSSARY} changes in this commit: re-point or drop the label in it)"
+                if GLOSSARY in guarded else "")
+        out += [f"{ROADMAP} {x}{hint}" for x in roadmap_label_problems(text, in_index(GLOSSARY, staged) or None)]
     if on_trunk and ROADMAP in guarded:
         # A built list item stays, shown done, until the owner's roadmap change removes it:
         # its notes keep naming it, so dropping a done one is no drop.
@@ -15594,6 +15717,8 @@ def main(argv: list[str] | None = None) -> int:
                    help="this chunk doesn't finish its spec: the roadmap keeps it taken")
     rm = sub.add_parser("roadmap", help="the roadmap's phases and scopes, and their states on trunk")
     rm.add_argument("--write", action="store_true", help=f"regenerate {ROADMAP_VIEW} in the trunk checkout")
+    rm.add_argument("--label", metavar="TERM",
+                    help="only the scopes and items carrying this label, across every product")
     rl = sub.add_parser("reading-list", help="what to read before touching these files")
     rl.add_argument("paths", nargs="+", metavar="path")
     rl.add_argument("--claims", action="store_true",
