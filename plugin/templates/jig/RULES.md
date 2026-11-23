@@ -966,7 +966,12 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
   each pararepo's that `jig repos` reaches; one it can't reach is named, and its products'
   scopes read *unknown*. The hook checks a pararepo's `Scope:` lines against the metarepo's
   trunk, and passes them with a warning naming it when it can't be reached; on the metarepo's
-  trunk it refuses dropping a scope a reachable pararepo's spec or note takes, naming the file.
+  trunk it refuses dropping a scope a reachable pararepo's spec or note takes, naming the file;
+  one dropped while that pararepo can't be reached passes with a warning, and that pararepo's
+  next commit to the spec taking it is refused. A pararepo that keeps a roadmap of its own is
+  its own family of one: its specs take its own scopes, never the metarepo's. A pararepo whose
+  trunk removes a page its product section touches commits, warning that the metarepo's item
+  needs re-pointing.
   A pararepo's merge writes nothing to the metarepo, and it writes no `ROADMAP.md`: the view is
   the metarepo's. In a pararepo the next step comes from the current phases and lists of the
   products it owns; in the metarepo, from its own and the products it owns as `this repo`.

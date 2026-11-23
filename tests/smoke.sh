@@ -4955,6 +4955,18 @@ msg="family: dropping Walyt alpha/pairing in meta while pa's spec takes it is re
 sed -i.bak '/^- `pairing`/d' .jig/roadmap.md && rm .jig/roadmap.md.bak && git add -A; out=$(git commit -qm 'GLOSSARY: drop' 2>&1); rc=$?; git reset -q --hard
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'drops Walyt alpha/pairing, which pa:.jig/specs/sp.md still takes'" "$out"
 ( cd "$FA" && git rm -q .jig/specs/sp.md && git commit -qm "no sp" )
+cd "$FA"
+msg="family: a pa page naming a scope of meta's roadmap in code quotes is refused, as in a stand-alone repo"
+printf '\nSee `Walyt alpha/pairing`.\n' >> docs/p.md && git add -A; out=$(git commit -qm see 2>&1); rc=$?; git reset -q --hard
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'docs/p.md line .* names .Walyt alpha/pairing.'" "$out"
+msg="family: pa removing a page its product section in meta touches commits, with a warning naming the scope"
+git rm -q docs/p.md; out=$(git commit -qm "no p" 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q 'warning: meta.s .jig/roadmap.md: .Walyt alpha/pairing. touches docs/p.md'" "$out"
+git revert --no-edit -q HEAD >/dev/null 2>&1
+msg="family: from a job's worktree in pa, jig roadmap counts pa's spec once, never as another repo's"
+$J open W --owns 'lib/**' >/dev/null && git add -A && git commit -qm "open W"
+expect_pass sh -c "cd .git/jig/worktrees/W && $J roadmap | grep -E '^  Walyt alpha/z2 ' | grep -q '.jig/specs/s2.md' && ! $J roadmap | grep -q 'pa:'"
+cd "$FM"
 msg="family: with pb out of the repos file, meta's roadmap shows pb's open scopes unknown, naming pb"
 cp "$T/repos.json" "$T/repos.full" && python3 -c "import json; f='$T/repos.json'; d=json.load(open(f)); d.pop('pb'); json.dump(d, open(f,'w'))"
 expect_pass sh -c "$J roadmap | grep -qE '^  Familiar App alpha/host +unknown' && $J roadmap | grep -q 'pb can.t be reached here'"
@@ -4963,6 +4975,8 @@ msg="family: with meta out of the repos file, a spec commit in pa passes its Sco
 python3 -c "import json; f='$T/repos.json'; d=json.load(open(f)); d.pop('meta'); json.dump(d, open(f,'w'))"
 cd "$FA" && fspec s3 'Walyt alpha/whatever' && git add -A; out=$(git commit -qm s3 2>&1); rc=$?
 expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q 'warning: meta isn.t reachable here'" "$out"
+msg="family: with meta unreachable, rig and reading-list in pa say so, rather than showing nothing"
+expect_pass sh -c "$J rig | grep -q 'Not read: meta can.t be reached here' && $J reading-list src/x.py | grep -q 'not read: meta can.t be reached here'"
 git rm -q .jig/specs/s3.md && git commit -qm "no s3"; cp "$T/repos.full" "$T/repos.json"
 # Progress, read live: pb builds host, and the merge writes nothing to meta.
 cd "$FB" && fspec h 'Familiar App alpha/host' && git add -A
@@ -5003,6 +5017,13 @@ msg="family: with the scope moved under ## Walyt alpha in that commit, the merge
 sed -i.bak -e '/^- `w`: the w work/d' -e 's/^- `z2`: new$/- `z2`: new\n- `w`: the w work (touches docs\/w.md)/' .jig/roadmap.md && rm .jig/roadmap.md.bak && git add .jig/roadmap.md
 out=$(git commit -qm 'GLOSSARY: merge mvw' 2>&1); rc=$?
 expect_pass sh -c "test $rc = 0 && grep -q '^- .w.: the w work' .jig/roadmap.md" "$out"
+# A pararepo keeping its own roadmap is its own family: its ids never meet meta's.
+fnew pc && mkdir -p docs && printf '# P\n\nP is.\n' > docs/p.md && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
+$J init --para meta --location "$FM" >/dev/null 2>&1 && git add -A && git commit -qm para-init && python3 .jig/jig.py repos add para "$T/pc" --name pc >/dev/null
+printf '# Roadmap\n\n## Demos\nScopes:\n- `d`: its own d\n' > .jig/roadmap.md && fspec s 'Demos/d' && git add -A && git commit -qm own
+cd "$FM" && python3 -c "import json; f='.jig/meta.json'; d=json.load(open(f)); d['pararepos'].append('pc'); json.dump(d, open(f,'w'), indent=2)" && plant "pc joins"
+msg="family: pc keeps its own roadmap: its spec on its own Demos/d isn't read as taking meta's Demos/d"
+expect_pass sh -c "$J roadmap | grep -E '^  Demos/d ' | grep -qv 'pc:'"
 }
 
 # ---------------------------------------------------------------- roadmap

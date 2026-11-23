@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import bisect
 from collections import Counter
+import copy
 import difflib
 import fnmatch
 import hashlib
@@ -2750,6 +2751,13 @@ def clip(text: str) -> str:
     return text if len(text) <= CLIP else text[:CLIP].rstrip() + "…"
 
 
+def unreachable_line() -> str:
+    """What a roadmap reader says when its family names a repo it couldn't read, "" if none."""
+    gone = family().unreachable
+    return (f"not read: {', '.join(gone)} can't be reached here (`jig repos`), so the roadmap "
+            "items its trunk holds or takes aren't shown") if gone else ""
+
+
 def roadmap_items(rev: str, states: tuple[str, ...] = ("taken",)) -> list[tuple[str, str, str, list[str]]]:
     """(kind, id, what, pages) for every item of the one list not done, and every scope in
     STATES, in REV's roadmap: the project work that names a page with `(touches …)`."""
@@ -2805,6 +2813,8 @@ def foldin_lines(root: Path, board: Board, branch: str) -> str:
             asked[(kind, iid, what)] = hit
     out += [f'- [ ] {kind} `{iid}` ({", ".join(hit)}): "{clip(what)}" — built / untouched / departed: ___'
             for (kind, iid, what), hit in asked.items()]
+    if gone := unreachable_line():
+        out.append(gone)
     out += [f"- [ ] UNOWNED {f} — add to docmap (a new page starts from {DIR}/docs-page.md), "
             "or no page needed because ___ (the repository's own tooling, its build, CI, release "
             "and dev scripts, needs none)"
@@ -3163,6 +3173,8 @@ def cmd_reading_list(root: Path, args) -> int:
         p, have, named, lambda f: (root / f).read_text(errors="replace")))
     # The project work naming a page is the context a page itself never carries.
     items = roadmap_items("HEAD", ("open", "taken"))
+    if gone := unreachable_line():
+        print(f"  ({gone})")
 
     def show(page: str, line: str) -> None:
         """Print PAGE once, wherever it first appears, with the items that name it."""
@@ -3243,7 +3255,8 @@ def built_untaken(where: Path, trunk: str, note: str, body: str, fold: str, spec
     read = lambda f: (where / f).read_text(errors="replace") if (where / f).is_file() else ""
     took = {sc for f in specs | ({named.group(1)} if named else set()) for sc in spec_scopes(read(f))} \
         | set(scopes_in(note, body))
-    there = roadmap_scopes(read(ROADMAP))
+    fam = family()
+    there = roadmap_scopes(fam.text) if fam.reads_meta else roadmap_scopes(read(ROADMAP))
     out = []
     for l in fold.splitlines():
         u = ITEM_LINE.match(l.strip())
@@ -10621,6 +10634,7 @@ class Family:
         self.owners: dict[str, str] = {}
         self.others: list[tuple[str, Snapshot]] = []   # the other reachable repos' trunks
         self.unreachable: list[str] = []
+        self._trees: dict[str, set[str]] = {}
         meta, para = load_meta(trunk), load_para(trunk)
         paras: list[str] = []
         if meta is not None:
@@ -10648,6 +10662,10 @@ class Family:
                 continue
             if loc is None or not loc.is_dir():
                 self.unreachable.append(name)
+                continue
+            # One that keeps a roadmap of its own is its own family of one: its ids are its
+            # roadmap's, and the same `alpha/x` here is another scope.
+            if trunk_show(loc, ROADMAP):
                 continue
             self.others.append((name, Snapshot(Board.trunk_name(loc), cwd=loc)))
 
@@ -10689,8 +10707,19 @@ class Family:
             return None if product or self.kind == "para" else here
         if loc.resolve() == self.root.resolve():
             return here
-        return set(git("-c", "core.quotePath=false", "ls-tree", "-r", "--name-only",
-                       Board.trunk_name(loc), cwd=str(loc)).splitlines())
+        key = str(loc.resolve())
+        if key not in self._trees:
+            self._trees[key] = set(git("-c", "core.quotePath=false", "ls-tree", "-r", "--name-only",
+                                       Board.trunk_name(loc), cwd=str(loc)).splitlines())
+        return self._trees[key]
+
+    def page_home(self, sid: str, trunk: str) -> str:
+        """Whose trunk a `(touches …)` of SID names a page of, as a refusal says it."""
+        product = product_of(sid.rsplit("/", 1)[0].removesuffix(" " + NO_PHASE), self.owners)
+        owner = self.owners.get(product, "")
+        if product and owner and owner != THIS_REPO:
+            return f"{owner}'s trunk"
+        return f"{self.meta_name}'s trunk" if self.kind == "para" else trunk
 
     def section_of(self, repo: str) -> str:
         """The product a pararepo REPO owns in this metarepo's roadmap, when that repo plans
@@ -10713,8 +10742,10 @@ _FAMILIES: dict[tuple[str, str], "Family"] = {}
 
 
 def family(root: Path | None = None, trunk: str = "") -> "Family":
-    """This repo's family, built once per command: every roadmap reader asks for it."""
-    root = root or main_root()
+    """This repo's family, built once per command: every roadmap reader asks for it. Keyed on
+    the trunk checkout, whatever worktree asks, so a job's worktree never sees its own repo
+    as another one."""
+    root = main_root()
     trunk = trunk or Board.trunk_name(root)
     key = (str(root.resolve()), trunk)
     if key not in _FAMILIES:
@@ -10743,9 +10774,23 @@ def roadmap_list(snap: Snapshot, fam: "Family | None" = None) -> list[dict]:
     return full[1] if full else []
 
 
+_TAKERS: dict[tuple, tuple] = {}
+
+
 def scope_takers(snap: Snapshot, label: str = "") -> tuple[dict[str, list[tuple[str, bool]]], dict[str, str]]:
     """({scope id: [(spec, complete)]}, {closed spec: its note}) from SNAP's specs and notes,
-    each spec named as LABEL's (`<repo>:<path>`) when it is another repo's."""
+    each spec named as LABEL's (`<repo>:<path>`) when it is another repo's. A commit's answer
+    never changes, so it is read once per command."""
+    key = (snap.rev, str(snap.cwd), label) if snap.where == "rev" else None
+    if key and key in _TAKERS:
+        return _TAKERS[key]
+    out = _scope_takers(snap, label)
+    if key:
+        _TAKERS[key] = out
+    return out
+
+
+def _scope_takers(snap: Snapshot, label: str) -> tuple[dict[str, list[tuple[str, bool]]], dict[str, str]]:
     takes: dict[str, list[tuple[str, bool]]] = {}
     tree = [f for f in snap.ls(SPECS) if is_spec(f)]
     notes = completing_notes(snap)
@@ -10765,7 +10810,22 @@ def scope_takers(snap: Snapshot, label: str = "") -> tuple[dict[str, list[tuple[
     return takes, closed
 
 
+_FULL: dict[tuple, object] = {}
+
+
 def roadmap_full(snap: Snapshot, fam: "Family | None" = None) -> tuple[list[dict], list[dict]] | None:
+    """roadmap_state's reading, once per commit and family for the command: rig and the hooks
+    ask for it several times, and each read pulls every repo the family reaches. Callers get
+    their own copy, since some annotate what they read."""
+    key = (snap.rev, str(snap.cwd), id(fam)) if snap.where == "rev" else None
+    if key is None:
+        return _roadmap_full(snap, fam)
+    if key not in _FULL:
+        _FULL[key] = _roadmap_full(snap, fam)
+    return copy.deepcopy(_FULL[key])
+
+
+def _roadmap_full(snap: Snapshot, fam: "Family | None" = None) -> tuple[list[dict], list[dict]] | None:
     """(phases, the one list's items), every scope and item with its specs and state, every
     phase with its state; None when there is no roadmap. The list is given states as a
     phase's scopes are, and is never a phase: it has no state, and is never current. With a
@@ -10913,7 +10973,7 @@ def cmd_roadmap(root: Path, args) -> int:
     parsed = parse_roadmap(text, problems)
     problems += ref_problems(parsed, parse_no_phase(text, problems))
     have = set(snap.ls("docs/"))
-    problems += [f"{iid} touches {page}, which {trunk} has no page for: re-point it"
+    problems += [f"{iid} touches {page}, which {fam.page_home(iid, trunk)} has no page for: re-point it"
                  for iid, page in sorted(dead_touches(text, have, fam))]
     problems += [f"product {pr}: its Owner: names {o}, which `jig repos` doesn't know"
                  for pr, o in fam.unknown_owners()]
@@ -11122,11 +11182,26 @@ def boundary_rules(trunk: str, branch: str, staged: bool, paths: list[str],
             else:
                 out.append(f"{ROADMAP}: {iid} touches {page}, which this commit leaves with no page: "
                            "re-point its (touches …) in this commit")
+    fam = family(main_root(), trunk)
+    if branch == trunk and fam.reads_meta and fam.text and moved:
+        # The metarepo's roadmap names this repo's pages for the products it owns; its hook
+        # can't see this commit, so the page's loss is said here, never refused: the item is
+        # the metarepo's to re-point, by a proposal.
+        now = set(git("-c", "core.quotePath=false", "ls-files").splitlines())
+        for heading, iid, pages in touched(fam.text):
+            if fam.ours(product_of(heading, fam.owners)):
+                for t in pages:
+                    if page_in(t, now) not in now:
+                        print(f"jig: warning: {fam.meta_name}'s {ROADMAP}: `{iid}` touches {t}, which this "
+                              "commit leaves with no page: propose re-pointing it (`jig propose`)", file=sys.stderr)
     files = [f for f in paths if product_file(f, meta)]
     if not files:
         return out
     # On trunk the commit's own roadmap counts too, so a scope added with its page is known.
-    sids = scope_ids(at_rev(trunk, ROADMAP)) + (scope_ids(in_index(ROADMAP, staged)) if branch == trunk else [])
+    fam = family(main_root(), trunk)
+    # A pararepo planning from the metarepo's roadmap names its scopes no more than its own.
+    sids = (scope_ids(fam.text) if fam.reads_meta else scope_ids(at_rev(trunk, ROADMAP))) \
+        + (scope_ids(in_index(ROADMAP, staged)) if branch == trunk else [])
     names = scope_quoted(sids)
     for at, n, text in added_lines(trunk, staged, files):
         hit = PROJECT_PATHS.search(text) or next((m for r in names if (m := r.search(text))), None)
@@ -15047,6 +15122,7 @@ def rig_state(root: Path, board: "Board") -> dict:
             "cycles": [list(c) for c in sorted(cycles)], "groups": out_groups,
             "waiting_on_you": len(asks) + len(asked) + len(cycles), "can_start": sum(i["opens"] == "now" for i in start),
             "feedback": sum(i["kind"] == "feedback" for i in items), "jobs": jobs,
+            "unreachable": family(root, board.trunk).unreachable,
             # Closing needs no answer, so finished specs count in neither number.
             "finished": finished_specs(Snapshot(board.trunk), board)}
 
@@ -15055,6 +15131,9 @@ def rig_text(state: dict) -> str:
     items = state["items"]
     n, m = state["waiting_on_you"], state["can_start"]
     out = [f"{n} thing{'s' if n != 1 else ''} waiting on your answers; {m} can start now."]
+    if state.get("unreachable"):
+        out.append(f"Not read: {', '.join(state['unreachable'])} can't be reached here (`jig repos`): "
+                   "the roadmap steps its trunk holds or takes aren't shown.")
     out.append("\nCan start now:")
     for g, group in enumerate(state["groups"], 1):
         paths = group["paths"]
