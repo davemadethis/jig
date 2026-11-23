@@ -5256,7 +5256,7 @@ expect_pass sh -c "test $rc = 0 && test -n '$br' && git -C '$EM' show '$br:.jig/
 msg="roadmap edit: meta's trunk and every checkout's HEAD are unchanged, and the draft is gone"
 expect_pass sh -c "test \"\$(git -C '$EM' rev-parse main)\" = '$metamain' && test \"\$(git -C '$EM' rev-parse HEAD) \$(git rev-parse HEAD)\" = '$heads' && test ! -e '$draft' && test -z \"\$(git -C '$EM' status --porcelain)\""
 msg="roadmap edit: pa has a new Open BUFFER.md row and a roadmap-<date>.md spec citing the branch, uncommitted"
-expect_pass sh -c "grep -q '^| B1 | meta/.jig/roadmap.md § Walyt alpha | added Walyt alpha/z3 | hubnode, ' .jig/ledgers/BUFFER.md && grep -qx -- '- meta: meta proposal $br' .jig/specs/roadmap-*.md && git status --porcelain | grep -q 'specs/roadmap-'"
+expect_pass sh -c "grep -q '^| B1 | meta/.jig/roadmap.md § Walyt alpha | added Walyt alpha/z3 | hubnode, ' .jig/ledgers/BUFFER.md && grep -qx -- '- meta: meta proposal $br' .jig/specs/roadmap-*.md && git status --porcelain -uall | grep -q 'specs/roadmap-'"
 git add -A
 msg="roadmap edit: the spec and the BUFFER.md row commit in pa"
 expect_pass git commit -qm "specs: roadmap proposal"

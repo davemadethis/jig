@@ -11306,8 +11306,9 @@ def roadmap_draft(root: Path, fam: "Family", trunk: str) -> int:
     base = roadmap_base(root, fam, trunk)
     if not base:
         die(f"no {ROADMAP} on {trunk}: this repo keeps no roadmap")
+    base = base.rstrip("\n") + "\n"
     path = draft_path()
-    if path.exists() and path.read_text() != base:
+    if path.exists() and path.read_text().rstrip("\n") != base.rstrip("\n"):
         die(f"{path} is a draft that differs from the roadmap: `jig roadmap --edit` it, or delete it")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(base)
@@ -11386,9 +11387,11 @@ def splice_sections(text: str, new: str, keep) -> str:
         out.append(t)
     extra = [t for h, t in mine if h not in placed]
     at = last + 1 if last >= 0 else len(out)
-    out[at:at] = [x if x.endswith("\n") else x + "\n" for x in extra]
-    joined = [x if x.endswith("\n") or i == len(out) - 1 else x + "\n" for i, x in enumerate(out)]
-    return "".join(joined)
+    out[at:at] = extra
+    # A section that ended its file may land mid-file: it keeps a blank line before the next
+    # heading. The file ends in one newline, as a roadmap does, whatever git's output kept.
+    out = [x if i == len(out) - 1 or x.endswith("\n\n") else x.rstrip("\n") + "\n\n" for i, x in enumerate(out) if x]
+    return "".join(out).rstrip("\n") + "\n"
 
 
 def plumb_commit(loc: Path, branch: str, path: str, text: str, message: str) -> str:
@@ -11484,8 +11487,8 @@ def stage_label(fam: "Family", label: str, sids: list[str], repo: str) -> Path:
         f"---\nstaged: true\ntarget: {fam.meta_name}\nkind: doc\nchange: update\ndestination: {GLOSSARY}\n"
         f"source: {repo}'s hubnode, {time.strftime('%Y-%m-%d')}\nstatus: staged\n---\n"
         f"# Label: {label}\n\n{repo} labels its roadmap work `{label}`, a term {GLOSSARY} doesn't have. "
-        f"Add it as a `## ` term, with its `Owner:` line when a repo owns it; `jig roadmap --edit` in "
-        f"{repo} then adds the label.\n\n## Labels\n" + "\n".join(sorted(set(named))) + "\n")
+        f"Add it as a `## ` term, with its `Owner:` line when a repo owns it; {repo}'s next "
+        f"`jig roadmap --edit` then puts the label on these.\n\n## Labels\n" + "\n".join(sorted(set(named))) + "\n")
     return path
 
 
@@ -11499,13 +11502,16 @@ def roadmap_edit(root: Path, fam: "Family", trunk: str, file: str) -> int:
     new = draft.read_text()
     if fam.kind == "para" and fam.meta_loc is None:
         die(f"the roadmap is {fam.meta_name}'s, which can't be reached here (`jig repos`): nothing written")
-    trunk_text = fam.text if fam.kind == "para" else at_rev(trunk, ROADMAP)
-    base = roadmap_base(root, fam, trunk)
+    # Compared and written ending in one newline: git's output drops it, an editor keeps it.
+    norm = lambda t: t.rstrip("\n") + "\n" if t else t
+    new = norm(new)
+    trunk_text = norm(fam.text if fam.kind == "para" else at_rev(trunk, ROADMAP))
+    base = norm(roadmap_base(root, fam, trunk))
     if not base:
         die(f"no {ROADMAP} on {trunk}: this repo keeps no roadmap")
     if fam.kind != "para" and (git("branch", "--show-current") != trunk or not is_main_worktree(root)):
         die(f"edit the roadmap in the {trunk} checkout: R5 keeps {ROADMAP} on {trunk}")
-    if fam.kind != "para" and (root / ROADMAP).exists() and (root / ROADMAP).read_text() != base:
+    if fam.kind != "para" and (root / ROADMAP).exists() and (root / ROADMAP).read_text().rstrip("\n") != base.rstrip("\n"):
         die(f"{ROADMAP} in the {trunk} checkout differs from {trunk}'s: commit or discard it first, "
             "so nothing uncommitted is overwritten")
     old_s = {h: (n, t) for h, n, t in roadmap_sections(base)}
@@ -11646,7 +11652,7 @@ def family_report(root: Path, trunk: str) -> dict | None:
         for f in sorted((loc / SPECS).glob("*.md")) if (loc / SPECS).is_dir() else []:
             for m in PROPOSAL.finditer(f.read_text(errors="replace")):
                 if m.group("branch") and m.group("meta") == meta_name:
-                    cites.setdefault(m.group("branch"), []).append(f"{name}:{SPECS}/{f.name}")
+                    cites.setdefault(m.group("branch"), []).append(f"{name}:{SPECS}{f.name}")
     for b in git("for-each-ref", "--format=%(refname:short)", "refs/heads/propose/", cwd=str(meta_loc)).split():
         empty = proposal_empty(meta_loc, b, mtrunk)
         merged = not git("rev-list", "-1", f"{mtrunk}..{b}", cwd=str(meta_loc))
