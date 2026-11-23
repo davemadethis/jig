@@ -9,7 +9,7 @@ fail() { echo "check: $1" >&2; exit 2; }
 
 # --- quick -----------------------------------------------------------------
 claude plugin validate ./plugin >/dev/null 2>&1 || fail "plugin invalid (claude plugin validate ./plugin)"
-python3 -m py_compile plugin/templates/jig/jig.py || fail "jig.py does not compile"
+python3 -W error -m py_compile plugin/templates/jig/jig.py scripts/roles_svg.py || fail "jig.py does not compile"
 # README's "Who does what" pictures are drawn from jig.py's ROLES and FLOWS; a change to either
 # without a redraw would leave the README stating old tables.
 python3 scripts/roles_svg.py --check || fail "README's drawing is stale: python3 scripts/roles_svg.py, then commit assets/"

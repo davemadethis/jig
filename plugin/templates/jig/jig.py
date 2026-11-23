@@ -2943,7 +2943,7 @@ LINK_STOP = re.compile(r"[)\s]")
 
 
 def link_spans(line: str, blank_ends: bool = True) -> list[tuple[int, int, int, int, str]]:
-    """(start, end, text start, text end, target) of each Markdown link in LINE, in order: the
+    r"""(start, end, text start, text end, target) of each Markdown link in LINE, in order: the
     matches re.finditer(r"\[([^\]]*)\]\(([^)\s]*)\)") gives, or without BLANK_ENDS, the target
     `[^)]*`, found in one pass. That regex retries every `[` and rescans to the next `]` or `)`
     from each, so a minified line of brackets takes it minutes. A try from a `[` is settled by
