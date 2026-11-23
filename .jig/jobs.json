@@ -1,7 +1,7 @@
 {
   "cross-repo-roadmap": {
     "spec": ".jig/specs/cross-repo-roadmap.md",
-    "state": "claimed",
+    "state": "gated",
     "after": [],
     "owns": [],
     "shares": [
