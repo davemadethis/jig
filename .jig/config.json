@@ -13,7 +13,68 @@
     "CHANGELOG.md"
   ],
   "reserve": {},
-  "docmap": {},
+  "docmap": {
+    "docs/jobs.md": [
+      "plugin/templates/jig/jig.py",
+      "plugin/templates/jig/RULES.md",
+      "plugin/skills/work/**",
+      "plugin/skills/review/**",
+      "plugin/skills/subnode/**",
+      "plugin/skills/bug/**"
+    ],
+    "docs/workflows.md": [
+      "plugin/templates/jig/jig.py",
+      "plugin/templates/jig/RULES.md",
+      "plugin/tiers.json",
+      "scripts/roles_svg.py",
+      "assets/**",
+      "plugin/skills/hubnode/**",
+      "plugin/skills/subnode/**",
+      "plugin/skills/spec/**",
+      "plugin/skills/bug/**",
+      "plugin/skills/work/**",
+      "plugin/skills/review/**",
+      "plugin/skills/check/**",
+      "plugin/skills/rig/**",
+      "plugin/skills/decision-cards/**"
+    ],
+    "docs/records.md": [
+      "plugin/templates/jig/jig.py",
+      "plugin/templates/jig/RULES.md",
+      "plugin/templates/jig/docs-page.md",
+      "plugin/templates/specs/**",
+      "plugin/templates/ledgers/**",
+      "plugin/templates/process.md",
+      "plugin/templates/AGENTS.md",
+      "plugin/templates/CLAUDE.md",
+      "plugin/skills/stage/**",
+      "plugin/skills/retro/**",
+      "plugin/skills/redocument/**",
+      "plugin/skills/survey/**",
+      "plugin/skills/release/**"
+    ],
+    "docs/metarepos.md": [
+      "plugin/templates/jig/jig.py",
+      "plugin/templates/jig/RULES.md",
+      "plugin/skills/relay/**",
+      "plugin/skills/send/**",
+      "plugin/skills/rigger/**",
+      "plugin/skills/repos/**"
+    ],
+    "docs/commands.md": [
+      "plugin/templates/jig/jig.py",
+      "plugin/skills/**",
+      "plugin/templates/github/**",
+      "plugin/templates/hardware.md",
+      "plugin/templates/skills/**"
+    ],
+    "docs/hooks.md": [
+      "plugin/templates/jig/jig.py",
+      "plugin/hooks/**",
+      "plugin/scripts/**",
+      "plugin/templates/jig/scripts/**"
+    ]
+  },
   "not_docs": [
     "plugin/**",
     "tests/fixtures/**"
