@@ -299,6 +299,15 @@ merges in the metarepo at the next sync the owner calls. In a metarepo, merging 
 is a roadmap change like any other: show the diff, and merge on the owner's yes. Rig there lists
 each cross-product wait no section confirms with `(needed by …)`: put it to the owner.
 
+A pararepo with a roadmap of its own moves it in by `jig move-in --product <Name>` in its trunk
+checkout, on the owner's yes, one step per `--apply`: its run with no flag says which step is
+next and whose yes it waits on. Step 1 stages a `BUFFER.md` row and `.jig/specs/move-in.md`
+here (commit them) and makes the metarepo's `propose/<repo>-move-in`, with the product's
+glossary term when the metarepo has none. Step 2, once the metarepo merged it, stages the
+roadmap's removal and the re-pointed `Scope:` lines: re-point any id it names by hand, then
+commit. In the metarepo, that branch is one roadmap change, the term with it: show the owner the
+name, the definition and the phases, change any on the branch on their word, and merge in a job.
+
 Work with no phase yet, parked mid-build (naming the pages it will touch) or not started, is
 an item under `## No phase` in `.jig/roadmap.md`, proposed the same way. A roadmap change asks
 for no decision entry and no change line. A built item stays, read done from the spec that

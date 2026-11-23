@@ -9943,7 +9943,100 @@ msg="queue config: the overflow key with the owner's words commits"
 expect_pass setq '{"width": "all", "overflow": {"to": "github", "reason": "the owner: keep the standing yes"}}'
 }
 
-UNITS="rules merge_derived update board_split worktree_setup metarepo,staging pararepo release r6_takes,r6_ints merge_after_sync repos workflow init_old_board ledger_rows hardware update_per_file pararepo_commands entry_globs report_fixes sync_buffer buffer_answered pointers removals feedback slash_names homes structure meta_docs agents_lines page_contract roadmap family boundary decisions supersede touches,touches_terms sweep staging_batches merge_log findings glossary headings check_levels role_line consolidate cheaper_rounds next svg update_roles holders rig rig_batch close versioning pin_bump moves claims inbox rigger queue"
+sec_movein() {
+export JIG_CONFIG="$T/repos.json"
+mnew() { mkdir -p "$T/$1" && cd "$T/$1" && git init -q -b main && git config user.email t@t && git config user.name t \
+  && cp -r "$P/jig" .jig && cp "$P/AGENTS.md" "$P/CLAUDE.md" .; }
+mplant() { git add -A && git -c core.hooksPath=/dev/null commit -qm "$1"; }
+mspec() { mkdir -p .jig/specs && printf '# %s\n\nSource: smoke\nScope: %s\n\n## Intent\nx\n\n## Touches\n- `src/x.py`\n' "$1" "$2" > ".jig/specs/$1.md"; }
+mpara() {  # mpara <name> <roadmap>: a pararepo of M keeping a roadmap of its own
+  mnew $1 && mkdir -p docs src && printf '# P\n\nP is.\n' > docs/p.md && printf 'x = 1\n' > src/x.py
+  git add -A && git commit -qm init && $J init >/dev/null && board "b['docmap'] = {'docs/p.md': ['src/**']}" && git add -A && git commit -qm board
+  $J init --para M --location "$MM" >/dev/null 2>&1 && git add -A && git commit -qm para-init && python3 .jig/jig.py repos add para "$T/$1" --name $1 >/dev/null
+  printf "$2" > .jig/roadmap.md && git add -A && git commit -qm own && $J roadmap --write >/dev/null && git add -A && git commit -qm view
+  ( cd "$MM" && python3 -c "import json; f='.jig/meta.json'; d=json.load(open(f)); d['pararepos'].append('$1'); json.dump(d, open(f,'w'), indent=2)" && mplant "$1 joins" ); }
+MM="$T/M"; mnew M && git add -A && git commit -qm init && $J init --meta --name M >/dev/null && git add -A && git commit -qm meta-init
+$J release $(mf) >/dev/null
+python3 -c "import json; f='.jig/meta.json'; d=json.load(open(f)); d['decision_prefix']='E-'; d['pararepos']=['L']; json.dump(d, open(f,'w'), indent=2)"
+printf '\n## Walyt\n\nThe wallet app.\n\nOwner: `L`.\n' >> docs/glossary.md && mplant "glossary"
+mnew L && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
+$J init --para M --location "$MM" >/dev/null 2>&1 && git add -A && git commit -qm para-init && python3 .jig/jig.py repos add para "$T/L" --name L >/dev/null
+python3 .jig/jig.py repos add meta "$MM" --name M >/dev/null
+mpara pd '# Roadmap\n\n## alpha\nScopes:\n- `x`: the x\n- `y`: the y (after alpha/x)\n\n## No phase\n- `u`: parked u (touches docs/p.md)\n- `v`: later v\n'
+FD="$T/pd"
+mspec sx alpha/x && mspec sy alpha/y && mkdir -p .jig/handoffs && printf '# v\n\nSpec: .jig/specs/sv.md\nScope: No phase/v\n\n## Built\nx\n' > .jig/handoffs/v-1.md
+mkdir -p .jig/ledgers && cp "$P/ledgers/BUFFER.md" .jig/ledgers/BUFFER.md
+printf '| B0 | M/docs/glossary.md § Walyt: the wallet | not ours | owner, 2026-11-23 | Open |\n' >> .jig/ledgers/BUFFER.md && mplant "takers and B0"
+msg="movein: the plan lists both steps, the first next and carrying the term Delta, the second waiting; nothing is written"
+mhead=$(git -C "$MM" rev-parse main); mbr=$(git -C "$MM" branch | wc -l)
+out=$($J move-in --product Delta --definition "The delta app." 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q '^1. product and phases proposed: next' && echo \"\$0\" | grep -q 'carries the term Delta' \
+  && echo \"\$0\" | grep -q '^2. roadmap leaves: waiting' && test -z \"\$(git status --porcelain)\" && test -z \"\$(git -C '$MM' status --porcelain)\" \
+  && test \"\$(git -C '$MM' branch | wc -l)\" = '$mbr'" "$out"
+msg="movein: without --definition while M has no Delta term, --apply is refused, naming the flag"
+out=$($J move-in --product Delta --apply 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q -- '--definition' && test -z \"\$(git status --porcelain)\"" "$out"
+msg="movein: --product Walyt is refused, naming its owner L"
+out=$($J move-in --product Walyt --apply 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \"Walyt is L's product\"" "$out"
+msg="movein: --apply makes propose/pd-move-in in M: one commit past its opening, passed by M's hook, its subject GLOSSARY:"
+out=$($J move-in --product Delta --definition "The delta app." --apply 2>&1); rc=$?
+ml=$(git -C "$MM" log --format=%s main..propose/pd-move-in)
+expect_pass sh -c "test $rc = 0 && test \"\$(echo \"\$1\" | wc -l | tr -d ' ')\" = 2 && echo \"\$1\" | head -1 | grep -q '^GLOSSARY: '" "$out" "$ml"
+[ $rc = 0 ] || echo "$out"
+mg=$(git -C "$MM" show propose/pd-move-in:docs/glossary.md); md=$(git -C "$MM" show propose/pd-move-in:.jig/decisions.md); mr=$(git -C "$MM" show propose/pd-move-in:.jig/roadmap.md)
+msg="movein: the proposal adds ## Delta, its sentence and Owner: \`pd\`. to M's glossary, with a line under ## Unreleased ### Added"
+expect_pass sh -c "echo \"\$0\" | grep -A4 '^## Delta\$' | grep -q 'The delta app.' && echo \"\$0\" | grep -qx 'Owner: \`pd\`.' \
+  && echo \"\$1\" | sed -n '/^## Unreleased/,\$p' | grep -A2 '^### Added' | grep -q '§ Delta'" "$mg" "$md"
+msg="movein: the proposal holds ## Delta alpha with y (after Delta alpha/x), and ## Delta No phase with u and v, as pd had them"
+expect_pass sh -c "echo \"\$0\" | grep -qx '## Delta alpha' && echo \"\$0\" | grep -qx -- '- \`y\`: the y (after Delta alpha/x)' \
+  && echo \"\$0\" | grep -qx '## Delta No phase' && echo \"\$0\" | grep -qx -- '- \`u\`: parked u (touches docs/p.md)' && echo \"\$0\" | grep -qx -- '- \`v\`: later v'" "$mr"
+msg="movein: M's trunk is unchanged and nothing is staged there; pd's buffer has the row, and move-in.md lists it alone, B0 left out"
+expect_pass sh -c "test \"\$(git -C '$MM' rev-parse main)\" = '$mhead' && test -z \"\$(git -C '$MM' status --porcelain)\" \
+  && grep -q '| B1 | M/.jig/roadmap.md § Delta: none yet' .jig/ledgers/BUFFER.md && sed -n '/^## Buffer rows/,/^\$/p' .jig/specs/move-in.md | grep -c '^- B' | grep -qx 1 \
+  && grep -qx -- '- B1' .jig/specs/move-in.md && ! grep -q '^| B0' .jig/specs/move-in.md && git diff --cached --name-only | grep -q move-in.md"
+git commit -qm "specs: move-in" >/dev/null 2>&1
+msg="movein: before M merges the proposal, step 2 waits on M's owner"
+expect_pass sh -c "$J move-in --product Delta | grep -q '^2. roadmap leaves: waiting on M'"
+( cd "$MM" && git switch -q propose/pd-move-in && sed -i.bak 's/^- `y`: the y/- `y2`: the y/' .jig/roadmap.md && rm .jig/roadmap.md.bak \
+  && git add -A && git commit -qm "ROADMAP: y is y2" && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-edit propose/pd-move-in )
+msg="movein: M merges the proposal in one merge, Delta No phase/u's docs/p.md read as pd's page by the merge's own glossary, and jig roadmap in M lists Delta's sections"
+expect_pass sh -c "cd '$MM' && git log -1 --format=%P | grep -q ' ' && test ! -e docs/p.md && grep -qx 'Owner: \`pd\`.' docs/glossary.md && $J roadmap | grep -q '^Delta alpha '"
+msg="movein: after the merge, --apply stages the removal and the Scope: lines, naming alpha/y and the spec that takes it"
+out=$($J move-in --product Delta --apply 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q 'alpha/y → Delta alpha/y .*sy.md' && git diff --cached --name-status | grep -q '^D	.jig/roadmap.md' \
+  && git diff --cached --name-status | grep -q '^D	ROADMAP.md' && grep -qx 'Scope: Delta alpha/x' .jig/specs/sx.md && grep -qx 'Scope: Delta No phase/v' .jig/handoffs/v-1.md \
+  && grep -qx 'Scope: alpha/y' .jig/specs/sy.md" "$out"
+msg="movein: the commit is refused while sy.md takes alpha/y, which M renamed"
+out=$(git commit -qm "move in" 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'sy.md takes alpha/y'" "$out"
+msg="movein: re-pointed to Delta alpha/y2, the commit passes"
+sed -i.bak 's|^Scope: alpha/y$|Scope: Delta alpha/y2|' .jig/specs/sy.md && rm .jig/specs/sy.md.bak && git add -A
+out=$(git commit -qm "move in" 2>&1); rc=$?; expect_pass test $rc = 0; [ $rc = 0 ] || echo "$out"
+msg="movein: then jig move-in says pd has moved in, and rig in pd offers Delta alpha/…, read from M"
+expect_pass sh -c "$J move-in | grep -q 'pd has moved in' && $J rig | grep -q 'Delta alpha/'"
+# A pararepo whose product M already names, with a heading under a term it owns.
+( cd "$MM" && printf '\n## Foxy\n\nThe fox app.\n\nOwner: `pf`.\n\n## Gadget\n\nThe gadget.\n\nOwner: `pf`.\n' >> docs/glossary.md && mplant "Foxy and Gadget" )
+mpara pf '# Roadmap\n\n## beta\nScopes:\n- `b`: the b\n\n## Gadget beta\nScopes:\n- `g`: the g (after beta/b)\n'
+msg="movein: ## Up next in pf is refused, naming jig update --apply"
+printf '\n## Up next\n- `n`: n\n' >> .jig/roadmap.md && mplant "up next"
+out=$($J move-in --product Foxy --apply 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'jig update --apply'" "$out"
+git reset -q --hard HEAD~1
+msg="movein: with ## Foxy beta already on M's trunk, --apply is refused, naming it, and no branch is made"
+( cd "$MM" && printf '# Roadmap\n\n## Foxy beta\nScopes:\n- `q`: q\n' > .jig/roadmap.md && mplant "Foxy beta" )
+out=$($J move-in --product Foxy --apply 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '## Foxy beta' && ! git -C '$MM' rev-parse -q --verify refs/heads/propose/pf-move-in && test -z \"\$(git status --porcelain)\"" "$out"
+( cd "$MM" && git rm -q .jig/roadmap.md && mplant "no Foxy beta" )
+msg="movein: Foxy owned by pf already: no glossary change, no --definition, and ## Gadget beta proposed unchanged"
+out=$($J move-in --product Foxy --apply 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && ! git -C '$MM' diff --name-only main propose/pf-move-in | grep -q glossary \
+  && git -C '$MM' show propose/pf-move-in:.jig/roadmap.md | grep -qx '## Gadget beta' && git -C '$MM' show propose/pf-move-in:.jig/roadmap.md | grep -qx '## Foxy beta' \
+  && git -C '$MM' show propose/pf-move-in:.jig/roadmap.md | grep -q '(after Foxy beta/b)'" "$out"
+[ $rc = 0 ] || echo "$out"
+}
+
+UNITS="rules merge_derived update board_split worktree_setup metarepo,staging pararepo release r6_takes,r6_ints merge_after_sync repos workflow init_old_board ledger_rows hardware update_per_file pararepo_commands entry_globs report_fixes sync_buffer buffer_answered pointers removals feedback slash_names homes structure meta_docs agents_lines page_contract roadmap family boundary decisions supersede touches,touches_terms sweep staging_batches merge_log findings glossary headings check_levels role_line consolidate cheaper_rounds next svg update_roles holders rig rig_batch close versioning pin_bump moves movein claims inbox rigger queue"
 
 if [ "${1:-}" = --list ]; then echo $UNITS | tr ' ,' '\n\n'; exit 0; fi
 if [ "${1:-}" = --unit ]; then        # --unit <run folder> <unit>: one unit, its output to a file

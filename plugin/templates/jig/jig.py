@@ -20,6 +20,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.parse
 from datetime import date
@@ -580,6 +581,10 @@ def check_rules(root: Path, board: Board, *, staged: bool) -> list[str]:
             out.append(f"R5 the roadmap is the owner's: {f} is edited on {trunk} only"
                        + (", or on a propose/ branch `jig propose` opened that isn't merged yet"
                           if meta is not None and f == ROADMAP else ""))
+    if meta is not None and GLOSSARY in paths and (branch == trunk or proposed_branch(branch, trunk)):
+        # A product's term and the phases it owns land in one merge (`jig move-in`): its
+        # headings are read by the commit's own glossary, as by the commit's own roadmap.
+        family(main_root(), trunk).owners = term_owners(in_index(GLOSSARY, staged))
     out += roadmap_rules(board, branch, staged, paths, guarded)
     out += boundary_rules(trunk, branch, staged, paths, meta, board.data.get("not_docs") or [])
     out += page_form_rules(root, board, trunk, staged, guarded)
@@ -9450,11 +9455,13 @@ def unproposed(root: Path) -> tuple[list[str], list[str]]:
              and tuple(buffer_rows(l)[0]) not in sent])
 
 
-def buffer_proposal(root: Path, para: dict, loc: Path, slug: str) -> tuple[Path, str] | None:
+def buffer_proposal(root: Path, para: dict, loc: Path, slug: str,
+                    only: set[str] | None = None) -> tuple[Path, str] | None:
     """Every Open row of the buffer not yet proposed, in one proposal: a metarepo branch, and a
     spec here that lists the rows by id, which is the record of what went. None when no row
-    is left to propose."""
+    is left to propose. ONLY: just those rows, as `jig move-in` proposes its own."""
     head, open_ = unproposed(root)
+    open_ = [l for l in open_ if only is None or buffer_rows(l)[0][0] in only]
     if not open_:
         return None
     spec = root / DIR / "specs" / f"{slug}.md"
@@ -15495,6 +15502,294 @@ def cmd_rig(root: Path, args) -> int:
     return 0
 
 
+# -------------------------------------------------------------------- moving
+
+# A pararepo's roadmap moves into its metarepo's as one proposal, named so a rerun finds it.
+MOVE_IN = "move-in"
+BUFFER_SEED = ("# BUFFER\n\n| Id | Metarepo claim (`<meta>/<path> § section`, at the pin) | This repo now "
+               "(source, commit) | Decided (who, date) | State |\n|---|---|---|---|---|\n")
+
+
+def log_with_line(text: str, group: str, line: str) -> str:
+    """TEXT, a decision log, with LINE under ## Unreleased ### GROUP, the group made when it has none."""
+    m = re.search(r"^## Unreleased[ \t]*\n", text, re.M)
+    if not m:
+        text = text.rstrip("\n") + "\n\n## Unreleased\n"
+        m = re.search(r"^## Unreleased[ \t]*\n", text, re.M)
+    end = (re.compile(r"^## ", re.M).search(text, m.end()) or re.compile(r"\Z").search(text)).start()
+    g = re.compile(rf"^### {re.escape(group)}[ \t]*\n\n?", re.M).search(text, m.end(), end)
+    if g:
+        return text[:g.end()] + f"{line}\n" + text[g.end():]
+    head = text[:m.end()].rstrip("\n") + "\n\n"
+    rest = text[m.end():].lstrip("\n")
+    return head + f"### {group}\n\n{line}\n" + ("\n" + rest if rest else "")
+
+
+def proposal_commit(loc: Path, branch: str, files: dict[str, str | None], subject: str) -> tuple[bool, str]:
+    """Write FILES (None removes one) on BRANCH of the repo at LOC and commit them, in a temporary
+    worktree of it removed after: that repo's own hook judges the commit as it is made, and its
+    trunk checkout is never touched. (passed, the hook's output)."""
+    tmp = Path(tempfile.mkdtemp(prefix="jig-proposal-"))
+    wt = tmp / "w"
+    env = {k: v for k, v in os.environ.items() if k not in ("GIT_DIR", "GIT_INDEX_FILE", "GIT_WORK_TREE")}
+
+    def run(*args: str, cwd: Path) -> subprocess.CompletedProcess:
+        return subprocess.run(["git", *args], cwd=str(cwd), env=env, capture_output=True, text=True)
+    try:
+        made = run("worktree", "add", "-q", str(wt), branch, cwd=loc)
+        if made.returncode:
+            return False, made.stderr
+        for path, text in files.items():
+            if text is None:
+                run("rm", "-q", "--ignore-unmatch", "--", path, cwd=wt)
+                continue
+            (wt / path).parent.mkdir(parents=True, exist_ok=True)
+            (wt / path).write_text(text)
+            run("add", "--", path, cwd=wt)
+        done = run("commit", "-q", "-m", subject, cwd=wt)
+        return done.returncode == 0, (done.stdout + done.stderr).strip()
+    finally:
+        run("worktree", "remove", "--force", str(wt), cwd=loc)
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def drop_proposal(loc: Path, branch: str) -> None:
+    """Undo a proposal branch this command just opened, its commit refused: nothing was proposed."""
+    git("branch", "-D", branch, cwd=str(loc))
+
+
+def name_in_family(loc: Path) -> str:
+    """This repo's name as the metarepo at LOC lists it in `pararepos`, which its glossary's
+    `Owner:` lines name; the checkout's folder name when it lists none that resolves here."""
+    here = main_root().resolve()
+    try:
+        paras = json.loads(trunk_show(loc, META) or "{}").get("pararepos") or []
+    except ValueError:
+        paras = []
+    return next((n for n in paras if (p := repo_path(n)) is not None and p.resolve() == here),
+                main_root().name)
+
+
+def roadmap_headings(text: str) -> list[str]:
+    """Every `## ` heading of a roadmap outside fenced code, phases and lists alike, in order."""
+    out, fence = [], False
+    for line in text.splitlines():
+        if line.lstrip().startswith("```"):
+            fence = not fence
+        elif not fence and (m := re.match(r"##\s+(.+?)\s*$", line)):
+            out.append(m.group(1))
+    return out
+
+
+def move_in_map(text: str, product: str, owned: set[str]) -> dict[str, str]:
+    """Each heading of a pararepo's roadmap to its heading in the metarepo's: under PRODUCT,
+    unless its leading words are already a term OWNED (the glossary's for this repo)."""
+    owners = {t: "me" for t in owned | {product}}
+    out = {}
+    for h in roadmap_headings(text):
+        base = h[:-len(NO_PHASE)].rstrip() if is_list_heading(h) and h.strip().lower() != NO_PHASE.lower() else h
+        out[h] = h if h.strip().lower() != NO_PHASE.lower() and product_of(base, owners) else f"{product} {h}"
+    return out
+
+
+def map_ref(ref: str, hmap: dict[str, str]) -> str:
+    """A `<phase>`, `<phase>/<scope>` or `<list>/<id>` ref with its heading mapped."""
+    if ref in hmap:
+        return hmap[ref]
+    head, sep, rest = ref.rpartition("/")
+    return f"{hmap[head]}/{rest}" if sep and head in hmap else ref
+
+
+def mapped_sections(text: str, hmap: dict[str, str]) -> str:
+    """The roadmap's sections, from its first heading, with each heading and each ref in an
+    `(after …)` or `(needed by …)` mapped; every other line as it was."""
+    waits = re.compile(r"\((after|needed by)(\s+)([^()]*)\)")
+
+    def refs(m: re.Match) -> str:
+        parts = [re.sub(r"[^`\s,][^`,]*[^`\s,]|[^`\s,]", lambda r: map_ref(r.group(0), hmap), p, count=1)
+                 for p in m.group(3).split(",")]
+        return f"({m.group(1)}{m.group(2)}{','.join(parts)})"
+    out, fence, started = [], False, False
+    for line in text.splitlines():
+        if line.lstrip().startswith("```"):
+            fence = not fence
+        elif not fence and (m := re.match(r"(##\s+)(.+?)(\s*)$", line)):
+            started = True
+            line = f"{m.group(1)}{hmap.get(m.group(2), m.group(2))}{m.group(3)}"
+        elif not fence:
+            line = waits.sub(refs, line)
+        if started:
+            out.append(line)
+    return "\n".join(out).strip("\n") + "\n"
+
+
+def move_in_takers(snap_files: list[str], read) -> dict[str, list[str]]:
+    """{scope id: [spec or note taking it]} over SNAP_FILES, read by READ."""
+    out: dict[str, list[str]] = {}
+    for f in snap_files:
+        if takes_scopes(f):
+            for s in scopes_in(f, read(f)):
+                out.setdefault(s, []).append(f)
+    return out
+
+
+def cmd_move_in(root: Path, args) -> int:
+    """A pararepo's roadmap into its metarepo's, one step per --apply: its product and phases
+    proposed on one `propose/` branch, then, once merged there, its roadmap removed here."""
+    trunk = Board.trunk_name(root)
+    para = load_para(trunk)
+    if para is None:
+        die(f"not a pararepo (no {PARA} on {trunk}): only a pararepo moves its roadmap into a metarepo's", 2)
+    me_root = main_root()
+    if root.resolve() != me_root.resolve() or git("branch", "--show-current") != trunk:
+        die(f"run it in the {trunk} checkout ({me_root}): its writes there are the hubnode's to commit", 2)
+    loc = meta_checkout(root, para)
+    own = at_rev(trunk, ROADMAP)
+    if not own:
+        if loc is not None and (has := [p for p in family(root, trunk).products_in() if family(root, trunk).ours(p)]):
+            print(f"{name_in_family(loc)} has moved in: it plans from {para['meta']}'s roadmap ({', '.join(has)}).")
+            return 0
+        die(f"{ROADMAP} isn't on {trunk}: there is no roadmap here to move in", 2)
+    if loc is None:
+        die(f"can't reach {para['meta']}: run `jig repos add meta` in its checkout, then again", 2)
+    if any(h.strip().lower() == UP_NEXT.lower() for h in roadmap_headings(own)):
+        die(f"{ROADMAP} still has ## {UP_NEXT}: `jig update --apply` folds it into ## {NO_PHASE} first", 2)
+    if not args.product:
+        die("usage: jig move-in --product <Name> [--definition <text>] [--apply]", 2)
+    me, meta_name, product = name_in_family(loc), para["meta"], args.product.strip()
+    meta_trunk = Board.trunk_name(loc)
+    glossary = trunk_show(loc, GLOSSARY) or ""
+    owners = term_owners(glossary)
+    owner = next((o for t, o in owners.items() if t.casefold() == product.casefold()), None)
+    named = any(term_text(n).casefold() == product.casefold() for n, _ in page_sections(glossary)[1:])
+    if owner == THIS_REPO:
+        die(f"{product} is {meta_name}'s own term (its glossary's `Owner: this repo.`): name another product", 2)
+    if owner is not None and not (repo_path(owner) is not None and repo_path(owner).resolve() == me_root.resolve()):
+        die(f"{product} is {owner}'s product in {meta_name}'s {GLOSSARY}: name this repo's own", 2)
+    if owner is None and named:
+        die(f"{meta_name}'s {GLOSSARY} has ## {product} with no `Owner:` line: its hubnode names the owner first", 2)
+    carries = owner is None
+    mine = {t for t, o in owners.items() if o != THIS_REPO and (p := repo_path(o)) is not None
+            and p.resolve() == me_root.resolve()}
+    hmap = move_in_map(own, product, mine)
+    sid_map = {s: map_ref(s, hmap) for s in roadmap_scopes(own)}
+    meta_road = trunk_show(loc, ROADMAP) or ""
+    taken = [h for h in hmap.values() if h in roadmap_headings(meta_road)]
+    branch = f"propose/{me_root.name}-{MOVE_IN}"
+    spec = root / SPECS / f"{MOVE_IN}.md"
+    proposed = spec.exists() and any(m.group("branch") == branch for m in PROPOSAL.finditer(spec.read_text()))
+    exists = bool(git("rev-parse", "-q", "--verify", f"refs/heads/{branch}", cwd=str(loc)))
+    merged = exists and proposal_in(loc, branch, meta_trunk)
+    staged_out = not in_index(ROADMAP, True)
+    print(f"jig move-in: {me}'s roadmap into {meta_name}'s, as {product}")
+    for old, new in hmap.items():
+        if old != new:
+            print(f"  ## {old} → ## {new}")
+    # Step 1.
+    if proposed:
+        print(f"1. product and phases proposed: done, {branch} in {meta_name} ({spec.relative_to(root)})")
+    else:
+        print("1. product and phases proposed: next")
+        if carries:
+            print(f"   carries the term {product}: ## {product} in {meta_name}'s {GLOSSARY}, "
+                  f"`Owner: \\`{me}\\`.`, with its line under ## Unreleased ### Added")
+            if not args.definition:
+                print(f"   needs --definition \"<one sentence>\": {meta_name} has no {product} term yet")
+        else:
+            print(f"   the term {product} is {me}'s already in {meta_name}'s {GLOSSARY}: no glossary change")
+        print(f"   would write: a {BUFFER} row and {spec.relative_to(root)} here, and {branch} in "
+              f"{meta_name} with {', '.join(f'## {h}' for h in hmap.values())} appended to its {ROADMAP}")
+    # Step 2.
+    missing = sorted(s for s, n in sid_map.items() if n not in roadmap_scopes(meta_road))
+    takers = move_in_takers(git("-c", "core.quotePath=false", "ls-files", "--", SPECS, HANDOFFS).splitlines(),
+                            lambda f: in_index(f, True))
+    if staged_out:
+        print(f"2. roadmap leaves: staged, waiting on the owner's yes; the hubnode commits it on {trunk}")
+    elif not proposed:
+        print("2. roadmap leaves: waiting on step 1")
+    elif not merged:
+        print(f"2. roadmap leaves: waiting on {meta_name}'s owner: its hubnode merges {branch} in a job")
+    else:
+        print("2. roadmap leaves: next")
+        for s in missing:
+            print(f"   {s} → {sid_map[s]} isn't on {meta_name}'s {meta_trunk}"
+                  + (f": re-point {', '.join(takers[s])} by hand" if takers.get(s) else ""))
+        print(f"   would write: git rm {ROADMAP} {ROADMAP_VIEW}, and each Scope: line re-pointed by the map")
+    if not args.apply:
+        return 0
+    if not proposed:
+        if taken:
+            die(f"{meta_name}'s {ROADMAP} already has {', '.join(f'## {h}' for h in taken)}: "
+                "a heading both have is no move; rename the phase here first", 2)
+        if carries and not (args.definition or "").strip():
+            die(f"{meta_name} has no {product} term: give its definition, --definition \"<one sentence>\"", 2)
+        if exists:
+            die(f"{branch} already exists in {meta_name}", 2)
+        return move_in_propose(root, para, loc, product, me, own, hmap, carries, (args.definition or "").strip())
+    if not merged or staged_out:
+        print("Nothing to apply: the next step waits on a yes.")
+        return 0
+    git("rm", "-q", "--", ROADMAP, *([ROADMAP_VIEW] if at_rev(trunk, ROADMAP_VIEW) else []), check=True)
+    known = roadmap_scopes(meta_road)
+    for f in sorted({f for fs in takers.values() for f in fs}):
+        path = root / f
+        text = path.read_text()
+        m = re.search(r"^Scope:[ \t]*(.*)$", text, re.M)
+        if not m:
+            continue
+        new = ", ".join(sid_map[s] if sid_map.get(s) in known else s
+                        for s in (x.strip().strip("`") for x in m.group(1).split(",") if x.strip()))
+        if new != m.group(1).strip():
+            path.write_text(text[:m.start(1)] + new + text[m.end(1):])
+            git("add", "--", f, check=True)
+    left = sorted({f for s in missing for f in takers.get(s, [])})
+    print(f"staged: {ROADMAP} and {ROADMAP_VIEW} removed, Scope: lines re-pointed. The hubnode commits it "
+          f"on {trunk} on the owner's yes" + (f"; first re-point {', '.join(left)} by hand: the hook "
+                                               "refuses the commit while they name an id that isn't there" if left else "") + ".")
+    return 0
+
+
+def move_in_propose(root: Path, para: dict, loc: Path, product: str, me: str, own: str,
+                    hmap: dict[str, str], carries: bool, definition: str) -> int:
+    """Step 1: the buffer row here, and the proposal there carrying it, its one commit judged
+    by the metarepo's hook. Refused there, nothing is left behind on either side."""
+    ledger = root / BUFFER
+    before = ledger.read_text() if ledger.exists() else None
+    text = before or BUFFER_SEED
+    nums = [int(r[0][1:]) for r in buffer_rows(text) if re.fullmatch(r"B\d+", r[0])]
+    rid = f"B{max(nums, default=0) + 1}"
+    row = (f"| {rid} | {para['meta']}/{ROADMAP} § {product}: none yet | its phases and list, moving in | "
+           f"owner, {date.today().isoformat()} | Open |\n")
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    ledger.write_text(text.rstrip("\n") + "\n" + row)
+    made = buffer_proposal(root, para, loc, MOVE_IN, only={rid})
+    spec, branch = made
+    meta_road = trunk_show(loc, ROADMAP) or "# Roadmap\n"
+    files: dict[str, str | None] = {ROADMAP: meta_road.rstrip("\n") + "\n\n" + mapped_sections(own, hmap)}
+    if carries:
+        files[GLOSSARY] = ((trunk_show(loc, GLOSSARY) or "# Glossary\n").rstrip("\n")
+                           + f"\n\n## {product}\n\n{definition}\n\nOwner: `{me}`.\n")
+        files[LOG] = log_with_line(trunk_show(loc, LOG) or LOG_SEED, "Added",
+                                   f"- {GLOSSARY} § {product}: {me}'s product, its plan moving in.")
+    subject = f"{'GLOSSARY' if carries else 'ROADMAP'}: {product} moves in from {me}"
+    ok, out = proposal_commit(loc, branch, files, subject)
+    if not ok:
+        drop_proposal(loc, branch)
+        spec.unlink()
+        if before is None:
+            ledger.unlink()
+        else:
+            ledger.write_text(before)
+        die(f"{para['meta']}'s hook refused the proposal's commit, so nothing was proposed:\n{out}", 1)
+    git("add", "--", str(ledger), str(spec), check=True)
+    print(f"made {branch} in {para['meta']}: {', '.join(f'## {h}' for h in hmap.values())}"
+          + (f", and the term {product}" if carries else "") + f", one commit its hook passed.")
+    print(f"staged here: {rid} in {BUFFER}, and {spec.relative_to(root)} listing it. The hubnode commits them "
+          f"on the owner's yes; {para['meta']}'s hubnode merges {branch} in a job, deciding the name, "
+          "the definition and the phases there.")
+    return 0
+
+
 # ----------------------------------------------------------------------- main
 
 def main(argv: list[str] | None = None) -> int:
@@ -15620,6 +15915,10 @@ def main(argv: list[str] | None = None) -> int:
     pp.add_argument("--reason", help="why it is withdrawn, recorded in its spec")
     pp.add_argument("--pointers", action="store_true",
                     help="record it as pointer rewrites worked ahead of, not a proposal to wait for")
+    mi = sub.add_parser("move-in", help="pararepo: move its roadmap into the metarepo's, one step per --apply")
+    mi.add_argument("--product", help="the product its phases go under in the metarepo's roadmap")
+    mi.add_argument("--definition", help="the product's glossary sentence, when the metarepo has no such term yet")
+    mi.add_argument("--apply", action="store_true", help="do the next step")
     st = sub.add_parser("staging", help="list staged files, resolve or drop one, or check headers")
     st.add_argument("action", nargs="?", choices=["resolve", "drop", "check"])
     st.add_argument("file", nargs="*")
@@ -15674,7 +15973,7 @@ def main(argv: list[str] | None = None) -> int:
         "workflow": cmd_workflow, "roles": cmd_roles, "flows": cmd_flows, "next": cmd_next,
         "survey": cmd_survey, "reading-list": cmd_reading_list, "update": cmd_update, "repos": cmd_repos, "staging": cmd_staging,
         "release": cmd_release, "propose": cmd_propose, "roadmap": cmd_roadmap,
-        "rig": cmd_rig, "inbox": cmd_inbox,
+        "rig": cmd_rig, "inbox": cmd_inbox, "move-in": cmd_move_in,
     }[args.cmd]
     return fn(root, args)
 

@@ -64,8 +64,12 @@ its copy, with a line saying where it went. Old citations keep resolving through
 claim moves down only. Going up is a proposal.
 
 A pararepo with a [roadmap](glossary.md#roadmap) of its own can move it into the metarepo's, once, on the owner's yes.
-The metarepo's glossary names the product, and the pararepo proposes its [phases](glossary.md#phase). After that,
-the metarepo holds the one roadmap for every product it lists.
+`python3 .jig/jig.py move-in --product <Name>` does it in two steps, one per `--apply`. First it proposes the
+pararepo's [phases](glossary.md#phase) under the product's name, with the product's glossary term when the
+metarepo has none yet, on one `propose/` branch. The metarepo's hubnode decides the name and the
+phases together when it merges that branch. Then the pararepo's roadmap leaves, with every `Scope:`
+line pointed at the metarepo's ids. After that, the metarepo holds the one roadmap for every
+product it lists.
 
 ## Design sessions
 

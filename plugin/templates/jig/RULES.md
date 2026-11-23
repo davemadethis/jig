@@ -1021,15 +1021,35 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
   `propose/<repo>-<slug>` branch in the metarepo, never on its trunk, and merged there at the
   next sync the owner calls. A pararepo's merge writes nothing to the metarepo's roadmap.
   Labels, names and new products (the glossary term and its `Owner:` line) are the metarepo's
-  hubnode's.
-- **Moving in**, once per pararepo, by hand, on the owner's yes: the metarepo's glossary names
-  the product with its `Owner:` line; the pararepo proposes its phases as
-  `## <Product> <phase>` and its `## No phase` items as `## <Product> No phase`, and the
-  metarepo merges it; then the pararepo's next commit removes its `.jig/roadmap.md` and
-  `ROADMAP.md`, its `Scope:` lines re-pointed to the metarepo's ids, which the hook checks on the
-  metarepo's trunk. After it, the pararepo's hook refuses a `.jig/roadmap.md` while the
-  metarepo's roadmap holds a product it owns, and `jig update --sweep` writes none there: its
-  `## Undefined` entries are proposed under `## <Product> No phase`.
+  hubnode's: a product a pararepo proposes with its phases (`jig move-in`) is decided with them,
+  name and definition and all, at that proposal's merge, where its hubnode may change any of
+  them first.
+- **Moving in**, once per pararepo, on the owner's yes, by `jig move-in --product <Name>` in the
+  pararepo's trunk checkout. It runs one step per `--apply`; without it, it prints each step's
+  state (done, next, or whose yes it waits on) and what the next would write.
+  1. *Product and phases proposed.* Each `## <phase>` becomes `## <Product> <phase>`, unless its
+     leading words are already a term the metarepo's glossary says this repo owns, and
+     `## No phase` becomes `## <Product> No phase`; each ref in `(after …)` and `(needed by …)` is
+     mapped the same way, and every other line is kept as written. With no `<Product>` term on
+     the metarepo's trunk, the same proposal carries it: `## <Product>`, the sentence
+     `--definition` gives, and `` Owner: `<repo>`. ``, with its line under `## Unreleased`
+     `### Added`, so one yes decides the product and its phases. A term another repo owns, a
+     mapped heading the metarepo's roadmap already has, or a `## Up next` here is refused before
+     anything is written. `--apply` adds one `BUFFER.md` row, opens `propose/<repo>-move-in`
+     carrying that row alone (`.jig/specs/move-in.md`), and commits the sections there in a
+     temporary worktree of the metarepo, whose hook judges the commit. On the metarepo's trunk
+     the hook reads a heading's product by the commit's own glossary, as by its own roadmap, so
+     the term and the phases it owns land in one merge.
+  2. *Its roadmap leaves*, once the metarepo's trunk has the proposal. `--apply` stages
+     `git rm` of `.jig/roadmap.md` and `ROADMAP.md` and each `Scope:` line in tracked specs and
+     handoff notes re-pointed by the map; an id the metarepo's trunk lacks (its owner changed it
+     before merging) is named with what takes it, and left for the hubnode to re-point by hand.
+     The hubnode commits it on trunk on the owner's yes, and the hook checks every `Scope:` line
+     it keeps against the metarepo's trunk.
+
+  After it, the pararepo's hook refuses a `.jig/roadmap.md` while the metarepo's roadmap holds
+  a product it owns, and `jig update --sweep` writes none there: its `## Undefined` entries are
+  proposed under `## <Product> No phase`.
 - **Unconfirmed waits.** A scope or phase may say what waits on it, `(needed by <ref>, …)`,
   as it says what it waits on. A cross-product `(after …)` the waited-on scope or phase doesn't
   confirm so is listed by `jig roadmap` in the metarepo and under rig's Waiting on you, for the
@@ -1736,6 +1756,7 @@ jig propose <spec> <slug>   pararepo: open a proposal branch on the metarepo
 jig propose <spec> <slug> --pointers  the same, recorded as pointer rewrites worked ahead of
 jig propose --buffer [slug]  pararepo: every Open row of the sync buffer, in one proposal
 jig propose --withdraw <branch> --reason <text>  pararepo: a proposal the metarepo won't release
+jig move-in --product <Name> [--definition <text>] [--apply]  pararepo trunk: move its roadmap into the metarepo's, one step per --apply
 jig sync --answered <ids> --in <release> --reason <text>  pararepo trunk: close rows a release answered
 ```
 
