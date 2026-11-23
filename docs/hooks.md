@@ -30,12 +30,15 @@ minute. It has four hooks:
   A failure there keeps the agent from finishing.
 - **With each prompt**, in the trunk checkout, it prints a count of unread messages in the
   repo's [inbox](glossary.md#inbox). It reads nothing else and moves nothing.
-- **At session start**, it prints one line naming the session's node: [hubnode](glossary.md#hubnode) or [subnode](glossary.md#subnode), and
-  which job. A session that lost its instructions to compaction is told again.
+- **At session start**, it prints one line naming the session's [node](glossary.md#node):
+  [hubnode](glossary.md#hubnode) or [subnode](glossary.md#subnode), and which job. A session
+  that lost its instructions to compaction is told again. It runs in any repo with a `.jig/`
+  folder, and it only reads and prints.
 
 ## Opting in
 
 Claude Code warns about every plugin with hooks, because hooks run shell commands as you.
-jig's plugin hooks run only in a repo that opted in. `python3 .jig/jig.py install-hooks` writes
-a marker, `.git/jig/enabled`. Git never clones `.git/`, so a repo you fetched can't turn itself
+The three hooks that run your repo's scripts do so only in a repo that opted in. The
+session-start hook runs nothing of the repo's: it reads and prints one line.
+`python3 .jig/jig.py install-hooks` writes the opt-in marker, `.git/jig/enabled`. Git never clones `.git/`, so a repo you fetched can't turn itself
 on and get its scripts run.

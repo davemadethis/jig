@@ -3,7 +3,7 @@
 jig keeps a handful of records in a repo, each with one home. Everything it makes lives in a
 hidden `.jig/` folder, so nobody mistakes it for your project. A session reads them to learn
 what's true, what was decided, and what comes next. They are the pages, the
-[decision log](glossary.md#decision-log), the roadmap, [staging](glossary.md#staging), and
+[decision log](glossary.md#decision-log), the [roadmap](glossary.md#roadmap), [staging](glossary.md#staging), and
 releases.
 
 ## The always-loaded file

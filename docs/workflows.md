@@ -1,6 +1,6 @@
 # Workflows
 
-Every session in a jig repo is a node, and every step it takes belongs to a
+Every session in a jig repo is a [node](glossary.md#node), and every step it takes belongs to a
 [workflow](glossary.md#workflow) and a [role](glossary.md#role). The workflows are data inside
 `jig.py`, so jig knows each [job](glossary.md#job)'s next step and who takes it. It refuses a
 step taken out of order.
@@ -74,17 +74,16 @@ anything.
 ## The rig
 
 `/jig:rig` is the hubnode's front door. It shows one picture: what can start now, what waits on
-what, what waits on you, and the roadmap's next step. Then it asks you one batch of decisions
+what, what waits on you, and the [roadmap](glossary.md#roadmap)'s next step. Then it asks you one batch of decisions
 and acts on your answers. `/jig:rig auto` writes the specs and starts the jobs it can without
 asking, and leaves your questions open for later.
 
 ## The drawing
 
-The same nodes, roles and workflows, drawn from the data in `jig.py` by `scripts/roles_svg.py`.
-A check fails when the drawing and the data disagree.
+The same nodes, roles and workflows, drawn from the data in `jig.py`.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../assets/roles-and-flows-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="../assets/roles-and-flows-light.svg">
-  <img src="../assets/roles-and-flows-light.svg" alt="Roles: the hubnode (the owner's session) assigns, gates, merges, releases, pushes and publishes; a subnode takes one role, outside the trunk checkout; spec (tier 2, effort 2) writes and consolidates specs; bug (2,1) investigates and writes the spec for what it found; work (2,3, one session per job) builds, hands off, fixes and syncs; review (2,2, always a fresh session) runs review-work and review-change; check (3,4) runs the complete suite, before a release too, traces a failed batch and surveys; jig itself refuses steps out of order and cleans up after a merge. Workflows: Job is spec, work, review-work, handoff, gate, check, merge; Fix and Sync are work, review-change, handoff; Bug is bug, spec, then a Job; Feedback, Batch, Release, Survey and Redocument follow, each with its starting point and controls. The tables below say the same in text.">
+  <img src="../assets/roles-and-flows-light.svg" alt="Roles: the hubnode (the owner's session) assigns, gates, merges, releases, pushes and publishes; a subnode takes one role, outside the trunk checkout; spec (tier 2, effort 2) writes and consolidates specs; bug (2,1) investigates and writes the spec for what it found; work (2,3, one session per job) builds, hands off, fixes and syncs; review (2,2, always a fresh session) runs review-work and review-change; check (3,4) runs the complete suite, before a release too, traces a failed batch and surveys; jig itself refuses steps out of order and cleans up after a merge. Workflows: Job is spec, work, review-work, handoff, gate, check, merge; Fix and Sync are work, review-change, handoff; Bug is bug, spec, then a Job; Feedback, Batch, Release, Survey and Redocument follow, each with its starting point and controls. The tables above say the same in text.">
 </picture>

@@ -6,10 +6,9 @@ tool. Most skills are thin wrappers around the checker. Every command below eith
 [job](glossary.md#job), moves one along to its [gate](glossary.md#gate), or keeps the repo's
 records straight.
 
-Owner-only skills don't show in the slash list, and an agent can't start one on its own. Each
-changes the repo, tags a release, writes your repo list, speaks for a
-[hubnode](glossary.md#hubnode), or files a report on jig. So only you start them: type them in
-full at the start of a message.
+Only the owner runs the owner-only skills. The model never starts one on its own, so type it
+yourself. Each one changes the repo, tags a release, writes your repo list, speaks for a
+[hubnode](glossary.md#hubnode), or files a report on jig.
 
 ## Setting a repo up
 
@@ -88,7 +87,7 @@ Jobs, for anyone:
 Records:
 
 - `python3 .jig/jig.py decision <id>` prints a decision and what it replaced.
-- `python3 .jig/jig.py roadmap` prints the roadmap's states. `--write` regenerates its view.
+- `python3 .jig/jig.py roadmap` prints the [roadmap](glossary.md#roadmap)'s states. `--write` regenerates its view.
 - `python3 .jig/jig.py staging` lists staged files. `resolve` lands one and `drop` deletes one.
 - `python3 .jig/jig.py inbox` prints the hubnode's unread messages and marks them read.
 - `python3 .jig/jig.py release` runs the repo's release and tags it.

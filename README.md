@@ -2,7 +2,7 @@
 
 AI coding agents are fast, and they drift. They skip the plan, fix the symptom, wave a review
 through, and step on each other when two of them share a repo. A woodworker solves the same
-problem with a jig: clamp the work in place once, and every cut lands where it should.
+problem with a jig: clamp the work in place once, and the cuts come out the same each time.
 
 So that's what this is. A short written [spec](docs/glossary.md#spec) before building, a bug
 looked into before it's fixed, and one review per [handoff](docs/glossary.md#handoff) from a
@@ -45,11 +45,12 @@ python3 .jig/jig.py open greeting --spec .jig/specs/greeting.md --owns src/app.p
 git add .jig/jobs.json && git commit -m "open greeting"
 ```
 
-That makes a branch and a worktree at `.git/jig/worktrees/greeting`. The board is committed on
-trunk, because the hooks read trunk's copy.
+That makes a branch and a worktree at `.git/jig/worktrees/greeting`, and prints a kickoff
+naming both. The board is committed on trunk, because the hooks read trunk's copy.
 
-**4. Build it.** A second session, a [subnode](docs/glossary.md#subnode), works in that worktree.
-Say it edits `src/app.py`, and also strays into `src/other.py`. The commit is refused:
+**4. Build it.** The hubnode starts a second session in that worktree with the kickoff. That's
+a [subnode](docs/glossary.md#subnode), in the work [role](docs/glossary.md#role). Say it edits `src/app.py`, and also
+strays into `src/other.py`. The commit is refused:
 
 ```
 $ git commit -am "greet"
@@ -59,25 +60,36 @@ jig: R3 src/other.py is not job greeting's: ask the hubnode to add it to shares
 The subnode puts `src/other.py` back and commits again. If the job really needs that file, the
 hubnode adds it with `python3 .jig/jig.py share greeting src/other.py`.
 
-**5. Review and hand off.** A fresh session runs `/jig:review` on the diff. It sees the diff, the
-spec and the rules, and none of the conversation. The hubnode records it with
-`python3 .jig/jig.py reviewed`. Then the subnode runs `python3 .jig/jig.py handoff`, which writes a
-note naming the reviewed commit. That's the [handoff](docs/glossary.md#handoff).
+**5. Review.** The hubnode starts a fresh session for `/jig:review`. It sees the diff, the spec
+and the rules, and none of the conversation. The hubnode records the review in the job's
+worktree with `python3 .jig/jig.py reviewed --blocking 0` (or however many it found).
 
-**6. [Gate](docs/glossary.md#gate).** The hubnode runs `python3 .jig/jig.py gate greeting`. It sets up a scratch checkout of that commit with trunk merged in,
-and prints the complete check to run there.
+**6. Hand off.** The work subnode runs `python3 .jig/jig.py handoff`, which writes a note naming
+the reviewed commit. The subnode fills in every heading of the note and commits it. That's the
+[handoff](docs/glossary.md#handoff).
 
-**7. Merge.** On your word, the hubnode runs `python3 .jig/jig.py merge greeting`. The job's
+**7. [Gate](docs/glossary.md#gate).** The hubnode runs `python3 .jig/jig.py gate greeting`. It
+sets up a scratch checkout of that commit with trunk merged in, and prints the complete check
+to run there.
+
+**8. Check.** The hubnode starts a check subnode, which runs that printed check in the scratch
+checkout. When it passes, the subnode records it there, with the check role's
+[tier](docs/glossary.md#tier) and [effort](docs/glossary.md#effort):
+`python3 .jig/jig.py checked --tier 3 --effort 4 --seconds <s>`. Then the hubnode runs
+`python3 .jig/jig.py mark greeting gated` and commits `.jig/jobs.json` on trunk.
+
+**9. Merge.** On your word, the hubnode runs `python3 .jig/jig.py merge greeting`. The job's
 entry leaves the board in the merge commit, and its worktree and branch go away.
 
 Every step above belongs to a [workflow](docs/glossary.md#workflow), and each subnode takes one
-[role](docs/glossary.md#role) in it. At any point, `python3 .jig/jig.py next` says what each job needs next and who takes it.
+role in it. At any point, `python3 .jig/jig.py next` says what each job needs next and who
+takes it.
 
 ## 📚 Read more
 
 - [Jobs](docs/jobs.md): the board, owned files, the rules, handoff, gate and merge.
-- [Workflows](docs/workflows.md): nodes, roles, workflows, and who takes each step.
-- [Records](docs/records.md): pages, the [decision log](docs/glossary.md#decision-log), the roadmap, [staging](docs/glossary.md#staging) and releases.
+- [Workflows](docs/workflows.md): [nodes](docs/glossary.md#node), roles, workflows, and who takes each step.
+- [Records](docs/records.md): pages, the [decision log](docs/glossary.md#decision-log), the [roadmap](docs/glossary.md#roadmap), [staging](docs/glossary.md#staging) and releases.
 - [Metarepos](docs/metarepos.md): several repos sharing one set of decisions through a [metarepo](docs/glossary.md#metarepo).
 - [Commands](docs/commands.md): every skill and checker command.
 - [Hooks](docs/hooks.md): what runs, when, and why it's safe.
@@ -85,8 +97,8 @@ Every step above belongs to a [workflow](docs/glossary.md#workflow), and each su
 
 After init, `.jig/RULES.md` in your repo holds every rule the hooks enforce.
 
-**On trust.** jig's plugin hooks run only your repo's own scripts, in a repo that opted in with a
-marker inside `.git/`. Git never clones `.git/`, so a fetched repo can't opt itself in. [More](docs/hooks.md).
+**On trust.** jig's plugin hooks run your repo's own scripts only in a repo that opted in, with a
+marker git never clones. The session-start hook only reads and prints one line. [More](docs/hooks.md).
 
 ## 💬 Feedback and working on jig
 

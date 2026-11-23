@@ -4,8 +4,9 @@ A [job](glossary.md#job) is how several sessions change one repo at the same tim
 stepping on each other. Each job gets its own branch, its own worktree and its own files, its
 [owns and shares](glossary.md#owns-and-shares), listed on the [board](glossary.md#board). Git
 hooks refuse any commit that strays outside them. Finished work goes through a
-[handoff](glossary.md#handoff) and a [gate](glossary.md#gate) before it merges. It's a small version of what teams already
-do with topic branches, CODEOWNERS and a merge queue, except it's enforced.
+[handoff](glossary.md#handoff) and a [gate](glossary.md#gate) before it merges. It's a small
+version of what teams already do with topic branches, CODEOWNERS and a merge queue, checked at
+every commit.
 
 ## The board
 
@@ -54,7 +55,7 @@ The git hooks check eight rules before every commit:
 - **R2.** A job is built in its own worktree. While jobs are open, a branch that's on no job is refused.
 - **R3.** A job changes only its owns, its shares, the common paths, or new files.
 - **R4.** Another open job's owned file is refused, even if this job lists it too.
-- **R5.** The board and the roadmap change on trunk only.
+- **R5.** The board and the [roadmap](glossary.md#roadmap) change on trunk only.
 - **R6.** A scarce number belongs to the one job that reserved it.
 - **R7.** A new [workaround](glossary.md#workaround)'s `WORKAROUND:` comment needs its ledger row in the same commit.
 - **R8.** A job is gated only after the jobs in its `after` have merged.
@@ -79,7 +80,8 @@ rules. It never sees the conversation that wrote the code. Whoever dispatched th
 records it with `python3 .jig/jig.py reviewed`, along with how many blocking findings it left.
 
 `python3 .jig/jig.py handoff` then writes a note naming that exact commit. It refuses while the
-newest review still has blocking findings. A fix after a blocking review gets a review of only
+newest review still has blocking findings. The work session fills in every heading of the note,
+including which docs pages its change touched, and commits it with the work. A fix after a blocking review gets a review of only
 what changed. A job's third blocking review stops the loop and starts the bug
 [workflow](glossary.md#workflow) instead.
 
@@ -88,23 +90,27 @@ what changed. A job's third blocking review stops the loop and starts the bug
 The hubnode runs `python3 .jig/jig.py gate <job>`. A gate refuses a job
 whose `after` jobs haven't merged, or one with no handoff note. Then it sets up a scratch
 checkout of the noted commit, with trunk merged in. It prints the complete check to run
-there, but it never runs it. The check [role](glossary.md#role) does, and records it with
-`python3 .jig/jig.py checked`.
+there, but it never runs it. A check session, in the check [role](glossary.md#role), runs it
+there and records the pass with `python3 .jig/jig.py checked`.
+
+Then the hubnode runs `python3 .jig/jig.py mark <job> gated`, which removes the scratch
+checkout, and commits `.jig/jobs.json` on trunk. The mark refuses until the check is recorded.
 
 ## Merge
 
 `python3 .jig/jig.py merge <job>` happens only on the owner's word, and only for a gated job.
 In one commit it merges the branch and deletes the job's entry. It also numbers any new
-decisions and removes the finished spec. Then it syncs the other open jobs that merge cleanly.
-After the commit it removes the job's worktree and branch, if the worktree is clean.
+decisions and removes the finished spec. It then prints "Sync the clean jobs", and the hubnode
+runs `python3 .jig/jig.py sync` in each clean job's worktree. After the commit it removes the job's worktree and branch, if the worktree is clean.
 
 Two or more gated jobs can merge as a [batch](glossary.md#batch), with one complete check on
 trunk afterward. A batch that fails is traced to the merge that broke it.
 
 ## Sync
 
-`python3 .jig/jig.py sync` brings trunk into a job. Lines that both sides only added to a
-shared file resolve themselves, and a clean sync needs no new review. Anything else stops with
+`python3 .jig/jig.py sync` brings trunk into a job. In the append files (`append_files` in the
+config, plus the decision log), lines both sides only added resolve themselves. A clean sync
+needs no new review. Anything else stops with
 the files named. A sync resolved by hand gets a review of what changed before the next handoff.
 
 ## Bugs

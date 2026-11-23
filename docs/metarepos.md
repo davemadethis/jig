@@ -43,7 +43,7 @@ A pararepo changes the metarepo by proposal, written up first as a [spec](glossa
 merges it and releases. A [job](glossary.md#job) whose spec waits on a proposal doesn't pass its [gate](glossary.md#gate) until the
 pinned release holds it.
 
-`python3 .jig/jig.py propose --withdraw` takes back a proposal the metarepo will never release.
+`python3 .jig/jig.py propose --withdraw <branch>` takes back a proposal the metarepo will never release.
 
 ## The buffer
 
@@ -63,7 +63,7 @@ first, through [staging](glossary.md#staging) and a job of its own. Then the met
 its copy, with a line saying where it went. Old citations keep resolving through that line. A
 claim moves down only. Going up is a proposal.
 
-A pararepo with a roadmap of its own can move it into the metarepo's, once, on the owner's yes.
+A pararepo with a [roadmap](glossary.md#roadmap) of its own can move it into the metarepo's, once, on the owner's yes.
 The metarepo's glossary names the product, and the pararepo proposes its [phases](glossary.md#phase). After that,
 the metarepo holds the one roadmap for every product it lists.
 

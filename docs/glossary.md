@@ -24,6 +24,11 @@ A job's two file lists. A file a job owns is one no other open job may change. A
 shares, others may change too. They aren't permissions on the file system: a git hook checks
 them at every commit.
 
+## Node
+
+A session in a jig repo, of one of two kinds: the hubnode or a subnode. A node is a chat with
+an agent. It isn't a machine or a process.
+
 ## Hubnode
 
 The owner's session, in the trunk checkout. It opens jobs, assigns each step, gates and merges.
@@ -93,6 +98,12 @@ then optional Talks to and Invariants sections. It isn't a style guide for prose
 One file per repo, `.jig/decisions.md`, holding every decision (who, when, what it replaced)
 and every change line, grouped by release. It isn't a wiki. A changed mind is a new entry
 that replaces the old one.
+
+## Roadmap
+
+The owner's plan for a repo: its phases in order, each phase's scopes, and work named but not
+yet placed. It's optional. Progress on it is worked out from merged work, and it isn't a
+task tracker anyone ticks.
 
 ## Phase
 
