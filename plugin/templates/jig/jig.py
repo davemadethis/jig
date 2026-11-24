@@ -11703,7 +11703,8 @@ def roadmap_draft(root: Path, fam: "Family", trunk: str) -> int:
         die(f"the roadmap is {fam.meta_name}'s, which can't be reached here (`jig repos`)")
     base = roadmap_base(root, fam, trunk)
     if not base:
-        die(f"no {ROADMAP} on {trunk}: this repo keeps no roadmap")
+        die(f"nothing written: {fam.meta_name}'s {ROADMAP} isn't on its trunk yet" if fam.kind == "para"
+            else f"nothing written: {ROADMAP} isn't on {trunk} yet (above)")
     base = base.rstrip("\n") + "\n"
     path = draft_path()
     if path.exists() and path.read_text().rstrip("\n") != base.rstrip("\n"):
@@ -11954,7 +11955,8 @@ def roadmap_edit(root: Path, fam: "Family", trunk: str, file: str) -> int:
     trunk_text = norm(fam.text if fam.kind == "para" else at_rev(trunk, ROADMAP))
     base = norm(roadmap_base(root, fam, trunk))
     if not base:
-        die(f"no {ROADMAP} on {trunk}: this repo keeps no roadmap")
+        die(f"nothing written: {fam.meta_name}'s {ROADMAP} isn't on its trunk yet" if fam.kind == "para"
+            else f"nothing written: {ROADMAP} isn't on {trunk} yet (above)")
     here = Path(git("rev-parse", "--show-toplevel") or ".")
     if fam.kind != "para" and (git("branch", "--show-current") != trunk or not is_main_worktree(here)):
         die(f"edit the roadmap in the {trunk} checkout: R5 keeps {ROADMAP} on {trunk}")

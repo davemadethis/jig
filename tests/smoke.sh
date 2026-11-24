@@ -5474,6 +5474,16 @@ python3 -c "import sys; p=sys.argv[1]; s=open(p).read(); open(p,'w').write(s + '
 out=$($J roadmap --edit 2>&1); rc=$?
 python3 -c "import sys; p=sys.argv[1]; s=open(p).read(); open(p,'w').write(s.replace(' (after alpha/nope)', ''))" "$sdraft"
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'waits on alpha/nope' && $J roadmap --edit >/dev/null && grep -q '^- .b.: b\$' .jig/roadmap.md && git add -A && git commit -qm 'roadmap b'" "$out"
+msg="roadmap edit: --edit refuses dropping an id a spec's Later: names, naming the spec and its Later: line"
+mkdir -p .jig/specs && printf '# lt\n\nSource: smoke\nLater: alpha/b\n\n## Intent\nx\n' > .jig/specs/lt.md && git add -A && git commit -qm "specs: lt" >/dev/null
+$J roadmap --draft >/dev/null
+python3 -c "import sys; p=sys.argv[1]; s=open(p).read(); open(p,'w').write(s.replace('- \`b\`: b\n', ''))" "$sdraft"
+out=$($J roadmap --edit 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'drops alpha/b, which .jig/specs/lt.md still leaves for later: re-point its Later: line first' && grep -q '^- .b.: b\$' .jig/roadmap.md" "$out"
+msg="roadmap edit: a note's Later: naming the id doesn't stop --edit dropping it"
+git rm -q .jig/specs/lt.md && mkdir -p .jig/handoffs && printf '# Handoff: lt\n\nCommit: %s\nDate: 2026-11-01\nSpec: .jig/specs/lt.md\nLater: alpha/b\n\n## Built\nx\n' "$(git rev-parse HEAD)" > .jig/handoffs/lt-2026-11-01.md && git add -A && git -c core.hooksPath=/dev/null commit -qm "a note leaving alpha/b for later"
+out=$($J roadmap --edit 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && ! grep -q '^- .b.: b\$' .jig/roadmap.md" "$out"
 }
 
 # ---------------------------------------------------------------- labels
