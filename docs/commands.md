@@ -53,7 +53,7 @@ yourself. Each one changes the repo, tags a release, writes your repo list, spea
 
 Setting up and checking:
 
-- `python3 .jig/jig.py init` writes the board and installs the hooks.
+- `python3 .jig/jig.py init` writes the board, the decision log and the roadmap's empty structure, and installs the hooks. A pararepo gets no roadmap: it plans from its metarepo's.
 - `python3 .jig/jig.py install-hooks` rewrites the hooks.
 - `python3 .jig/jig.py rules` runs the rules here, as the hook does.
 - `python3 .jig/jig.py survey` inventories the repo against the jig shape.
@@ -87,7 +87,7 @@ Jobs, for anyone:
 Records:
 
 - `python3 .jig/jig.py decision <id>` prints a decision and what it replaced.
-- `python3 .jig/jig.py roadmap` prints the [roadmap](glossary.md#roadmap)'s states, each phase with its type (Prototype, Pilot or Production). `--product`, `--phase`, `--type`, `--state` `--owner` and `--label` narrow what it prints, each repeatable, and `--view` prints that part as the view's Markdown. `--write` regenerates the whole view, and takes no filter.
+- `python3 .jig/jig.py roadmap` prints the [roadmap](glossary.md#roadmap)'s states, each phase with its type (Prototype, Pilot or Production). `--product`, `--phase`, `--type`, `--state`, `--owner` and `--label` narrow what it prints, each repeatable, and `--view` prints that part as the view's Markdown. `--write` regenerates the whole view, and takes no filter. Run in the trunk checkout on a trunk with no roadmap, it commits the roadmap's empty structure first, as the other commands that read the roadmap do.
   `--label <term>` keeps the scopes and items carrying that [label](glossary.md#label), across every product,
   headed by the term's owner.
 - `python3 .jig/jig.py roadmap --draft` writes the roadmap this repo plans from to a draft outside the tree, and

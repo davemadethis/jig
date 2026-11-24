@@ -120,7 +120,9 @@ old text is left alone unless the owner raises it.
   `.jig/decisions.md` that the page cites; a present-tense product fact goes into the page body,
   undated. Make the second and third by hand first. Then `jig update --apply --sweep` moves the
   rest to `## No phase` in `.jig/roadmap.md`, creating it when absent, and removes the emptied
-  sections; a section holding other text stays, to move by hand. The roadmap is trunk's (R5), so
+  sections; a section holding other text stays, to move by hand. In a pararepo with no roadmap
+  of its own it writes nothing and refuses: propose the product to the metarepo first (a
+  glossary term with an `Owner:` line naming this repo), then `jig move-in`, then sweep again. The roadmap is trunk's (R5), so
   run it there; in a metarepo the pages are a job's (M4): ask the hubnode to open the job the
   run names, and run `--apply --sweep` again in its worktree, which removes the sections whose
   entries trunk's roadmap holds. A clean tree is required.
@@ -217,6 +219,11 @@ with nothing answering them. Each offers one `BUFFER.md` row: add it only on a y
    anything in the repo that already does its job by hand — a check script that borrows the
    main checkout's environment, `ln -s` steps in a skill — and offer to remove each once
    `setup.sh` covers it.
+   If it added `.jig/roadmap.md` and `ROADMAP.md`, the roadmap's empty structure and its view,
+   as a new `jig init` writes them, say so in one line and ask nothing: every stand-alone repo
+   and metarepo keeps one, phases and items added later on the owner's word. A hand-written
+   root `ROADMAP.md` holds it back: it is listed under the files to review, its content to move
+   into `.jig/roadmap.md` first. A pararepo gets none: it plans from its metarepo's.
    If it added `.jig/scripts/release.sh`, leave the TODO: `/jig:release` fills it on the first
    release. If it added `.jig/scripts/publish.sh`, leave its TODO too: `/jig:release` asks what
    a release publishes on the next release.

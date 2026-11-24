@@ -100,7 +100,7 @@ checkout, and commits `.jig/jobs.json` on trunk. The mark refuses until the chec
 
 `python3 .jig/jig.py merge <job>` happens only on the owner's word, and only for a gated job.
 In one commit it merges the branch and deletes the job's entry. It also numbers any new
-decisions and removes the finished spec. It then prints "Sync the clean jobs", and the hubnode
+decisions and removes the finished spec, keeping its `Scope:` and `Later:` lines on the handoff note. It then prints "Sync the clean jobs", and the hubnode
 runs `python3 .jig/jig.py sync` in each clean job's worktree. After the commit it removes the job's worktree and branch, if the worktree is clean.
 
 Two or more gated jobs can merge as a [batch](glossary.md#batch), with one complete check on

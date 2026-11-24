@@ -7,6 +7,12 @@ A breaking change is one that a reader taking the release must act on: a `**Brea
 
 ## Unreleased
 
+### Added
+- A spec names the work it leaves for later on a `Later:` line of roadmap ids, beside `Scope:`, each already on trunk's roadmap: the hook checks them as it checks `Scope:` ids, the drop guard included. `jig gate` prints `Closes with the spec at merge:` with the spec's `Later:` ids and `## Out of scope` lines, the merge keeps the `Later:` line on the note, and `jig rig` lists each id still open under Left for later (`later` in `--json`). Work left for later in an `## Out of scope` line, with no `Later:` id, is a blocking review finding.
+
+### Changed
+- Every stand-alone repo and metarepo keeps a roadmap, its empty structure if nothing else: `jig init` writes the roadmap and its view, `ROADMAP.md`, `jig update --apply` adds them where missing, and `jig roadmap`, rig, reading-list, survey, staging, the gate and the merge commit them on trunk in the trunk checkout when trunk has none (elsewhere they say where it is written). On trunk the hook refuses a commit removing it, and with none on trunk refuses a spec's `Scope:` or `Later:` line. A repo whose root `ROADMAP.md` is its own gets none until that content moves into the roadmap. A pararepo keeps none: `jig init --para` removes the empty structure a plain init wrote, and `jig update --apply --sweep` there refuses, naming the metarepo's glossary `Owner:` term and `jig move-in`, unless the pararepo keeps a roadmap of its own.
+
 ## v0.15.0 - 2026-11-19
 
 ### Added
