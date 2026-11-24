@@ -11554,6 +11554,17 @@ msg="move (up, withdrawn): once M's job numbers the re-proposal, the job opens f
 GARGS="D-003 --to M"; gjob d3 .jig/specs/move-d-003-2.md "D-003: up to M" .jig/decisions.md
 rs=$($J rig 2>&1 | sed -n '/^Can start now:/,/^Waiting on you:/p')
 expect_pass sh -c "test $grc = 0 && test $gcrc = 0 && test $mrc = 0 && grep -q -- '- D-003: moved to M/.jig/decisions.md § E-' .jig/decisions.md && ! echo \"\$1\" | grep -q 'move-d-003'" "$gout $gcom $mout" "$rs"; [ "$fail" = 0 ] || echo "$gout $gcom $mout $rs"
+msg="move (an idea up): L's open D-004, in its ideas file, is proposed into M's .jig/ideas.md with its moved-from line in M's log"
+printf '\n### D-004 four-up\nOpen (2026-11-03).\nTouches: none — up\n\nFour?\n' >> .jig/ideas.md && gplant "idea D-004"
+out=$($J move D-004 --to M --apply 2>&1); rc=$?
+mi=$(git -C "$GM" show propose/L-move-d-004:.jig/ideas.md 2>/dev/null); ml=$(git -C "$GM" show propose/L-move-d-004:.jig/decisions.md 2>/dev/null)
+expect_pass sh -c "test $rc = 0 && echo \"\$1\" | grep -q '^### E-?four-up four-up' && echo \"\$2\" | grep -qx -- '- E-?four-up: moved from L/.jig/decisions.md § D-004.' && ! echo \"\$2\" | grep -q '^### E-?four-up'" "$out" "$mi" "$ml"; [ $rc = 0 ] || echo "$out"
+git commit -qm "specs: move D-004" >/dev/null 2>&1
+( cd "$GM" && git switch -q propose/L-move-d-004 && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-commit propose/L-move-d-004 && $J merge --number >/dev/null 2>&1; git commit -qm "merge L's D-004" >/dev/null 2>&1 )
+msg="move (an idea up): once M numbers it, step 2 in L's job takes D-004 out of L's ideas file with its move line, and the commit passes"
+GARGS="D-004 --to M"; gjob d4 .jig/specs/move-d-004.md "D-004: up to M" .jig/decisions.md .jig/ideas.md
+expect_pass sh -c "test $grc = 0 && test $gcrc = 0 && test $mrc = 0 && ! grep -q '^### D-004' .jig/ideas.md && grep -q -- '- D-004: moved to M/.jig/decisions.md § E-' .jig/decisions.md \
+  && grep -q '^### E-[0-9]* four-up' '$GM/.jig/ideas.md'" "$gout $gcom $mout"; [ "$fail" = 0 ] || echo "$gout $gcom $mout"
 msg="move (sideways): in L, jig move docs/l.md --to K stages it in K"
 out=$($J move docs/l.md --to K --apply 2>&1); rc=$?
 expect_pass sh -c "test $rc = 0 && grep -qx 'moved-from: L/docs/l.md' '$GK/.jig/staging/move-docs-l-md.md'" "$out"; [ $rc = 0 ] || echo "$out"

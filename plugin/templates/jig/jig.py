@@ -6668,13 +6668,11 @@ def move_rules(trunk: str, staged: bool, meta: dict | None) -> list[str]:
         if body is None:
             out.append(f"{LOG}: `{line}`: {repo}'s {t} has no {path} (read {loc}/{path} on {t}): "
                        f"land it there first")
-        elif section and path in (LOG, IDEAS):
-            # An id names an entry or an idea there: one decided since keeps it in the other file.
-            both = entries_at(t, str(loc))
-            if move_key(section) not in {move_key(e["id"]) for e in log_entries(both, log_prefix_of(both))}:
-                out.append(f"{LOG}: `{line}`: {repo}'s {path} on {t} has no entry {section}: "
-                           f"land it there first")
-        elif section and pointer_gap(path, section, True, body)[0] != RESOLVES:
+        # An id names an entry or an idea there: one decided since keeps it in the other file.
+        elif section and path in (LOG, IDEAS) and move_key(section) not in entry_keys(entries_at(t, str(loc))):
+            out.append(f"{LOG}: `{line}`: {repo}'s {path} on {t} has no entry {section}: "
+                       f"land it there first")
+        elif section and path not in (LOG, IDEAS) and pointer_gap(path, section, True, body)[0] != RESOLVES:
             out.append(f"{LOG}: `{line}`: {repo}'s {path} on {t} has no heading {section}: "
                        f"land it there first")
         else:
@@ -6686,6 +6684,11 @@ def move_rules(trunk: str, staged: bool, meta: dict | None) -> list[str]:
                            f"this repo's {what} (read {loc}/{LOG}): land it there first, with its moved-from line")
     out += moved_from_rules(new, old, paras, unread)
     return out
+
+
+def entry_keys(text: str) -> set[str]:
+    """The ids TEXT's entries have, as move_key compares them."""
+    return {move_key(e["id"]) for e in log_entries(text, log_prefix_of(text))}
 
 
 def moved_from_rules(new: str, old: str, paras: set[str], unread: str = "") -> list[str]:
@@ -6745,7 +6748,9 @@ def moved_from_rules(new: str, old: str, paras: set[str], unread: str = "") -> l
         their_log = trunk_show(loc, LOG) or ""
         body = their_log if path == LOG else trunk_show(loc, path)
         if path == LOG and section:
-            pending = move_key(section) in {move_key(e["id"]) for e in log_entries(their_log, log_prefix_of(their_log))}
+            # The thing may be an idea there, in the ideas file beside the log.
+            both = with_ideas(their_log, trunk_show(loc, IDEAS) or "")
+            pending = move_key(section) in {move_key(e["id"]) for e in log_entries(both, log_prefix_of(both))}
         elif section:
             pending = body is not None and pointer_gap(path, section, True, body)[0] == RESOLVES
         else:
@@ -18222,7 +18227,8 @@ def cmd_move(root: Path, args) -> int:
     trunk, meta, para, loc, meta_loc, up, me = (st[k] for k in ("trunk", "meta", "para", "loc", "meta_loc", "up", "me"))
     path, section, rec, state, spec, mine_ptr = (st[k] for k in ("path", "section", "rec", "state", "spec", "mine_ptr"))
     landed_as, step2, meta_name = st["landed_as"], st["step2"], st["meta_name"]
-    entry = next((e for e in log_entries(in_index(LOG, True), log_prefix(trunk))
+    # An id names an entry in the log or an idea in the ideas file beside it.
+    entry = next((e for e in log_entries(in_index(LOG, True), log_prefix(trunk)) + idea_entries(in_index(IDEAS, True), log_prefix(trunk))
                   if move_key(e["id"]) == move_key(section or "")), None) if path == LOG else None
     as_ = (args.as_ or path) if path != LOG else LOG
     their_meta = load_meta_at(loc)
@@ -18335,8 +18341,14 @@ def move_step1(root, me, to, loc, meta, para, meta_loc, up, what, path, section,
         try:
             there_log = trunk_show(loc, LOG) or LOG_SEED
             files: dict[str, str | None] = {}
-            if path == LOG:
+            their_ideas = trunk_show(loc, IDEAS)
+            if path == LOG and not entry["status"].startswith("Accepted") and \
+                    (their_ideas is not None or not re.search(r"^## Open[ \t]*$", there_log, re.M)):
+                # An open question is an idea there, at the end of its ideas file.
+                files[IDEAS] = (their_ideas or IDEAS_SEED).rstrip("\n") + f"\n\n{text}"
+            elif path == LOG:
                 acc = entry["status"].startswith("Accepted")
+                # A log not folded yet keeps its ideas under ## Open.
                 sec_h = "## Unreleased" if acc else "## Open"
                 if not re.search(rf"^{sec_h}[ \t]*$", there_log, re.M):
                     there_log = there_log.rstrip("\n") + f"\n\n{sec_h}\n"
@@ -18394,12 +18406,21 @@ def move_step2(root, me, to, loc, meta, para, meta_loc, up, what, path, section,
     logf = root / LOG
     text = logf.read_text() if logf.exists() else LOG_SEED
     if path == LOG:
-        e = next((x for x in log_entries(text, log_prefix(Board.trunk_name(root))) if move_key(x["id"]) == move_key(section)), None)
-        if e is None:
-            die(f"no entry {section} in {LOG}", 2)
-        lines = text.splitlines(keepends=True)
-        end = e["end"] if e["end"] is not None else len(lines)
-        text = "".join(lines[:e["start"]] + lines[end:])
+        prefix = log_prefix(Board.trunk_name(root))
+        e = next((x for x in log_entries(text, prefix) if move_key(x["id"]) == move_key(section)), None)
+        if e is not None:
+            lines = text.splitlines(keepends=True)
+            end = e["end"] if e["end"] is not None else len(lines)
+            text = "".join(lines[:e["start"]] + lines[end:])
+        else:
+            # An idea leaves the ideas file in the commit that writes its move line.
+            idf = root / IDEAS
+            ideas = idf.read_text() if idf.exists() else ""
+            e = next((x for x in log_entries(with_ideas("", ideas), prefix) if move_key(x["id"]) == move_key(section)), None)
+            if e is None:
+                die(f"no entry {section} in {LOG} or {IDEAS}", 2)
+            idf.write_text(ideas.replace(e["block"], "", 1).rstrip("\n") + "\n")
+            git("add", "--", IDEAS, check=True)
     elif section:
         page = (root / path).read_text()
         span = heading_span(page, section)
