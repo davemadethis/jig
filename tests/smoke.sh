@@ -3610,6 +3610,11 @@ expect_pass test $f = 0
 msg="answered P2: naming no release, the refusal says so"
 sed -i.bak 's/| Open |$/| Closed (answered in elsewhere: done) |/' .jig/ledgers/BUFFER.md && rm .jig/ledgers/BUFFER.md.bak && git add -A; out=$(git commit -qm x 2>&1); undo
 expect_pass sh -c "echo \"\$0\" | grep -q 'answered in elsewhere, which is not a release of bam'" "$out"
+msg="answered: during a merge in progress, sync --answered commits nothing: the merge stays the user's, the rows stay Open"
+before=$(git rev-parse HEAD); side=$(git commit-tree "HEAD^{tree}" -p HEAD -m side)
+git merge -q --no-commit --no-ff "$side" >/dev/null 2>&1; out=$($J sync --answered B1,B2 --in v0.2.0 --reason "D-001 rewritten" 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && test \"\$(git rev-parse HEAD)\" = $before && git rev-parse -q --verify MERGE_HEAD >/dev/null && grep -q '^| B1 .*| Open |\$' .jig/ledgers/BUFFER.md && echo \"\$0\" | grep -q 'a merge is in progress here'" "$out"
+git merge --abort
 msg="answered: sync --answered closes B1 and B2 in one commit, recording the release and the reason, and offers the withdraw"
 before=$(git rev-parse HEAD); out=$($J sync --answered B1,B2 --in v0.2.0 --reason "D-001 rewritten" 2>&1)
 expect_pass sh -c "test \"\$(git rev-list --count $before..HEAD)\" = 1 && git log -1 --format=%s | grep -qx 'meta: bam v0.2.0: B1, B2 answered in v0.2.0' && grep -q '^| B1 | DECISIONS.md § D-001: ids shown | .*| Closed (answered in v0.2.0: D-001 rewritten) |\$' .jig/ledgers/BUFFER.md && grep -q '^| B2 .*| Closed (answered in v0.2.0: D-001 rewritten) |\$' .jig/ledgers/BUFFER.md && test -z \"\$(git status --porcelain)\" && echo \"\$0\" | grep -q 'jig propose --withdraw propose/ba-para-moot'" "$out"
@@ -5097,6 +5102,12 @@ msg="family D: the spec re-pointed, a note's Later: still naming pd's own No pha
 sed -i.bak 's|^Scope: Delta alpha/nope$|Scope: Delta alpha/x|' .jig/specs/sx.md && rm .jig/specs/sx.md.bak && git add -A
 out=$(git commit -qm "move in" 2>&1); rc=$?
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'old-2026-11-01.md leaves No phase/v for later, which meta.s .jig/roadmap.md on its trunk'" "$out"
+msg="family D: once the owner drops v from pd's roadmap, a note's Later: naming it is history: the move-in passes with the note untouched"
+git reset -q --hard && sed -i.bak '/`v`: later v/d' .jig/roadmap.md && rm .jig/roadmap.md.bak && $J roadmap --write >/dev/null && git add -A && git commit -qm "drop v"
+git rm -q .jig/roadmap.md ROADMAP.md && sed -i.bak 's|^Scope: alpha/x$|Scope: Delta alpha/x|' .jig/specs/sx.md && rm .jig/specs/sx.md.bak && git add -A
+expect_pass sh -c "git commit -qm 'move in, v dropped' && grep -qx 'Later: No phase/v' .jig/handoffs/old-2026-11-01.md"
+git reset -q --hard HEAD~2    # back to before the drop: the re-pointing case below
+git rm -q .jig/roadmap.md ROADMAP.md && sed -i.bak 's|^Scope: alpha/x$|Scope: Delta alpha/x|' .jig/specs/sx.md && rm .jig/specs/sx.md.bak && git add -A
 msg="family D: re-pointed to Delta alpha/x and Delta No phase/v, the moving-in commit passes"
 sed -i.bak 's|^Later: No phase/v$|Later: Delta No phase/v|' .jig/handoffs/old-2026-11-01.md && rm .jig/handoffs/old-2026-11-01.md.bak && git add -A
 expect_pass git commit -qm "move in"

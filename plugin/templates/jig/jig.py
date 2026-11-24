@@ -8540,7 +8540,10 @@ def sync_meta(root: Path) -> int:
     settles = next((t for t in held if any(proposal_in(loc, b, t) for _, b, _ in buffered)), None)
     if settles:
         closing = [(s, b, rows) for s, b, rows in buffered if proposal_in(loc, b, settles)]
-        if git("status", "--porcelain", "--", PARA, "AGENTS.md", BUFFER) or git("diff", "--cached", "--name-only"):
+        if busy := in_progress(root):
+            print(f"{name} {settles} releases {', '.join(b for _, b, _ in closing)}: {busy} is in progress "
+                  f"here: finish it first, so jig sync can close its rows in a commit of their own")
+        elif git("status", "--porcelain", "--", PARA, "AGENTS.md", BUFFER) or git("diff", "--cached", "--name-only"):
             print(f"{name} {settles} releases {', '.join(b for _, b, _ in closing)}: commit or stash first, "
                   f"so jig sync can close its rows in a commit of their own")
         else:
@@ -10586,13 +10589,15 @@ def laters_in(path: str, text: str) -> list[str]:
     return spec_laters(note_head(text) if path.startswith(HANDOFFS) else text)
 
 
-def cited(path: str, text: str, bad, *, notes_later: bool = False) -> str:
+def cited(path: str, text: str, bad, *, notes_later: set[str] | None = None) -> str:
     """What PATH's `Scope:` and `Later:` lines name that BAD holds, as a refusal says it:
     "takes a, b", "leaves c for later", or both; "" when none. A note's `Later:` is history,
-    so the owner drops a deferred item without rewriting it: it counts only with NOTES_LATER,
-    when moving in changes every id's form and a note left behind would name nothing."""
+    so the owner drops a deferred item without rewriting it: it counts only for an id in
+    NOTES_LATER, the roadmap moving in removes, whose ids change form there. One the owner
+    already dropped has nothing to be re-pointed to, and stays as history."""
     took = [s for s in scopes_in(path, text) if bad(s)]
-    left = [s for s in laters_in(path, text) if bad(s)] if notes_later or is_spec(path) else []
+    left = [s for s in laters_in(path, text) if bad(s)
+            and (is_spec(path) or notes_later is not None and s in notes_later)]
     return " and ".join(x for x in (f"takes {', '.join(took)}" if took else "",
                                      f"leaves {', '.join(left)} for later" if left else "") if x)
 
@@ -10696,7 +10701,8 @@ def job_note(snap: Snapshot, job: str) -> str:
     for n in snap.ls(HANDOFFS):
         body = snap.show(n)
         commit = re.search(r"^Commit: (\w+)", body, re.M)
-        if (re.search(rf"^# Handoff: {re.escape(job)}[ \t]*$", body, re.M) and commit
+        # The title on the first line, as handoff_notes reads it: a quoted one in the prose isn't.
+        if (body.split("\n", 1)[0] == f"# Handoff: {job}" and commit
                 and not re.search(r"^Partial: yes", body, re.M) and snap.landed(commit.group(1))):
             date = re.search(r"^Date: (\S+)", body, re.M)
             best = max(best, ((date.group(1) if date else ""), n))
@@ -10757,7 +10763,9 @@ def close_specs(finished: list[dict], snap: Snapshot) -> list[str]:
         git("rm", "-q", "-f", "--", f, check=True, cwd=str(root))
         out.append(f"closed {f}")
         if later := spec_laters(text):
-            out.append(f"left for later by {f}: {', '.join(later)}")
+            out.append(f"left for later by {f}: {', '.join(later)}" if carry else
+                       f"not written: {f} left {', '.join(later)} for later, and no landed note of its "
+                       "job is there to carry it; add the line to the job's note by hand")
     return out
 
 
@@ -11863,7 +11871,8 @@ def proposed_branch(branch: str, trunk: str) -> bool:
 def moving_in(para: dict, staged: bool) -> list[str]:
     """The pararepo's commit removing its own roadmap, once its phases and lists are the
     metarepo's: every `Scope:` line it keeps names the metarepo's ids, read on its trunk."""
-    if empty_roadmap(at_rev(Board.trunk_name(main_root()), ROADMAP)):
+    removed = at_rev(Board.trunk_name(main_root()), ROADMAP)
+    if empty_roadmap(removed):
         # The empty structure an init wrote before `init --para`: nothing in it moves in.
         return []
     loc = meta_checkout(main_root(), para)
@@ -11886,7 +11895,7 @@ def moving_in(para: dict, staged: bool) -> list[str]:
     out = []
     for f in git("-c", "core.quotePath=false", "ls-files", "--", SPECS, HANDOFFS).splitlines():
         if takes_scopes(f) and (what := cited(f, in_index(f, staged), lambda sc: sc not in known,
-                                              notes_later=True)):
+                                              notes_later=roadmap_scopes(removed))):
             out.append(f"{f} {what}, which {para['meta']}'s {ROADMAP} on its trunk doesn't "
                        f"have: this commit removes {ROADMAP}, so re-point it to {para['meta']}'s ids here")
     return out
