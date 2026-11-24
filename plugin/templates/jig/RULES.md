@@ -1542,7 +1542,8 @@ or section with its move line (Decision log, Released sections), in one commit, 
 refuses until the receiver's trunk has the moved-from line. Frozen citations of the old id keep
 resolving through the line, so nothing released is rewritten. A metarepo pointer to a page or
 section a pararepo moved away reads `(moved: <pointer>)` in `jig sync`, the release and P2,
-never as missing: the metarepo re-points it, and a pararepo bumping its pin past such a release
+never as missing. The answer is a removal's: the metarepo's rewrite as a pointers proposal
+(`jig propose --pointers`), or a `BUFFER.md` row. A pararepo bumping its pin past such a release
 reads the pointer's new home in the pin-bump request.
 
 The metarepo's decisions are its `.jig/decisions.md` (Decision log), cited as

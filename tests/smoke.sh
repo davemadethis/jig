@@ -9465,8 +9465,13 @@ expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \"moves to X, which i
 msg="moves B (family): with M out of the repos file, a move line in L passes with a warning that M's family wasn't read"
 rment D-006 && ulog '### Removed
 
-- D-006: moved to K/.jig/decisions.md § D-001.' && git add -A; out=$(JIG_CONFIG="$MV/none.json" git commit -qm "D-006: away" 2>&1); rc=$?; git reset -q --hard HEAD~1 2>/dev/null || git reset -q --hard
+- D-006: moved to K/.jig/decisions.md § D-001.' && git add -A; out=$(JIG_CONFIG="$MV/none.json" git commit -qm "D-006: away" 2>&1); rc=$?; { [ $rc = 0 ] && git reset -q --hard HEAD~1; } || git reset -q --hard
 expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q 'warning: .*M isn.t reachable here (.jig repos.), so this repo.s family wasn.t read'" "$out"; [ $rc = 0 ] || echo "$out"
+msg="moves B (family): with M out of the repos file, a move line for docs/l.md, which the commit keeps, is still refused"
+ulog '### Removed
+
+- docs/l.md: moved to K/docs/l.md.' && git add -A; out=$(JIG_CONFIG="$MV/none.json" git commit -qm "l: kept" 2>&1); rc=$?; git reset -q --hard
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'moves docs/l.md, which this repo still has'" "$out"; [ $rc != 0 ] || echo "$out"
 msg="moves B (sideways): K lands docs/l.md with its moved-from line while L's trunk still has it"
 cd "$K" && mkdir -p docs && printf '# L\n\nL is.\n' > docs/l.md && ulog '### Added
 

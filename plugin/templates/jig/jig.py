@@ -6188,6 +6188,12 @@ def family_names(trunk: str, meta: dict | None) -> tuple[set[str], str]:
     return out | {n for n in paras if not is_here(n)}, ""
 
 
+def maybe_family(repo: str, names: set[str], unread: str) -> bool:
+    """Whether a misplaced move record names a repo that is, or may be, of the family: with the
+    metarepo unread, any repo `jig repos` knows may be one, and the misplacement is refused all the same."""
+    return in_family(repo, names) or (bool(unread) and repo_path(repo) is not None)
+
+
 def in_family(repo: str, names: set[str]) -> bool:
     """Whether REPO is one of NAMES: by name, or by folder, as `Family` reads its members, so an
     alias or a checkout's own name is no stranger."""
@@ -6258,7 +6264,7 @@ def move_rules(trunk: str, staged: bool, meta: dict | None) -> list[str]:
             f"under ## Unreleased ### Removed"
             for sec, grp, line, m in log_move_lines(new, False) if (sec, grp, line) not in was
             and (grp == "Removed" and not move_held(sec)
-                 or grp != "Removed" and in_family(pointer_parts(m.group("to"))[0], paras))]
+                 or grp != "Removed" and maybe_family(pointer_parts(m.group("to"))[0], paras, unread))]
     # One address per moved thing: a second line would leave readers to pick between two homes.
     # A line this change rewrites in place is no longer the log's, so a corrected target passes.
     kept = set(new.splitlines())
@@ -6302,15 +6308,13 @@ def move_rules(trunk: str, staged: bool, meta: dict | None) -> list[str]:
                        f"a moved entry leaves in the commit that writes its line")
             continue
         repo, path, section = pointer_parts(ptr)
-        if unread and not in_family(repo, paras):
-            print(f"jig: warning: `{line}`: {unread} isn't reachable here (`jig repos`), so this repo's "
-                  f"family wasn't read and {repo} wasn't checked", file=sys.stderr)
-            continue
-        if not paras:
+        # The family unread, membership can't be judged; what this commit itself holds still is.
+        unknown = bool(unread) and not in_family(repo, paras)
+        if not unknown and not paras:
             out.append(f"{LOG}: `{line}` moves to {repo}, but this repo has no family (no {META} with "
                        f"pararepos, no {PARA}): a claim moves only between a metarepo and its pararepos")
             continue
-        if not in_family(repo, paras):
+        if not unknown and not in_family(repo, paras):
             out.append(f"{LOG}: `{line}` moves to {repo}, which isn't of this repo's family "
                        f"({', '.join(sorted(paras))}): a claim moves within its family only")
             continue
@@ -6322,6 +6326,10 @@ def move_rules(trunk: str, staged: bool, meta: dict | None) -> list[str]:
             elif pointer_gap(wpath.strip(), wsec, True, body)[0] == RESOLVES:
                 out.append(f"{LOG}: `{line}` moves {what}, which {wpath.strip()} still has: remove "
                            f"the section in the same commit, or drop the line")
+        if unknown:
+            print(f"jig: warning: `{line}`: {unread} isn't reachable here (`jig repos`), so this repo's "
+                  f"family wasn't read and {repo} wasn't checked", file=sys.stderr)
+            continue
         loc = repo_path(repo)
         if not loc or not loc.is_dir():
             print(f"jig: warning: `{line}`: {repo} isn't in `jig repos` here, so its target "
@@ -6365,7 +6373,7 @@ def moved_from_rules(new: str, old: str, paras: set[str], unread: str = "") -> l
             "under ## Unreleased ### Added"
             for sec, grp, line, _m in any_moved_from(new)
             if (sec, grp, line) not in placed and (grp == "Added" and not move_held(sec)
-                                                   or grp != "Added" and in_family(pointer_parts(_m.group("frm"))[0], paras))]
+                                                   or grp != "Added" and maybe_family(pointer_parts(_m.group("frm"))[0], paras, unread))]
 
     def source(m: re.Match) -> tuple[str, Path | None, str, str, str | None]:
         repo, path, section = pointer_parts(m.group("frm"))
