@@ -1,7 +1,7 @@
 # bug-stale-gate-and-entry-files: a stale gate checkout gets checked and gated; `--merge-log` leaves `entry_files` naming files it removes
 
-Source: jig hubnode session / 2026-11-24 / Dave, with Claude (staged as feedback-jig-2026-11-24-next-stale-gate.md): `jig next` names the check in a stale gate checkout after a new handoff
-Source: jig hubnode session / 2026-11-24 / Dave, with Claude (staged as feedback-jig-2026-11-24-merge-log-entry-files.md): `--merge-log` removes a record folder's index but `meta.json` keeps naming it
+Source: jig hubnode session / 2026-11-24 / Dave, with Claude ("open a bug spec for it after these jobs merge") (staged as feedback-jig-2026-11-24-next-stale-gate.md): `jig next` names the check in a stale gate checkout after a new handoff
+Source: jig hubnode session / 2026-11-24 / Dave, with Claude ("Stage it") (staged as feedback-jig-2026-11-24-merge-log-entry-files.md): `--merge-log` removes a record folder's index but `meta.json` keeps naming it
 
 Opens after ideas-log merges (its `cmd_merge_log`/`record_plan` rewrite is the base of bug-merge-log-entry-files' fix).
 
