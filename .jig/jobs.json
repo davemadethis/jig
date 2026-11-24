@@ -49,13 +49,15 @@
       "plugin/skills/hubnode/SKILL.md",
       "plugin/templates/jig/RULES.md",
       "plugin/templates/jig/jig.py",
-      "tests/smoke.sh"
+      "tests/smoke.sh",
+      "plugin/skills/release/SKILL.md",
+      "plugin/templates/ledgers/BUFFER.md"
     ],
     "reserved": {}
   },
   "bug-deferred-scope": {
     "spec": ".jig/specs/bug-deferred-scope.md",
-    "state": "claimed",
+    "state": "ready",
     "after": [],
     "owns": [],
     "shares": [
