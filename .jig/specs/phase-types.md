@@ -106,7 +106,7 @@ Part B, in that metarepo:
 - [ ] (stand-alone) In the Part A repo, `jig roadmap --type prototype` prints `alpha` only.
 
 All parts:
-- [ ] (no regression) `python3 .jig/jig.py queue -- bash tests/smoke.sh roadmap family rig rig_batch sweep update moves boundary pararepo metarepo` passes, and so do `python3 .jig/jig.py queue -- .jig/scripts/check.sh` and `claude plugin validate ./plugin`.
+- [ ] (no regression) `python3 .jig/jig.py queue -- bash tests/smoke.sh roadmap family phase_types page_contract rig rig_batch sweep update moves boundary pararepo metarepo` passes, and so do `python3 .jig/jig.py queue -- .jig/scripts/check.sh` and `claude plugin validate ./plugin`.
 - [ ] (docs) `docs/records.md` § Roadmap, `docs/commands.md` (roadmap's flags) and `docs/glossary.md` § Phase describe types and filters. `grep -n -E 'Prototype|--product' docs/records.md docs/commands.md docs/glossary.md` finds each.
 
 ## Out of scope
