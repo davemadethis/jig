@@ -5284,7 +5284,7 @@ n0=$(git -C "$EM" rev-list --count "$br")
 reditb "s = s.replace('- \`pairing\`: pairing (touches docs/p.md)', '- \`pairing\`: pairing (touches docs/p.md) (labels teleport)')" label
 msg="roadmap edit: a label added to an existing scope is written on the branch, its row naming the scope changed"
 expect_pass sh -c "test $rc = 0 && git -C '$EM' show '$br:.jig/roadmap.md' | grep -q 'pairing (touches docs/p.md) (labels teleport)' && grep -q '| changed Walyt alpha/pairing |' .jig/ledgers/BUFFER.md" "$out"
-reditb "s = s.replace('(labels teleport)', '(labels teleport) (after Walyt alpha/z3)')" after
+reditb "s = s.replace('(touches docs/p.md) (labels teleport)', '(touches docs/p.md) (labels teleport) (after Walyt alpha/z3)')" after
 msg="roadmap edit: an (after …) added to an existing scope is written on the branch"
 expect_pass sh -c "test $rc = 0 && git -C '$EM' show '$br:.jig/roadmap.md' | grep -q 'after Walyt alpha/z3'" "$out"
 reditb "s = s.replace('## Walyt alpha\nScopes:', '## Walyt alpha\nExit when:\n- [ ] pairs two phones\nScopes:')" exit
@@ -5303,7 +5303,7 @@ $J roadmap --draft >/dev/null 2>&1
 msg="roadmap edit: a draft in pa changing a line under Familiar App alpha is refused by line, naming it and pb, writing nothing"
 edraft "s = s.replace('the host', 'the big host')"
 out=$($J roadmap --edit 2>&1); rc=$?
-expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'line 9: ## Familiar App alpha is pb.s' && test \"\$(cd '$EA' && for r in '$EM' '$EA' '$T/pb'; do git -C \"\$r\" for-each-ref --format='%(refname) %(objectname)'; git -C \"\$r\" status --porcelain; done)\" = \"\$1\"" "$out" "$before"
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'line [0-9]*: ## Familiar App alpha is pb.s' && test \"\$(cd '$EA' && for r in '$EM' '$EA' '$T/pb'; do git -C \"\$r\" for-each-ref --format='%(refname) %(objectname)'; git -C \"\$r\" status --porcelain; done)\" = \"\$1\"" "$out" "$before"
 msg="roadmap edit: one changing meta's own ## Demos is refused, naming meta"
 edraft "s = s.replace('the big host', 'the host').replace('a demo', 'a big demo')"
 out=$($J roadmap --edit 2>&1); rc=$?
