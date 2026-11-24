@@ -10126,18 +10126,32 @@ $J init --para M2 --location "$MM2" >/dev/null 2>&1 && git add -A && git commit 
 printf '# Roadmap\n\n## alpha\nScopes:\n- `x`: the x\n' > .jig/roadmap.md && git add -A && git commit -qm own && $J roadmap --write >/dev/null && git add -A && git commit -qm view
 ( cd "$MM2" && python3 -c "import json; f='.jig/meta.json'; d=json.load(open(f)); d['pararepos']=['pw']; json.dump(d, open(f,'w'), indent=2)" && mplant "pw joins" )
 $J move-in --product Wex --definition "The wex." --apply >/dev/null 2>&1 && git commit -qm "specs: move-in" >/dev/null 2>&1
-msg="movein: a move-in branch reset to its opening commit reads empty in M2, step 1 next; deleted unmerged, it reads gone"
-git -C "$MM2" branch -q -f propose/pw-move-in propose/pw-move-in~1; o1=$($J move-in 2>&1)
-git -C "$MM2" branch -q -D propose/pw-move-in; o2=$($J move-in 2>&1)
-expect_pass sh -c "echo \"\$0\" | grep -q 'propose/pw-move-in is empty in M2' && echo \"\$0\" | grep -q '^1. product and phases proposed: next' \
-  && echo \"\$1\" | grep -q 'propose/pw-move-in, which .jig/specs/move-in.md records, is gone from M2 unmerged'" "$o1" "$o2"
-$J move-in --definition "The wex." --apply >/dev/null 2>&1 && git commit -qm "specs: move-in again" >/dev/null 2>&1
+msg="movein: a move-in branch reset to its opening commit reads empty in M2, and step 1 is next"
+git -C "$MM2" branch -q -f propose/pw-move-in propose/pw-move-in~1; out=$($J move-in 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -q 'propose/pw-move-in is empty in M2' && echo \"\$0\" | grep -q '^1. product and phases proposed: next'" "$out"
+msg="movein: step 1 again on that empty record with --product Wox proposes Wox under move-in.md, its own row alone; Wex's row stays Open"
+out=$($J move-in --product Wox --definition "The wox." --apply 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && grep -q '§ Wox: none yet' .jig/specs/move-in.md && sed -n '/^## Buffer rows/,/^\$/p' .jig/specs/move-in.md | grep -c '^- B' | grep -qx 1 \
+  && grep -q '| B1 | M2/.jig/roadmap.md § Wex: none yet .* | Open |' .jig/ledgers/BUFFER.md" "$out"
+git commit -qm "specs: move-in as Wox" >/dev/null 2>&1
+msg="movein: deleted unmerged, the branch reads gone"
+git -C "$MM2" branch -q -D propose/pw-move-in; out=$($J move-in 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -q 'propose/pw-move-in, which .jig/specs/move-in.md records, is gone from M2 unmerged'" "$out"
+$J move-in --definition "The wox." --apply >/dev/null 2>&1 && git commit -qm "specs: move-in again" >/dev/null 2>&1
+msg="movein: jig propose --buffer leaves the stale Wex move-in row out: nothing to propose, no buffer spec, no branch"
+nbr=$(git -C "$MM2" branch | wc -l); out=$($J propose --buffer 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q 'nothing to propose' && ! ls .jig/specs | grep -q '^buffer-' && test \"\$(git -C '$MM2' branch | wc -l)\" = '$nbr'" "$out"
 $J propose --withdraw propose/pw-move-in --reason r >/dev/null 2>&1 && git add -A && git commit -qm "specs: withdraw" >/dev/null 2>&1
+msg="movein: withdrawn, jig propose --buffer still leaves both move-in rows out"
+out=$($J propose --buffer 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q 'nothing to propose' && ! ls .jig/specs | grep -q '^buffer-' && test \"\$(git -C '$MM2' branch | wc -l)\" = '$nbr'" "$out"
 msg="movein: withdrawn, M2 keeping the old branch, step 1 makes propose/pw-move-in-2 and move-in-2.md; the withdrawn spec is untouched"
 out=$($J move-in --product Wex --definition "The wex." --apply 2>&1); rc=$?
 expect_pass sh -c "test $rc = 0 && git -C '$MM2' rev-parse -q --verify refs/heads/propose/pw-move-in-2 >/dev/null && test -f .jig/specs/move-in-2.md \
   && test -z \"\$(git diff HEAD -- .jig/specs/move-in.md)\" && grep -q 'meta: M2 withdrawn propose/pw-move-in ' .jig/specs/move-in.md && ! ls .jig/specs/ | grep -q withdrawn" "$out"
 [ $rc = 0 ] || echo "$out"
+msg="movein: the re-proposal as Wex reuses its own Open row, B1, alone in move-in-2.md"
+expect_pass sh -c "grep -qx -- '- B1' .jig/specs/move-in-2.md && test \"\$(sed -n '/^## Buffer rows/,/^\$/p' .jig/specs/move-in-2.md | grep -c '^- B')\" = 1"
 git commit -qm "specs: move-in-2" >/dev/null 2>&1
 ( cd "$MM2" && git switch -q propose/pw-move-in-2 && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-edit propose/pw-move-in-2 && $J release $(mf) >/dev/null ) >/dev/null 2>&1
 msg="movein: after M2 merges and releases it, pw's sync says propose/pw-move-in-2 is released, with no 'withdrawn, but released' advice"

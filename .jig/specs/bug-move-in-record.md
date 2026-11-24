@@ -148,6 +148,13 @@ The reviewer's direction (score only re-headed headings, honour `want` above 0) 
      gives (`move-in`, then `move-in-2`), with branch `propose/<repo>-<slug>`. A withdrawn spec
      is never moved, renamed or rewritten. Its branch, if M kept it, is M's to delete and
      blocks nothing. The `move-in-withdrawn-<n>.md` code goes.
+   - A spec counts as a record only when its `## Buffer rows` lists that row alone, as step 1
+     writes it: a spec carrying more rows is some other proposal's.
+   - The move-in row is `jig move-in`'s alone. `unproposed` leaves out every row whose "This
+     repo now" cell reads `its phases and list, moving in`, except for step 1's own call, so
+     neither `jig release` nor `jig propose --buffer` carries it. A row left Open by a withdrawal,
+     or by step 1 rerun under another `--product`, waits for `jig move-in` (review-change of
+     9ac1ee9, blocking: a withdrawn row swept into `buffer-<tag>.md` became step 2's record).
 2. **The product at step 2** is the record's. `--product <Name>` at step 2 is the owner's word
    that M's hubnode renamed it at the merge. When it differs from the record, the plan prints
    both names. The map is `move_in_map(own, product, mine)`, with `mine` as today. Before step 2
@@ -221,6 +228,11 @@ Smoke, `movein` section, in its throwaway repos (`JIG_CONFIG`, `XDG_CONFIG_HOME`
   - `jig move-in` in `pw` then says step 2 is next, as Wex.
 - [ ] (empty is not gone) With a move-in branch reset to its opening commit, the plan says it is
   empty in M and step 1 is next. With the branch deleted unmerged, the plan says gone.
+- [ ] (the move-in row stays move-in's) In `pw`, step 1 rerun with `--product Wox` on an empty
+  record proposes Wox under `move-in.md`, its own row listed alone, and Wex's row stays Open.
+  Then, before and after the withdrawal, `jig propose --buffer` says nothing to propose: no
+  `buffer-*` spec and no new branch in M2. The re-proposal as Wex reuses its row, B1, alone in
+  `move-in-2.md`.
 - [ ] (strike 1 stays fixed) "with the branch deleted by that merge, step 2 is next" still passes.
 - [ ] `grep -c 'def moved_in_as\|withdrawn-{n}' plugin/templates/jig/jig.py` prints 0.
 - [ ] `python3 .jig/jig.py queue -- bash tests/smoke.sh movein moves pararepo metarepo roadmap
@@ -241,6 +253,7 @@ Smoke, `movein` section, in its throwaway repos (`JIG_CONFIG`, `XDG_CONFIG_HOME`
   - `cmd_move_in`: the record lookup, the product from the record, `--product` at step 2,
     the two refusals, and empty told apart from gone;
   - `move_in_propose`: the slug from `free_name`, no `kept_as`;
+  - `unproposed` and `buffer_proposal`: the move-in row left out of every proposal but step 1's;
   - `moved_in_as`: deleted;
   - `owner_dropped` and its call in `check_rules`: every parent, roadmap or glossary paths;
   - the `MOVE_IN` comment.
@@ -260,7 +273,8 @@ Smoke, `movein` section, in its throwaway repos (`JIG_CONFIG`, `XDG_CONFIG_HOME`
   file", and the owner's rule is to reuse a record as-is. This reason is [seen].
 - **Read a renamed product from the merge's roadmap diff** (the headings the merge added).
   Rejected because M's hubnode may add or re-head other phases on the branch, so the added
-  headings still need matching to the map. That is inference again. This reason is [assumed].
+  headings still need matching to the map. That is inference again. This reason is [assumed];
+  the fix doesn't rest on it: rename-following was never asked for, and `--product` carries it.
 - **Keep the fixed name and move a withdrawn spec aside** (c47c2d5). Rejected because the moved
   record and the new one name one branch, and `jig sync` then advises `--answered` for a row the
   live proposal carried. This reason is [seen], in the repro.

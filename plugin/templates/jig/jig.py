@@ -9447,15 +9447,18 @@ def open_proposal(para: dict, loc: Path, slug: str) -> str:
     return branch
 
 
-def unproposed(root: Path) -> tuple[list[str], list[str]]:
+def unproposed(root: Path, moving_in: bool = False) -> tuple[list[str], list[str]]:
     """The buffer's table header and its Open rows not yet proposed as they stand. A row a
-    proposal already carries unchanged waits for that one; an edited row goes again."""
+    proposal already carries unchanged waits for that one; an edited row goes again. A move-in
+    row (`jig move-in`'s) is that command's alone: only MOVING_IN lists it, so a release or
+    `jig propose --buffer` never carries one into a proposal step 2 would take for its own."""
     text = (root / BUFFER).read_text() if (root / BUFFER).exists() else ""
     lines = [l for l in text.splitlines() if l.lstrip().startswith("|")]
     sent = proposed_rows([s.read_text() for s in sorted((root / DIR / "specs").glob("*.md"))])
     return ([l for l in lines if not buffer_rows(l)],
             [l for l in lines if buffer_rows(l) and buffer_rows(l)[0][-1] == "Open"
-             and tuple(buffer_rows(l)[0]) not in sent])
+             and tuple(buffer_rows(l)[0]) not in sent
+             and (moving_in or (buffer_rows(l)[0][2:3] or [""])[0] != MOVE_IN_NOW)])
 
 
 def buffer_proposal(root: Path, para: dict, loc: Path, slug: str,
@@ -9463,7 +9466,7 @@ def buffer_proposal(root: Path, para: dict, loc: Path, slug: str,
     """Every Open row of the buffer not yet proposed, in one proposal: a metarepo branch, and a
     spec here that lists the rows by id, which is the record of what went. None when no row
     is left to propose. ONLY: just those rows, as `jig move-in` proposes its own."""
-    head, open_ = unproposed(root)
+    head, open_ = unproposed(root, moving_in=only is not None)
     open_ = [l for l in open_ if only is None or buffer_rows(l)[0][0] in only]
     if not open_:
         return None
@@ -15685,9 +15688,10 @@ def move_in_records(root: Path, meta: str) -> list[dict]:
     out = []
     for spec in sorted((root / SPECS).glob("*.md")):
         text = spec.read_text(errors="replace")
-        listed = set(listed_rows(text))
-        rows = [r for r in buffer_rows(text) if r[0] in listed and len(r) > 2 and r[2] == MOVE_IN_NOW
-                and claim.fullmatch(r[1])]
+        listed = listed_rows(text)
+        # Step 1 lists its row alone: a spec carrying more is some other proposal's.
+        rows = [r for r in buffer_rows(text) if len(listed) == 1 and r[0] == listed[0] and len(r) > 2
+                and r[2] == MOVE_IN_NOW and claim.fullmatch(r[1])]
         live = next((m.group("branch") for m in PROPOSAL.finditer(text) if m.group("meta") == meta), None)
         gone = next((m.group("branch") for m in WITHDRAWN.finditer(text) if m.group("meta") == meta), None)
         if rows and (live or gone):
