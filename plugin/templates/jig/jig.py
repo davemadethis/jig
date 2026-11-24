@@ -14353,6 +14353,8 @@ def record_plan(root: Path, log: str, prefix: str, seed: dict[str, str] | None =
             if os.path.basename(f).lower() in RECORD_INDEXES:
                 rest = record_index_left(f, read(f), paths)
                 if not rest:
+                    # One answer per path: a planned text it held goes with it.
+                    plan["write"].pop(f, None)
                     plan["remove"].append(f)
                     continue
                 plan["write"][f] = rest
@@ -14815,6 +14817,9 @@ def cmd_merge_log(root: Path, apply: bool) -> int:
     rp = record_plan(root, text, prefix, seed, set(gone))
     text = rp["text"]
     problems += rp["problems"]
+    # What the old files keep and lose is the plan's: an index left only its headings is removed.
+    keep = {f: t for f, t in keep.items() if f in rp["write"]}
+    gone = [f for f, _ in files_in if f not in keep]
     # The records' ideas go last, after the pass, so a block's `Record N before this log.` stays.
     new_ideas = m["ideas"] + rp["ideas"]
     ideas_text = rp["write"].get(IDEAS) or ideas_disk
@@ -14823,6 +14828,10 @@ def cmd_merge_log(root: Path, apply: bool) -> int:
     planned = {**rp["write"], LOG: text}
     if new_ideas or not (root / IDEAS).exists():
         planned[IDEAS] = ideas_text
+    removals = list(dict.fromkeys(gone + rp["remove"]))
+    # One answer per path: a file both written and removed would show one thing and do another.
+    if clash := sorted(set(planned) & set(removals)):
+        die(f"merge-log planned both a text and a removal for {', '.join(clash)}: a jig bug, nothing written", 2)
     if not rp["problems"]:
         problems += log_problems(text, prefix) + ideas_problems(ideas_text, text, prefix)
     print("Merging into " + LOG + ":")
@@ -14832,7 +14841,7 @@ def cmd_merge_log(root: Path, apply: bool) -> int:
         print(f"  {n}")
     for line in m["undated"] + rp["undated"]:
         print(f"  {line}")
-    for f, para in m["homeless"]:
+    for f, para in [(f, para) for f, para in m["homeless"] if f in keep]:
         print(f"  no home, move by hand: {f}:{para[0][0]}–{para[-1][0]} `{para[0][1].strip()[:60]}`")
     if rp["remove"]:
         print(f"  removed after: {', '.join(rp['remove'])}")
@@ -14888,8 +14897,7 @@ def cmd_merge_log(root: Path, apply: bool) -> int:
         planned[META] = json.dumps(d, indent=2) + "\n"
     if on_trunk_now:
         planned[CONFIG] = json.dumps(data, indent=2) + "\n"
-    # Each path once, from the plan; then what the run removes.
-    removals = [f for f in dict.fromkeys(gone + rp["remove"]) if f not in planned]
+    # What the run removes, then each path once, from the plan.
     for f in removals:
         git("rm", "-q", "--", f, check=True)
     for f, new in planned.items():

@@ -8260,6 +8260,35 @@ printf '{"entry_files": ["docs/decisions/README.md"]}\n' > .jig/meta.json && git
 git switch -q -c ml && $UP --apply --merge-log >/dev/null 2>&1
 msg="merge-log one write: a register that is a record folder's README is removed and stays removed, D-001 in the log once"
 expect_pass sh -c "test ! -e docs/decisions/README.md && git status --short | grep -qx 'D  docs/decisions/README.md' && test \$(grep -c '^### D-001 ' .jig/decisions.md) = 1"
+# A README register that keeps prose at first: once its record links go, only headings are left.
+for kind in bullets title; do
+  pcnew "$T/ml-readme-$kind" && mkdir -p docs/decisions
+  printf '# 0001. Use markdown\n\n- **Date:** 2026-01-01\n- **Status:** accepted\n\n## Context\n\nWe needed a format.\n' > docs/decisions/0001-use-markdown.md
+  printf '# 0002. Use a log\n\n- **Date:** 2026-01-02\n- **Status:** accepted\n\n## Context\n\nA log.\n' > docs/decisions/0002-use-a-log.md
+  if [ $kind = bullets ]; then
+    printf '# Architecture decisions\n\n| Id | Decision | Status | Date |\n|---|---|---|---|\n| D-001 | a | accepted (Ann) | 2026-01-01 |\n\n- [0001 Use markdown](0001-use-markdown.md)\n- [0002 Use a log](0002-use-a-log.md)\n' > docs/decisions/README.md
+  else
+    printf '# Architecture decisions\n\n| Id | Decision | Status | Date |\n|---|---|---|---|\n| D-001 | a, per record 0001 | accepted (Ann) | 2026-01-01 |\n' > docs/decisions/README.md
+  fi
+  git add -A && git commit -qm init && $J init >/dev/null 2>&1; git add -A && git commit -qm board
+  printf '{"entry_files": ["docs/decisions/README.md"]}\n' > .jig/meta.json && git add -A && git -c core.hooksPath=/dev/null commit -qm meta && git switch -q -c ml
+  dry=$($UP --merge-log 2>&1); $UP --apply --merge-log >/dev/null 2>&1
+  msg="merge-log one write: a README register with $kind, headings left only, is shown removed and removed, entry_files no longer naming it"
+  expect_pass sh -c "echo \"\$0\" | grep -q '^  docs/decisions/README.md (a decision register, 1 row), removed after' && ! echo \"\$0\" | grep -q 'no home, move by hand: docs/decisions/README.md' && test ! -e docs/decisions/README.md && git status --short | grep -qx 'D  docs/decisions/README.md' && ! grep -q README .jig/meta.json && test \$(grep -c '^### D-001 ' .jig/decisions.md) = 1" "$dry"
+done
+msg="merge-log one write: a plan holding a text and a removal for one path is refused, and nothing is written"
+mlone "$T/ml-clash" none
+out=$(python3 -c "
+import sys, pathlib, importlib.util as u
+s = u.spec_from_file_location('j', '$P/jig/jig.py'); m = u.module_from_spec(s); s.loader.exec_module(m)
+orig = m.record_plan
+def clash(*a, **k):
+    p = orig(*a, **k)
+    p['write']['docs/decisions/0001-use-markdown.md'] = 'both'
+    return p
+m.record_plan = clash
+sys.exit(m.cmd_merge_log(pathlib.Path('.').resolve(), True))" 2>&1); rc=$?
+expect_pass sh -c "test $rc = 2 && echo \"\$0\" | grep -q 'planned both a text and a removal for docs/decisions/0001-use-markdown.md' && test -z \"\$(git status --porcelain)\"" "$out"
 }
 
 # ---------------------------------------------------------------- a heading is a page's address
