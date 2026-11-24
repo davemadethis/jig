@@ -5908,9 +5908,10 @@ LOG_HEAD = (
     "A breaking change is one that a reader taking the release must act on: a `**Breaking:**` line "
     "says what to change, and it doesn't set the version's level.\n")
 LOG_SEED = "# Decisions and changes\n\n" + LOG_HEAD + "\n## Unreleased\n"
-# The seeds earlier jigs wrote, with ## Open, still read as an empty log.
+# The seeds earlier jigs wrote, with ## Open or the old versioning header, still read as an empty log.
 OLD_LOG_SEEDS = ("# Decisions and changes\n\n" + LOG_HEAD + "\n## Open\n\n## Unreleased\n",
-                 "# Decisions and changes\n\n" + OLD_LOG_HEAD + "\n## Open\n\n## Unreleased\n")
+                 "# Decisions and changes\n\n" + OLD_LOG_HEAD + "\n## Open\n\n## Unreleased\n",
+                 "# Decisions and changes\n\n" + OLD_LOG_HEAD + "\n## Unreleased\n")
 # The log holds decisions only. What is still to be researched before it can be decided, scoped,
 # built and documented is an idea, in an entry of the log's form with an id from the log's
 # counter: released entries and pararepos cite ids an Open entry had, so an idea keeps its id,
