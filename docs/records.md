@@ -60,6 +60,16 @@ phases in order, and each phase lists its
 [scopes](glossary.md#scope). A [spec](glossary.md#spec) says which scopes it takes. A scope is done when every spec
 taking it has landed, so nobody ticks a box to show progress.
 
+Each phase has a type, read from its name: a Greek letter (`alpha`, `beta`) is Prototype,
+`Pilot A` is Pilot, and any other name, such as `Launch`, is Production. Within a product the
+types run Prototype, then Pilot, then Production, and the hook refuses a roadmap on trunk that
+puts them out of order.
+
+`python3 .jig/jig.py roadmap` can show part of the roadmap: `--product Widget --phase alpha` is
+what's in Widget alpha, and `--type`, `--state` and `--owner` narrow it the same way. Add
+`--view` to print that part as the view's Markdown. `ROADMAP.md` itself is always the whole
+roadmap.
+
 Work you've named but haven't placed in a phase yet is an item under the roadmap's `## No phase`
 section. Each merge rewrites a kanban view of the roadmap at the root, which any forge renders.
 `python3 .jig/jig.py roadmap` prints the roadmap's states.
