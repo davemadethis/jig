@@ -11083,6 +11083,11 @@ o1=$($J move D-003 --to M 2>&1); out=$($J move D-003 --to M --apply 2>&1); rc=$?
 expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q '^1. land it in M: next' && test -f .jig/specs/move-d-003-2.md && grep -qx -- '- meta: M proposal propose/L-move-d-003-2' .jig/specs/move-d-003-2.md \
   && git -C '$GM' rev-parse -q --verify refs/heads/propose/L-move-d-003-2 >/dev/null && test -z \"\$(git diff HEAD -- .jig/specs/move-d-003.md)\" && grep -q 'meta: M withdrawn propose/L-move-d-003 ' .jig/specs/move-d-003.md" "$o1"; [ $rc = 0 ] || echo "$out"
 git commit -qm "specs: move D-003 again" >/dev/null 2>&1
+msg="move (up, withdrawn): once M's job numbers the re-proposal, the job opens from move-d-003-2.md unrefused, and after its merge rig offers neither spec"
+( cd "$GM" && git switch -q propose/L-move-d-003-2 && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-commit propose/L-move-d-003-2 && $J merge --number >/dev/null 2>&1; git commit -qm "merge L's D-003" >/dev/null 2>&1 )
+GARGS="D-003 --to M"; gjob d3 .jig/specs/move-d-003-2.md "D-003: up to M" .jig/decisions.md
+rs=$($J rig 2>&1 | sed -n '/^Can start now:/,/^Waiting on you:/p')
+expect_pass sh -c "test $grc = 0 && test $gcrc = 0 && test $mrc = 0 && grep -q -- '- D-003: moved to M/.jig/decisions.md § E-' .jig/decisions.md && ! echo \"\$1\" | grep -q 'move-d-003'" "$gout $gcom $mout" "$rs"; [ "$fail" = 0 ] || echo "$gout $gcom $mout $rs"
 msg="move (sideways): in L, jig move docs/l.md --to K stages it in K"
 out=$($J move docs/l.md --to K --apply 2>&1); rc=$?
 expect_pass sh -c "test $rc = 0 && grep -qx 'moved-from: L/docs/l.md' '$GK/.jig/staging/move-docs-l-md.md'" "$out"; [ $rc = 0 ] || echo "$out"
@@ -11196,8 +11201,8 @@ out=$($J move docs/products/walyt/dd.md --to L --apply 2>&1); rc=$?
 expect_pass sh -c "test $rc = 0 && test -f '$GL/.jig/staging/move-docs-products-walyt-dd-md.md' && test -f $DS && ! ls .jig/specs | grep -q 'move-docs-products-walyt-dd-md-2'" "$out"; [ $rc = 0 ] || echo "$out"
 git commit -qm "TOOL: move dd again" >/dev/null 2>&1
 # U's pages are all contract paths: every change to one needs P2's answer.
-cd "$GM" && printf '# U5\n\nSee `U/.jig/decisions.md § D-001` and `U/.jig/decisions.md § D-002`.\n\nSee `U/docs/s.md § A` and `U/docs/s.md § B`.\n' > docs/products/walyt/u5.md && gplant "M cites U"
-cd "$GU" && mkdir -p docs && for f in n b; do printf '# %s\n\n%s is.\n' $f $f > docs/$f.md; done && printf '# S\n\n## A\n\nA is.\n\n## B\n\nB is.\n' > docs/s.md
+cd "$GM" && printf '# U5\n\nSee `U/.jig/decisions.md § D-001` and `U/.jig/decisions.md § D-002`.\n\nSee `U/docs/s.md § A` and `U/docs/s.md § B`.\n\nPower: U/docs/p.md § Power of the cell.\n\nTrain: U/docs/p.md § Powertrain of the cart.\n\nCode: `U/docs/p.md § Powertrain`.\n' > docs/products/walyt/u5.md && gplant "M cites U"
+cd "$GU" && mkdir -p docs && for f in n b; do printf '# %s\n\n%s is.\n' $f $f > docs/$f.md; done && printf '# S\n\n## A\n\nA is.\n\n## B\n\nB is.\n' > docs/s.md && printf '# P\n\n## Power\n\nPower is.\n\n## Powertrain\n\nPowertrain is.\n' > docs/p.md
 ulog '### D-001 one
 Accepted (owner, 2026-11-03).
 Touches: none — one
@@ -11234,6 +11239,13 @@ $J move 'docs/s.md § A' --to K --as docs/sa.md --apply >/dev/null 2>&1 && git c
 GARGS="'docs/s.md § A' --to K --as docs/sa.md"; gjob saj .jig/specs/move-docs-s-md-a.md "A to K" docs/s.md .jig/decisions.md
 mp=$(git -C "$GM" show propose/U-move-docs-s-md-a-pointers:docs/products/walyt/u5.md 2>/dev/null)
 expect_pass sh -c "test $grc = 0 && test $gcrc = 0 && test $mrc = 0 && echo \"\$0\" | grep -q 'See .K/docs/sa.md § A. and .U/docs/s.md § B.\.'" "$mp"; [ "$fail" = 0 ] || echo "$gout $gcom $mout $mp"
+msg="move (pointers by the thing): U moves docs/p.md § Power to K; the prose pointer to § Power is rewritten, and § Powertrain, in prose and in code, stays"
+$J move 'docs/p.md § Power' --to K --as docs/power.md --apply >/dev/null 2>&1 && git commit -qm "specs: move Power" >/dev/null 2>&1
+( cd "$GK" && gland move-docs-p-md-power.md )
+GARGS="'docs/p.md § Power' --to K --as docs/power.md"; gjob pwj .jig/specs/move-docs-p-md-power.md "Power to K" docs/p.md .jig/decisions.md
+mp=$(git -C "$GM" show propose/U-move-docs-p-md-power-pointers:docs/products/walyt/u5.md 2>/dev/null)
+expect_pass sh -c "test $grc = 0 && test $gcrc = 0 && test $mrc = 0 && echo \"\$0\" | grep -qx 'Power: K/docs/power.md § Power of the cell.' \
+  && echo \"\$0\" | grep -qx 'Train: U/docs/p.md § Powertrain of the cart.' && echo \"\$0\" | grep -qx 'Code: .U/docs/p.md § Powertrain..'" "$mp"; [ "$fail" = 0 ] || echo "$gout $gcom $mout $mp"
 cd "$GM"
 # The up move of a contract page, in a family of its own: N's history is only reviewed merges
 # and .jig/ bookkeeping, so N can release the proposal for V's pin.
@@ -11268,7 +11280,7 @@ cd "$GM"
 # A real proposal branch, propose/L-move-docs-ls-md-pointers (unmerged), which already moves ls1
 # into ## Kite alpha with its pointers line; each try commits on it and is undone.
 git switch -q propose/L-move-docs-ls-md-pointers
-gtry() {  # gtry <item line or ""> <change k1: 1|""> <pointers line: 1|"">: commit the edit on the branch, out and rc set
+gtry() {  # gtry <item line or ""> <change k1: 1|""> <pointers line's source repo, or "">: commit the edit on the branch, out and rc set
   git reset -q --hard && python3 - "$@" <<'PY'
 import sys, re
 item, change, ptr = sys.argv[1:4]
@@ -11279,22 +11291,25 @@ open(f, 'w').write(s)
 if ptr:
     sys.path.insert(0, '.jig'); import jig
     f = '.jig/decisions.md'; log = open(f).read()
-    open(f, 'w').write(jig.log_with_line(log, 'Changed', '- Pointers to L/docs/l.md name K/docs/l.md, where it moved.'))
+    open(f, 'w').write(jig.log_with_line(log, 'Changed', f'- Pointers to {ptr}/docs/l.md name K/docs/l.md, where it moved.'))
 PY
   git add -A; out=$(git commit -qm "POINTERS: guard" 2>&1); rc=$?; [ $rc = 0 ] && git reset -q --hard HEAD~1; }
 msg="move (roadmap-labels' rule): on propose/L-…, an item added to K's section touching the moved page, with the commit's pointers line, passes"
-gtry '- `g1`: g one (touches docs/l.md)' "" 1
+gtry '- `g1`: g one (touches docs/l.md)' "" L
 expect_pass sh -c "test $rc = 0" "$out"; [ $rc = 0 ] || echo "$out"
 msg="move (roadmap-labels' rule): an item added to K's section that doesn't touch the moved page is refused"
-gtry '- `g2`: g two (touches docs/q2.md)' "" 1
+gtry '- `g2`: g two (touches docs/q2.md)' "" L
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \"## Kite alpha is K's: L changes only its own sections\"" "$out"
 msg="move (roadmap-labels' rule): a changed existing line in K's section is refused, even beside an item that follows the page"
-gtry '- `g1`: g one (touches docs/l.md)' 1 1
+gtry '- `g1`: g one (touches docs/l.md)' 1 L
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \"## Kite alpha is K's: L changes only its own sections\"" "$out"
 msg="move (roadmap-labels' rule): an item touching docs/l.md, on a branch whose only move line is docs/ls.md's, is refused"
 gtry '- `g1`: g one (touches docs/l.md)' "" ""
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \"## Kite alpha is K's: L changes only its own sections\"" "$out"
-git reset -q --hard && git switch -q main
+msg="move (roadmap-labels' rule): on L's branch, a move line naming U's move lends L nothing: an item touching its page in K's section is refused"
+gtry '- `g1`: g one (touches docs/l.md)' "" U
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \"## Kite alpha is K's: L changes only its own sections\"" "$out"
+git reset -q --hard && git switch -q main  # end of the propose/ branch tries
 msg="move: a repo outside the family is refused, naming the family"
 expect_pass sh -c "$J move D-001 --to X 2>&1 | grep -q \"X isn't of this repo's family\""
 }

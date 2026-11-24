@@ -220,7 +220,9 @@ Smoke, `movein` section, in its throwaway repos (`JIG_CONFIG`, `XDG_CONFIG_HOME`
   pg's step 2 runs as today's case does. The existing owner cases still pass:
   - the drop on a branch is refused;
   - the unrelated glossary edit on a branch cut before Rex and Rover passes;
-  - Rover renamed Rocket over two commits passes.
+  - Rover renamed Rocket on a `propose/` branch passes in one commit, headings and term together;
+    headings first is refused (moving-in-command.md, Decisions: the hubnode's Interpreted line of
+    2026-11-24 on a product rename).
 - [ ] (withdrawn) In a new pararepo `pw`:
   - step 1 is committed, then `jig propose --withdraw propose/pw-move-in --reason r` is committed;
   - with M still holding the old branch, step 1 `--apply` makes `propose/pw-move-in-2` and

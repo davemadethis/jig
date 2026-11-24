@@ -1400,9 +1400,9 @@ def waiting_specs(root: Path, board: "Board") -> dict[str, str]:
             continue
         text = f.read_text(errors="replace")
         # A bug spec is built in the job it names and reaches trunk only with that job's merge.
-        # A spec listing buffer rows (`jig propose --buffer`, `jig move-in`) is a proposal's
-        # record, not work: no job ever takes it.
-        if bug_for(text) or listed_rows(text):
+        # A spec listing buffer rows (`jig propose --buffer`, `jig move-in`), or a move's spec
+        # whose proposal was withdrawn, is a proposal's record, not work: no job ever takes it.
+        if bug_for(text) or listed_rows(text) or (MOVE_RECORD.search(text) and WITHDRAWN.search(text)):
             continue
         out[rel] = text
     return out
@@ -12915,7 +12915,7 @@ def only_items_for(old: str, new: str, pages: list[str]) -> bool:
 
 
 def proposal_section_refusals(branch: str, fork: str, text: str, fam: "Family", meta: dict,
-                              moves: list[tuple[str, str]] | None = None,
+                              logs: tuple[str, str] | None = None,
                               fork_owners: dict[str, str] | None = None) -> list[str]:
     """section_refusals for a metarepo's `propose/<repo>-<slug>` branch changing the roadmap
     from FORK (trunk's, where the branch left it) to TEXT: the proposing repo changes only the
@@ -12934,6 +12934,8 @@ def proposal_section_refusals(branch: str, fork: str, text: str, fam: "Family", 
         return [f"{branch} names no pararepo of this metarepo (its `pararepos`, by name or folder): "
                 "a roadmap change reaches it by `jig roadmap --edit` in the pararepo that owns the sections"]
     repo = max(names, key=lambda x: len(x[0]))[1]
+    # Only the proposing repo's own moves: another pararepo's move line lends it nothing.
+    moves = move_follows(*logs, called(repo)) if logs else []
     old_s = {h: t for h, _, t in roadmap_sections(fork)}
     new_s = {h: t for h, _, t in roadmap_sections(text)}
 
@@ -12989,14 +12991,10 @@ def roadmap_rules(board: "Board", branch: str, staged: bool, paths: list[str],
         # The branch's own glossary says whose a heading is: a product it proposes is its own.
         if own := in_index(GLOSSARY, staged):
             fam.owners = term_owners(own)
-        meta = load_meta(trunk)
-        callers = set()
-        for r in meta.get("pararepos") or []:
-            loc = repo_path(r)
-            callers |= {r} | ({loc.name} if loc is not None else set())
-        moves = move_follows(at_rev(fork, LOG) if fork else at_rev(trunk, LOG), in_index(LOG, staged), callers)
+        logs = (at_rev(fork, LOG) if fork else at_rev(trunk, LOG), in_index(LOG, staged))
         problems = proposal_section_refusals(branch, at_rev(fork, ROADMAP) if fork else old, text, fam,
-                                             meta, moves, term_owners(at_rev(fork, GLOSSARY) or "") if fork else None)
+                                             load_meta(trunk), logs,
+                                             term_owners(at_rev(fork, GLOSSARY) or "") if fork else None)
         parsed = parse_roadmap(text, problems)
         problems += ref_problems(parsed, parse_no_phase(text, problems))
         problems += type_problems(parsed, fam.owners)
@@ -16510,7 +16508,7 @@ def rig_items(root: Path, board: "Board") -> list[dict]:
                       "touches": touches_spans(text), "after": built_after(text),
                       "kept": sorted(kept_separate(text)), "scopes": spec_scopes(text)})
         # A move's spec is its step 2's job, which can't start until the receiver's trunk holds it.
-        if wait := move_wait(root, text):
+        if wait := move_wait(root, path, text):
             items[-1]["blocked"] = [wait]
     # A staged file a spec in flight carries, by its exact mark as `resolve` finds it, is that
     # spec's work: it waits on it, or on the job building it, and is never offered again. In
@@ -17755,9 +17753,9 @@ def move_state(root: Path, what: str, to: str) -> dict:
             "mine_ptr": mine_ptr, "landed_as": landed_as, "step2": step2, "meta_name": meta_name}
 
 
-def move_wait(root: Path, text: str) -> str:
-    """What a spec carrying a move's record waits on before its job can start (step 2 next),
-    by `jig move`'s own reader; "" when nothing."""
+def move_wait(root: Path, spec: str, text: str) -> str:
+    """What SPEC, carrying a move's record, waits on before its job can start (step 2 next), by
+    `jig move`'s own reader; "" when nothing, or when SPEC isn't the move's live record."""
     m = MOVE_RECORD.search(text)
     if not m:
         return ""
@@ -17765,6 +17763,8 @@ def move_wait(root: Path, text: str) -> str:
     st = move_state(root, what, to)
     if "error" in st:
         return f"{to} being reached ({st['error']})"
+    if st["rec"] is None or st["rec"]["spec"].resolve() != (root / spec).resolve():
+        return ""
     numbered = ", its id numbered" if st["path"] == LOG else ""
     return f"{to}'s moved-from line for {what}{numbered}" if st["step2"] in ("waiting", "receiver") else ""
 
@@ -18033,11 +18033,13 @@ def stage_roadmap(root: Path, target: str, name: str, body: str, forward_it: boo
 ENTRY_ID = re.compile(r"[A-Za-z][\w]*-(?:\d+|\?[a-z0-9-]+)")
 
 
-def pointers_moved(body: str, me: str, path: str, section: str | None, to: str, landed: str) -> str:
+def pointers_moved(body: str, me: str, path: str, section: str | None, to: str, landed: str,
+                   heads: list[str] = ()) -> str:
     """BODY with only its pointers to the moved thing naming where it landed (TO/LANDED, the
     receiver's id or path): an entry's `<me>/<log> § <id>` by the landed id, a section's
     `<me>/<path> § <s>` and a page's `<me>/<path>`, with its § part, by the landed path. Every
-    other pointer into that page or log stays."""
+    other pointer into that page or log stays. In prose, where a section runs on with the line,
+    the cited heading is the longest of the page's HEADS that begins it, a whole word or more."""
     new_path = LOG if path == LOG else pointer_parts(f"{to}/{landed}")[1]
     out = []
     for line in body.splitlines(keepends=True):
@@ -18056,9 +18058,12 @@ def pointers_moved(body: str, me: str, path: str, section: str | None, to: str, 
                 at = m.start("rest")
                 edits.append((at, at + len(ident.group(0)), landed))
             elif section:
-                # In prose the section runs on with the line: the moved heading must begin it.
-                if not cited or not (same_thing((path, cited), (path, section)) or
-                                     (not code and plain(cited).startswith(plain(section)))):
+                if code or not cited:
+                    hit = bool(cited) and same_thing((path, cited), (path, section))
+                else:
+                    begins = [h for h in heads if h and re.match(rf"{re.escape(h)}(?!\w)", plain(cited))]
+                    hit = bool(begins) and max(begins, key=len) == plain(section)
+                if not hit:
                     continue
             edits.append((m.start("name"), m.start("path") + len(p), f"{to}/{new_path}"))
         for a, b, rep in sorted(edits, reverse=True):
@@ -18075,12 +18080,14 @@ def move_pointers(root, me, to, para, meta_loc, path, section, landed, spec, roa
     old = f"{me}/{path}" + (f" § {section}" if section else "")
     new = f"{to}/{landed}" if path != LOG else f"{to}/{LOG} § {landed}"
     files: dict[str, str | None] = {}
+    # The page as it was before this step removed the section: HEAD, in the job.
+    heads = [plain(h) for h in HEADING.findall(at_rev("HEAD", path) or "")] if section else []
     for f in git("grep", "-l", "-F", f"{me}/{path}", mt, "--", "*.md", cwd=str(meta_loc)).splitlines():
         f = f.split(":", 1)[1] if ":" in f else f
         if f == LOG:
             continue    # a log's lines are history, frozen once released
         body = trunk_show(meta_loc, f) or ""
-        if (moved := pointers_moved(body, me, path, section, to, landed)) != body:
+        if (moved := pointers_moved(body, me, path, section, to, landed, heads)) != body:
             files[f] = moved
     if road is not None:
         files[ROADMAP] = road
