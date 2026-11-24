@@ -829,7 +829,10 @@ waits on the owner's answers counts every question: each open or unjudged staged
 items, or keep some apart) and each dependency cycle, a ring once; `--json` prints it as
 data, each group with, per member, the Touches it shares with the rest and whether all of them
 are append files (`append_only`): a member that meets its group only in the log is the one most
-likely kept apart. A staged decisions file's Touches are its entries' `Touches:` lines, less a
+likely kept apart. In a family, after Waiting on you, rig prints one line when the family
+report (Metarepo and pararepos) holds a stale staged file, a stale or empty proposal, an entry
+or a pair: `Family: <n> stale staged, <m> stale or empty proposals, <k> entries touch labelled
+work, <j> pairs of names: jig family`. It counts in neither number: a report, not a question. A staged decisions file's Touches are its entries' `Touches:` lines, less a
 pointer into another repo, plus `.jig/decisions.md`, so it meets the spec written from it by
 the same rule. A staged file a spec in the tree or an open job's spec carries, by its exact
 mark, is **taken**: it waits on that spec or job, in no group, and counts nowhere. A spec in
@@ -958,6 +961,24 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
   roadmap changes, the hook refuses, by line, a ref naming nothing the roadmap has, a ref to
   itself (a scope naming its own phase too), and a ring, named once with all its members;
   `jig roadmap` reports the same.
+- **Labels**: a scope or a `No phase` item may end with `(labels <term>, …)`, the features it
+  touches, peeled with its `(after …)`, `(needed by …)` and `(touches …)` in any order; a second
+  `(labels …)` on one line is refused, as a second of the others is. Labels sit on scopes and
+  items, never on a phase: a `(labels …)` line of its own in a phase is refused by line. Each
+  label is a term of the glossary: in a family the metarepo's `docs/glossary.md`, read where the
+  roadmap is (on its trunk, live from there in a pararepo); in a stand-alone repo its own. It
+  matches in any case and spacing: both, case folded with each run of spaces, `-` and `_` read
+  as one `-`, are equal, so `wallet-compatibility` names `## Wallet compatibility`. On trunk, when
+  the roadmap changes, the hook refuses by line a label naming no term, and a `(labels)` naming
+  nothing; with no glossary, any label is refused, naming it. On the metarepo's or a
+  stand-alone repo's trunk, a commit removing or renaming a term a label names is refused,
+  naming each scope: re-point the label in the same commit. A label is never a ref: it orders
+  nothing, changes no state and blocks nothing, so a ref naming one is a ref to nothing.
+  `jig roadmap` prints each scope's labels after its state, the view shows them in its cell,
+  and `jig roadmap --label <term>`, one of its filters (below), keeps only the scopes and items
+  carrying it, across every product, headed by the term's `Owner:`: what touches a feature,
+  and which other repo's work leans on one this repo owns. A new term is the
+  metarepo hubnode's; a repo labels its own scopes freely.
 - **Types**: each phase is a *Prototype*, a *Pilot* or a *Production* phase, read from its name
   after any product term, case folded: a Greek letter (`alpha`, `beta`, `gamma`, …) is
   Prototype, `Pilot <letter>` is Pilot, and any other name (`Launch`) is Production. There is
@@ -968,15 +989,16 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
   in the same update. `jig roadmap` prints each phase's type beside
   its state, and the view shows it in the phase line and each phase's heading
   (`## alpha (Prototype, current)`).
-- **Filters**: `jig roadmap` takes `--product`, `--phase`, `--type`, `--state` and `--owner`,
+- **Filters**: `jig roadmap` takes `--product`, `--phase`, `--type`, `--state`, `--owner` and `--label`,
   each repeatable and case folded; values of one flag are or'd, different flags and'ed.
   Product, phase, type and owner choose phases: `--phase alpha` is every product's alpha,
   `--phase "Widget alpha"` that one heading. `--owner` is the repo a product's `Owner:` names; a
   metarepo's own phases and its `this repo` products are the metarepo's, and in a stand-alone
   repo everything is the repo's; any name jig knows this repo by (`this`, its name, an alias in
   `jig repos`) means this repo, so in a pararepo it is the products its `Owner:` names.
-  `--state` (`open`, `taken`, `done`, `blocked`, `unknown`) chooses scopes within them, and a phase left with no scope isn't printed. A No phase item
-  matches product, owner and state; `--phase "No phase"` chooses the lists, and `--type`
+  `--state` (`open`, `taken`, `done`, `blocked`, `unknown`) and `--label` (a glossary term, as
+  labels match) choose scopes within them, and a phase left with no scope isn't printed. A No phase item
+  matches product, owner, state and label; `--phase "No phase"` chooses the lists, and `--type`
   leaves them out. A filter hides rows, never a problem: the problems print in full and the
   exit code is unchanged. A product, phase, owner or type naming nothing jig knows is refused,
   naming the known values, and filters that match nothing say so. `jig roadmap --view [filters]`
@@ -1083,6 +1105,32 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
   next sync the owner calls. A pararepo's merge writes nothing to the metarepo's roadmap.
   Labels, names and new products (the glossary term and its `Owner:` line) are the metarepo's
   hubnode's.
+  **The edit command.** `jig roadmap --draft` writes the roadmap this repo plans from (the
+  metarepo's trunk, live, in a pararepo, with its sections as its open roadmap proposal has
+  them; trunk's own otherwise) to `<git common dir>/jig/roadmap-draft.md`, outside the tree, and
+  prints its path and the headings this repo may change: a pararepo its products' phases and
+  lists; the metarepo its own and the products it owns as `this repo`; a stand-alone repo all.
+  It refuses while a draft that differs from that is there. `jig roadmap --edit [<file>]` reads
+  the roadmap again and refuses, writing nothing, by line: a line added, removed or changed under
+  a heading whose product another repo owns; in a pararepo, a new heading naming no product it
+  owns; and anything the hook would refuse on the result (shape, refs, rings, touched pages on
+  the owning repo's trunk, a dropped scope a reachable spec or note takes, labels). In a
+  pararepo a label the metarepo's glossary lacks is left off the line and staged in the
+  metarepo as `label-<term>.md` (`target: <meta>`, `kind: doc`, `destination:
+  docs/glossary.md`), naming the scopes it labels and the repo; in the metarepo or a
+  stand-alone repo it is refused, the term going in first. In the metarepo or a stand-alone
+  repo the edit writes `.jig/roadmap.md` in the trunk checkout (refused elsewhere, R5, and while
+  that file differs from trunk's), to commit on the owner's yes. In a pararepo it adds an Open
+  `BUFFER.md` row (`<meta>/.jig/roadmap.md § <heading>, …`; the scopes and items added, changed
+  or removed; `hubnode, <date>`) and commits the change on this repo's open roadmap proposal,
+  an unmerged `propose/<repo>-roadmap-<date>` branch its spec `roadmap-<date>.md` cites, or a
+  new one: by plumbing in the metarepo's checkout, so no checkout moves, replacing only this
+  repo's sections, whole. The spec lists roadmap rows only, so `jig propose --buffer` and
+  `jig release` never sweep them; commit it and `BUFFER.md` here. Either way the draft is
+  deleted. On a metarepo's `propose/<repo>-…` branch the hook refuses, as `--edit` does, a
+  change to a section another repo owns, the proposing repo found by its `jig repos` name or
+  its folder's, and a roadmap change on a branch naming no pararepo; a section that is
+  trunk's as it stands, merged in, is trunk's change, never the branch's.
 - **Moving in**, once per pararepo, by hand, on the owner's yes: the metarepo's glossary names
   the product with its `Owner:` line; the pararepo proposes its phases as
   `## <Product> <phase>` and its `## No phase` items as `## <Product> No phase`, and the
@@ -1683,6 +1731,29 @@ this repo's name, since named bare it is about every repo. A decision may cite t
 after it is exact. The line asks: the hubnode puts it to the owner with what the decision says,
 and adds the path only if the decision describes something this repo can change there.
 
+**The family report.** `jig family`, in a metarepo or any of its pararepos, prints the same
+report from either, read through the metarepo's checkout and each pararepo `jig repos`
+reaches; one it can't reach is named and skipped. It writes nothing and exits 0. Four
+sections, each `nothing` when empty: **Staged**, every file in each member's `.jig/staging/`
+with its repo, `target`, `kind` and age in days (its file's modification time: staging is never
+committed), `stale` past 7 days; **Proposals**, every `propose/` branch in the metarepo not
+merged into its trunk, or with nothing written on it, with its age (its opening commit's date;
+for an older branch, its first commit past trunk), `empty`, `stale` past 7 days, and the
+pararepo specs citing it (`meta: <meta> proposal <branch>`) or `cited by no spec`; **Entries
+touching labelled work**, each entry in the metarepo's log under `## Open` or `## Unreleased`
+whose `Touches:` names `docs/glossary.md § <term>` for a term labelling a scope or item not done
+(Roadmap, Labels), with those scopes and their owning repos: a pending ruling each should read
+before its next pin; **Two names**, two glossary terms equal once folded as labels are, and two
+scope or item ids under different products (the metarepo's own sections count as one) equal
+once folded, or one the other with whole hyphen-words added at its start or end. Listed for the
+owner, never refused. `jig rig` points at it (Workflow).
+
+**A staged label.** A pararepo's roadmap edit naming a label the metarepo's glossary lacks
+stages `label-<term>.md` in the metarepo's `.jig/staging/` (Roadmap, Edits): a `kind: doc`
+update to `docs/glossary.md`, the metarepo hubnode's, since a new term is. The label is added
+by the pararepo's next edit once the term lands. A repo puts an existing term on its own
+scopes freely.
+
 **Citing the metarepo.** A pararepo cites the metarepo the way the metarepo points to it:
 `<meta>/<path>` (or `<meta>:<path>`), with `§ <section>` for a heading, matched as above. On
 every run, `jig sync` and the release name each citation in this repo's tracked files, specs and
@@ -1811,6 +1882,10 @@ jig next [<job>]            a job's next step, the node or role that does it, an
 jig workflow                the older command: the roles under the old step names, then the flows
 jig handoff [--spec path] [--partial]   write the note for HEAD; --partial: it doesn't finish the spec
 jig roadmap [--write]       the roadmap's states on trunk, writing a missing one in the trunk checkout; --write regenerates ROADMAP.md
+jig roadmap --label <term>  a filter, with the others: only the scopes and items carrying that label, across every product
+jig roadmap --draft         the roadmap this repo plans from, to a draft outside the tree; the headings it may change
+jig roadmap --edit [<file>] check the draft and write it: trunk's checkout, or a pararepo's open roadmap proposal
+jig family                  a family's staged files, unmerged proposals, entries touching labelled work, two names
 jig gate <name>             hubnode: verify, set up the scratch checkout, print its check
 jig propose <spec> <slug>   pararepo: open a proposal branch on the metarepo
 jig propose <spec> <slug> --pointers  the same, recorded as pointer rewrites worked ahead of

@@ -74,6 +74,11 @@ Work you've named but haven't placed in a phase yet is an item under the roadmap
 section. Each merge rewrites a kanban view of the roadmap at the root, which any forge renders.
 `python3 .jig/jig.py roadmap` prints the roadmap's states.
 
+A scope or a `## No phase` item can name the features it touches as [labels](glossary.md#label),
+`(labels teleport, wallet-compatibility)`, each a term of the glossary (the metarepo's, in a
+family). A misspelt label is refused, and a label orders nothing. `roadmap --label <term>` lists
+the work carrying one, across every product.
+
 Work a spec leaves for later goes on its `Later:` line, as roadmap ids already on the roadmap, never as
 prose that closes with the spec. The gate shows what closes with the spec, the merge keeps the
 `Later:` line on the handoff note, and `jig rig` lists each id until a spec takes it or the owner
