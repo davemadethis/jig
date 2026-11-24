@@ -5289,7 +5289,7 @@ msg="roadmap edit: an (after …) added to an existing scope is written on the b
 expect_pass sh -c "test $rc = 0 && git -C '$EM' show '$br:.jig/roadmap.md' | grep -q 'after Walyt alpha/z3'" "$out"
 reditb "s = s.replace('## Walyt alpha\nScopes:', '## Walyt alpha\nExit when:\n- [ ] pairs two phones\nScopes:')" exit
 msg="roadmap edit: an exit box added is written on the branch, its row saying the section changed"
-expect_pass sh -c "test $rc = 0 && git -C '$EM' show '$br:.jig/roadmap.md' | grep -qF -- '- [ ] pairs two phones' && grep -q '| changed § Walyt alpha |' .jig/ledgers/BUFFER.md && test \$(git -C '$EM' rev-list --count '$br') = \$((n0 + 3))" "$out"
+expect_pass sh -c "test $rc = 0 && git -C '$EM' show '$br:.jig/roadmap.md' | grep -qF -- '- [ ] pairs two phones' && grep -q '| changed § Walyt alpha |' .jig/ledgers/BUFFER.md && test \$(git -C '$EM' rev-list --count '$br') = $((n0 + 3))" "$out"
 msg="roadmap edit: a hand commit on pa's proposal branch changing pb's section is refused by meta's hook, as --edit refuses it"
 out=$(cd "$EM" && git switch -q "$br" && sed -i.bak 's/the host/the big host/' .jig/roadmap.md && rm .jig/roadmap.md.bak && git add -A && git commit -qm "GLOSSARY: host" 2>&1); rc=$?
 (cd "$EM" && git reset -q --hard && git switch -q main)
