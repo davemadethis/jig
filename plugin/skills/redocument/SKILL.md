@@ -239,7 +239,7 @@ Your spec carries the job's remap rows and the Sources. You write only your page
      section, "phase 3", a priority order) → a `## No phase` candidate in the report, naming
      this page, added to `.jig/roadmap.md` on trunk only once the owner confirms it; never on
      the page, which says what the product does today;
-   - **an open product question** → an `## Open` entry candidate for `.jig/decisions.md`;
+   - **an open product question** → an idea candidate for `.jig/ideas.md`;
    - **how the repository is worked** (a reading order, commands, code style, review and
      handoff, jig and its `.jig/` files, build, CI and release steps), not what the product
      does → off the page, to its home by the test in `.jig/RULES.md` (Homes): a rule every task

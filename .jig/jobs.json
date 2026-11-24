@@ -1,24 +1,4 @@
 {
-  "ideas-log": {
-    "spec": ".jig/specs/ideas-log.md",
-    "state": "claimed",
-    "after": [],
-    "owns": [],
-    "shares": [
-      "docs/commands.md",
-      "docs/glossary.md",
-      "docs/metarepos.md",
-      "docs/records.md",
-      "plugin/skills/redocument/SKILL.md",
-      "plugin/skills/retro/SKILL.md",
-      "plugin/skills/stage/SKILL.md",
-      "plugin/skills/update/SKILL.md",
-      "plugin/templates/jig/RULES.md",
-      "plugin/templates/jig/jig.py",
-      "tests/smoke.sh"
-    ],
-    "reserved": {}
-  },
   "moving-in-command": {
     "spec": ".jig/specs/moving-in-command.md",
     "state": "claimed",
@@ -33,6 +13,20 @@
       "tests/smoke.sh",
       "plugin/skills/release/SKILL.md",
       "plugin/templates/ledgers/BUFFER.md"
+    ],
+    "reserved": {}
+  },
+  "bug-stale-gate-and-entry-files": {
+    "spec": ".jig/specs/bug-stale-gate-and-entry-files.md",
+    "state": "claimed",
+    "after": [],
+    "owns": [],
+    "shares": [
+      "plugin/templates/jig/jig.py",
+      "plugin/templates/jig/RULES.md",
+      "plugin/skills/hubnode/SKILL.md",
+      "tests/smoke.sh",
+      ".jig/decisions.md"
     ],
     "reserved": {}
   }
