@@ -53,21 +53,6 @@
     ],
     "reserved": {}
   },
-  "phase-types": {
-    "spec": ".jig/specs/phase-types.md",
-    "state": "gated",
-    "after": [],
-    "owns": [],
-    "shares": [
-      "docs/commands.md",
-      "docs/glossary.md",
-      "docs/records.md",
-      "plugin/templates/jig/RULES.md",
-      "plugin/templates/jig/jig.py",
-      "tests/smoke.sh"
-    ],
-    "reserved": {}
-  },
   "bug-deferred-scope": {
     "spec": ".jig/specs/bug-deferred-scope.md",
     "state": "claimed",
