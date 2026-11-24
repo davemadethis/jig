@@ -5245,6 +5245,9 @@ cd "$EA"
 msg="roadmap edit: --draft in pa writes the draft outside the tree and names the headings pa may change"
 out=$($J roadmap --draft 2>&1)
 expect_pass sh -c "test -f '$draft' && echo \"\$0\" | grep -q '## Walyt alpha' && echo \"\$0\" | grep -q '## Walyt No phase' && ! echo \"\$0\" | grep -q '## Demos' && test -z \"\$(git status --porcelain)\"" "$out"
+msg="roadmap edit: --draft and --edit take no filter"
+out=$($J roadmap --draft --product Walyt 2>&1); rc=$?; out2=$($J roadmap --edit --state open 2>&1); rc2=$?
+expect_pass sh -c "test $rc != 0 && test $rc2 != 0 && echo \"\$0\" | grep -q -- '--draft and --edit take no filter'" "$out"
 msg="roadmap edit: --draft again while a changed draft is there is refused, naming it"
 edraft "s = s.replace('- \`pairing\`: pairing (touches docs/p.md)', '- \`pairing\`: pairing (touches docs/p.md)\n- \`z3\`: the z3 work (labels teleport)')"
 out=$($J roadmap --draft 2>&1); rc=$?
@@ -5363,8 +5366,16 @@ out=$(cd "$EM" && git branch -q propose/stranger-x "$(git commit-tree 'main^{tre
   && printf '\n- `s`: s\n' >> .jig/roadmap.md && git add -A && git commit -qm "GLOSSARY: s" 2>&1); rc=$?
 (cd "$EM" && git reset -q --hard && git switch -q main && git branch -q -D propose/stranger-x)
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'propose/stranger-x names no pararepo of this metarepo'" "$out"
-msg="roadmap edit: merging trunk into PC's proposal after trunk changed pb's section passes the hook"
 cd "$EM" && sed -i.bak 's/the host/the hosted host/' .jig/roadmap.md && rm .jig/roadmap.md.bak && git add -A && git commit -qm "GLOSSARY: host on trunk" >/dev/null
+msg="roadmap edit: a merge of trunk into PC's proposal that keeps the branch's old copy of pb's section is refused, naming pb"
+out=$(git switch -q "$cbr" && git merge --no-commit --no-ff main >/dev/null 2>&1; git checkout HEAD -- .jig/roadmap.md && git commit -q --no-edit 2>&1); rc=$?
+git merge --abort 2>/dev/null; git reset -q --hard; git switch -q main 2>/dev/null
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '## Familiar App alpha is pb.s: pc changes only its own sections' && ! git show '$cbr:.jig/roadmap.md' | grep -q 'the hosted host'" "$out"
+msg="roadmap edit: a hand commit on PC's proposal, trunk not merged in, writing pb's section as trunk now has it is refused"
+out=$(git switch -q "$cbr" && sed -i.bak 's/the host/the hosted host/' .jig/roadmap.md && rm .jig/roadmap.md.bak && git add -A && git commit -qm "GLOSSARY: host by hand" 2>&1); rc=$?
+git reset -q --hard; git switch -q main 2>/dev/null
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '## Familiar App alpha is pb.s'" "$out"
+msg="roadmap edit: merging trunk into PC's proposal after trunk changed pb's section passes the hook"
 out=$(git switch -q "$cbr" && git merge --no-edit main 2>&1); rc=$?
 git merge --abort 2>/dev/null; git switch -q main 2>/dev/null
 expect_pass sh -c "test $rc = 0 && git show '$cbr:.jig/roadmap.md' | grep -q 'the hosted host' && git show '$cbr:.jig/roadmap.md' | grep -q 'g two'" "$out"

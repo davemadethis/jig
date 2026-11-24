@@ -11210,7 +11210,7 @@ def roadmap_filters(args) -> dict[str, set[str]]:
 def roadmap_filter(phases: list[dict], items: list[dict], filt: dict[str, set[str]],
                    owners: dict[str, str], me: str, mine: set[str] = frozenset(),
                    self_names: set[str] = frozenset(), ident=str.casefold,
-                   terms: list[str] = ()) -> tuple[list[dict], list[dict]]:
+                   glossary: str | None = None) -> tuple[list[dict], list[dict]]:
     """(phases, items) FILT chooses. Product, phase, type and owner choose phases; state chooses
     scopes within them, and a phase it leaves with no scope goes. A list item matches product,
     owner and state; `No phase` among the phases chooses the lists, and a type leaves them out.
@@ -11219,7 +11219,7 @@ def roadmap_filter(phases: list[dict], items: list[dict], filt: dict[str, set[st
     Owners are compared as IDENT reads them, one repo however it is named (an alias, its listed
     name). A value naming nothing jig knows dies, naming the known ones, so a typo never
     reads as an empty roadmap. A label, like a state, chooses scopes within the phases; it
-    names one of TERMS, the glossary's, matched as labels are (label_fold)."""
+    names a term of GLOSSARY, the glossary's text, as label_problems judges a label."""
     if untested := sorted(set(filt) - {"product", "phase", "type", "state", "owner", "label"}):
         die(f"--{untested[0]} has no test in roadmap_filter: add one there, or the filter would "
             "print the whole roadmap")
@@ -11241,8 +11241,8 @@ def roadmap_filter(phases: list[dict], items: list[dict], filt: dict[str, set[st
     also = {"phase": {(p["name"][len(p["product"]):].strip() if p["product"] else p["name"]).casefold()
                       for p in phases}}
     if "label" in filt:
-        folded = {label_fold(t) for t in terms}
-        if bad := sorted(v for v in filt["label"] if label_fold(v) not in folded):
+        terms = glossary_terms(glossary or "")
+        if bad := sorted(v for v in filt["label"] if label_problems([v], glossary, "")):
             die(f"--label {', '.join(bad)}: no glossary term" + (f"; known: {', '.join(terms)}" if terms else
                                                                  ": this repo's labels have no glossary"))
         filt = dict(filt, label={label_fold(v) for v in filt["label"]})
@@ -11288,6 +11288,8 @@ def cmd_roadmap(root: Path, args) -> int:
     board = Board.load(root, working_tree=True)
     trunk = board.trunk
     fam = family(root, trunk)
+    if (args.draft or args.edit is not None) and (roadmap_filters(args) or args.view or args.write):
+        die("--draft and --edit take no filter, --view or --write: the draft is the whole roadmap")
     if args.draft:
         return roadmap_draft(main_root(), fam, trunk)
     if args.edit is not None:
@@ -11329,7 +11331,7 @@ def cmd_roadmap(root: Path, args) -> int:
         found = repo_matches(name)
         return (found[0] if len(found) == 1 else name).casefold()
     shown, shown_items = roadmap_filter(phases, items, filt, fam.owners, me, mine, names, repo_ident,
-                                        glossary_terms(fam.glossary or ""))
+                                        fam.glossary)
     # The view goes to stdout alone, so it can be piped; the problems still print, to stderr.
     say = (lambda *a: print(*a, file=sys.stderr)) if args.view else print
     if fam.reads_meta:
@@ -12336,13 +12338,13 @@ def others_holding(dropped: set[str], fam: "Family") -> list[str]:
     return out
 
 
-def proposal_section_refusals(branch: str, fork: str, tip: str, text: str, fam: "Family", meta: dict) -> list[str]:
+def proposal_section_refusals(branch: str, fork: str, text: str, fam: "Family", meta: dict) -> list[str]:
     """section_refusals for a metarepo's `propose/<repo>-<slug>` branch changing the roadmap
     from FORK (trunk's, where the branch left it) to TEXT: the proposing repo changes only the
     products it owns. `jig propose` names the branch for the pararepo's folder, so the repo is
     found by its `jig repos` name or its folder's, the longest that the branch starts with; a
-    branch naming no pararepo is refused, never passed unjudged. A section that is trunk's TIP
-    as it stands is trunk's own change, merged in, never the branch's."""
+    branch naming no pararepo is refused, never passed unjudged. FORK is the commit being made's
+    merge base with trunk, so trunk's own changes merged in are in it, never the branch's."""
     def called(r: str) -> set[str]:
         loc = repo_path(r)
         return {r} | ({loc.name} if loc is not None else set())
@@ -12351,9 +12353,7 @@ def proposal_section_refusals(branch: str, fork: str, tip: str, text: str, fam: 
         return [f"{branch} names no pararepo of this metarepo (its `pararepos`, by name or folder): "
                 "a roadmap change reaches it by `jig roadmap --edit` in the pararepo that owns the sections"]
     repo = max(names, key=lambda x: len(x[0]))[1]
-    now = {h: t.strip() for h, _, t in roadmap_sections(tip)}
-    new = {h: t.strip() for h, _, t in roadmap_sections(text)}
-    owns = lambda h: (bool(h) and fam.owners.get(heading_product(h, fam.owners)) == repo) or now.get(h) == new.get(h)
+    owns = lambda h: bool(h) and fam.owners.get(heading_product(h, fam.owners)) == repo
     owner = lambda h: (lambda o: "this repo" if o in ("", THIS_REPO) else o)(
         fam.owners.get(heading_product(h, fam.owners), ""))
     return section_refusals(fork, text, owns, owner, repo, True)
@@ -12382,8 +12382,11 @@ def roadmap_rules(board: "Board", branch: str, staged: bool, paths: list[str],
         # A pararepo's proposal: its merge is judged on trunk; what it says is checked here too,
         # as `jig roadmap --edit` checks it: only the proposing repo's sections change.
         text = in_index(ROADMAP, staged)
-        fork = git("merge-base", trunk, "HEAD")
-        problems = proposal_section_refusals(branch, at_rev(fork, ROADMAP) if fork else old, old, text, fam,
+        # Where the commit being made leaves trunk: a merge of trunk into the branch moves it to
+        # trunk's tip, so a resolution keeping the branch's old copy of another repo's section
+        # reads as the change it is.
+        fork = git("merge-base", trunk, "HEAD", *merging_commits())
+        problems = proposal_section_refusals(branch, at_rev(fork, ROADMAP) if fork else old, text, fam,
                                              load_meta(trunk))
         parsed = parse_roadmap(text, problems)
         problems += ref_problems(parsed, parse_no_phase(text, problems))
