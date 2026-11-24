@@ -14216,10 +14216,12 @@ def record_plan(root: Path, log: str, prefix: str, seed: dict[str, str] | None =
     glossary_plan seeds its own: the citation pass reads a planned text before the disk and
     skips a planned removal, so no file gets two texts."""
     files = tracked(root)
-    read = lambda f: (root / f).read_text(errors="replace") if (root / f).is_file() else ""
+    planned = dict(seed or {})
+    # Nothing here reads a file the run has already planned: its planned text is the file.
+    read = lambda f: planned[f] if f in planned else (root / f).read_text(errors="replace") if (root / f).is_file() else ""
     folders = record_folders(root, files, read)
     plan = {"folders": folders, "text": log, "notes": [], "problems": [], "undated": [], "remove": [],
-            "keep": [], "write": dict(seed or {}), "rewrites": [], "left": [], "named": [], "hook": [],
+            "keep": [], "write": planned, "rewrites": [], "left": [], "named": [], "hook": [],
             "ids": [], "ideas": []}
     if not folders:
         return plan
@@ -14249,9 +14251,9 @@ def record_plan(root: Path, log: str, prefix: str, seed: dict[str, str] | None =
         if new is None or new["kind"] == "left":
             plan["problems"].append(f"{r['path']}: superseded by {r['by'] if r['by'] is not None else 'nothing named'}, "
                                     + ("which is left out of the log" if new else "which is no record here"))
-    # Above the ideas' ids too: one counter names an entry or an idea.
-    ideas = (root / IDEAS).read_text(errors="replace") if (root / IDEAS).is_file() else ""
-    next_id = highest_id(with_ideas(log, ideas), prefix, history=True) + 1
+    # Above the ideas' ids too, the planned ones a register brings among them: one counter names
+    # an entry or an idea.
+    next_id = highest_id(with_ideas(log, read(IDEAS)), prefix, history=True) + 1
     paths, nums, left = {}, {}, []
     for r in recs:
         if r["kind"] == "left":
@@ -14345,6 +14347,9 @@ def record_plan(root: Path, log: str, prefix: str, seed: dict[str, str] | None =
     plan["remove"] = [f for d, info in folders.items() for _, f in info["records"]]
     for d, info in folders.items():
         for f in info["other"]:
+            # An index the run already removes (a register that merged in) stays removed.
+            if f in removed:
+                continue
             if os.path.basename(f).lower() in RECORD_INDEXES:
                 rest = record_index_left(f, read(f), paths)
                 if not rest:
@@ -14799,13 +14804,21 @@ def cmd_merge_log(root: Path, apply: bool) -> int:
     # One plan of every file's final text, as glossary_plan builds its own: the log and what the
     # old files keep go in before the citation pass, which reads them first and skips what goes.
     gone = [f for f, _ in files_in if f not in keep]
-    rp = record_plan(root, text, prefix, {LOG: text, **keep}, set(gone))
+    seed = {LOG: text, **keep}
+    ideas_disk = (root / IDEAS).read_text() if (root / IDEAS).is_file() else IDEAS_SEED
+    # A register's open rows are ideas the plan holds before the pass: the record counter
+    # numbers above them, and their citations of records are rewritten as any file's are.
+    if m["ideas"]:
+        seed[IDEAS] = ideas_disk
+        for block in m["ideas"]:
+            seed[IDEAS] = seed[IDEAS].rstrip("\n") + f"\n\n{block}\n"
+    rp = record_plan(root, text, prefix, seed, set(gone))
     text = rp["text"]
     problems += rp["problems"]
-    # The new ideas go last, after the pass, so a block's `Record N before this log.` stays.
+    # The records' ideas go last, after the pass, so a block's `Record N before this log.` stays.
     new_ideas = m["ideas"] + rp["ideas"]
-    ideas_text = rp["write"].get(IDEAS) or ((root / IDEAS).read_text() if (root / IDEAS).is_file() else IDEAS_SEED)
-    for block in new_ideas:
+    ideas_text = rp["write"].get(IDEAS) or ideas_disk
+    for block in rp["ideas"]:
         ideas_text = ideas_text.rstrip("\n") + f"\n\n{block}\n"
     planned = {**rp["write"], LOG: text}
     if new_ideas or not (root / IDEAS).exists():

@@ -8239,6 +8239,27 @@ after = sorted(set(wrote) & gone)
 print('rc', rc, 'twice', twice, 'removed then written', after)
 sys.exit(1 if rc or twice or after else 0)" 2>&1); rc=$?
 expect_pass sh -c "test $rc = 0" "$out"; [ $rc = 0 ] || echo "$out"
+# A register's open row is an idea the plan holds before the records are numbered and cited.
+pcnew "$T/ml-regidea" && mkdir -p docs/decisions
+printf '# 0001. Use markdown\n\n- **Date:** 2026-01-01\n- **Status:** accepted\n\n## Context\n\nWe needed a format.\n' > docs/decisions/0001-use-markdown.md
+printf '# 0002. Use a log\n\n- **Date:** 2026-01-02\n- **Status:** accepted\n\n## Context\n\nA log.\n' > docs/decisions/0002-use-a-log.md
+printf '| Id | Decision | Status | Date |\n|---|---|---|---|\n| D-001 | a | accepted (Ann) | 2026-01-01 |\n| D-002 | b, per record 0001 | proposed | 2026-01-03 |\n' > DECISIONS.md
+git add -A && git commit -qm init && $J init >/dev/null 2>&1; git add -A && git commit -qm board
+msg="merge-log one write: records are numbered above a register's idea the same run plans, and the merge isn't refused"
+out=$($UP --apply --merge-log 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && grep -qx '### D-002 b, per D-003' .jig/ideas.md && grep -qx '### D-003 Use markdown' .jig/decisions.md && grep -qx '### D-004 Use a log' .jig/decisions.md && ! grep -q '^### D-002' .jig/decisions.md && git commit -qm 'TOOL: merge'" "$out"; [ $rc = 0 ] || echo "$out"
+msg="merge-log one write: a register idea's citation of a record is rewritten, and listed"
+expect_pass sh -c "echo \"\$0\" | grep -q '.jig/ideas.md:[0-9]*: .*record 0001.*→.*D-003'" "$out"
+# A register that is also a record folder's README: removed by the merge, it stays removed.
+pcnew "$T/ml-readme" && mkdir -p docs/decisions
+printf '# 0001. Use markdown\n\n- **Date:** 2026-01-01\n- **Status:** accepted\n\n## Context\n\nWe needed a format.\n' > docs/decisions/0001-use-markdown.md
+printf '# 0002. Use a log\n\n- **Date:** 2026-01-02\n- **Status:** accepted\n\n## Context\n\nA log.\n' > docs/decisions/0002-use-a-log.md
+printf '| Id | Decision | Status | Date |\n|---|---|---|---|\n| D-001 | a | accepted (Ann) | 2026-01-01 |\n' > docs/decisions/README.md
+git add -A && git commit -qm init && $J init >/dev/null 2>&1; git add -A && git commit -qm board
+printf '{"entry_files": ["docs/decisions/README.md"]}\n' > .jig/meta.json && git add -A && git -c core.hooksPath=/dev/null commit -qm meta
+git switch -q -c ml && $UP --apply --merge-log >/dev/null 2>&1
+msg="merge-log one write: a register that is a record folder's README is removed and stays removed, D-001 in the log once"
+expect_pass sh -c "test ! -e docs/decisions/README.md && git status --short | grep -qx 'D  docs/decisions/README.md' && test \$(grep -c '^### D-001 ' .jig/decisions.md) = 1"
 }
 
 # ---------------------------------------------------------------- a heading is a page's address
