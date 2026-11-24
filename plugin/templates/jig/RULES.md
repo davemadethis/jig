@@ -1240,12 +1240,17 @@ as `Accepted (who, date).`; dropped, removed with no line, as a rejected entry i
 metarepo, moved down with a move line (Released sections). A question that binds others is
 written as an idea when it is asked, so it can be cited before it is answered. An idea is
 labelled the way a scope is: a line of its own after its status line, `(labels <term>, …)`, each
-label a term of the glossary a scope's labels name here (the metarepo's in a family, read where
-the roadmap is; the repo's own otherwise), checked by the same rule and refused by line, a
-glossary change that drops a term an idea names included. `jig decision`, `jig reading-list` and
-peers read both files; `jig reading-list <paths>` shows each page's ideas. `jig ideas [--label
-<term>]` is the research list: each idea with its status, labels and touched pages, in a
-metarepo each registered pararepo's too, read on its trunk and named by repo. A log from before the ideas file kept them under `## Open`: `jig update --apply` folds
+label a term of the glossary a scope's labels name here, checked by the same rule and refused by
+line. Against the repo's own glossary every label line is judged, so a glossary change that
+drops a term an idea names is refused. Against the metarepo's (a family planning from its
+roadmap), only the label lines a commit adds or changes are judged, since the metarepo changes
+its glossary in commits of its own; with the metarepo out of reach they pass with a warning, as
+a roadmap's `Scope:` lines do. A log not folded yet keeps its ideas under `## Open`, and their
+label lines are judged the same way. `jig decision`, `jig reading-list` and peers read both
+files; `jig reading-list <paths>` shows each page's ideas. `jig ideas [--label <term>]` is the
+research list: each idea with its status, labels and touched pages, a not-yet-folded log's
+`## Open` entries included, in a metarepo each registered pararepo's too, read on its trunk and
+named by repo. A log from before the ideas file kept them under `## Open`: `jig update --apply` folds
 that section into `.jig/ideas.md`, ids and blocks byte for byte (in a metarepo, `jig update
 --apply --fold-ideas` in a job), and then the hook refuses an `## Open` heading or an open or
 proposed entry the log adds.

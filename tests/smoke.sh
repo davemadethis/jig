@@ -7001,6 +7001,10 @@ cd "$IL" && python3 -c "f='.jig/decisions.md'; s=open(f).read(); open(f,'w').wri
 git add -A && git -c core.hooksPath=/dev/null commit -qm "an old open entry"
 out=$($J ideas --label teleport 2>&1)
 expect_pass sh -c "echo \"\$0\" | grep -qx 'D-009 still in the old log' && echo \"\$0\" | grep -qx 'D-001 Can a wallet teleport?'" "$out"
+msg="ideas labels: a label line added to an unfolded log's open entry is judged too: naming no term, it is refused by line"
+python3 -c "f='.jig/decisions.md'; s=open(f).read(); open(f,'w').write(s.replace('(labels teleport)\n\n## Unreleased', '(labels teleport)\n(labels nosuchterm)\n\n## Unreleased', 1))"
+git add -A; out=$(git commit -qm "D-009: a bad label" 2>&1); rc=$?; undo
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'M2 .jig/decisions.md:[0-9]* D-009 labels nosuchterm, which docs/glossary.md has no term for'" "$out"
 # A pararepo planning from its metarepo's roadmap: its ideas' labels name the metarepo's terms.
 IF2="$T/il-fam"; mkdir -p "$IF2"
 pcnew "$IF2/meta" && git add -A && git commit -qm init && $J init --meta --name meta >/dev/null && git add -A && git commit -qm meta-init && $J release --feature >/dev/null 2>&1
@@ -7021,6 +7025,11 @@ Open (2026-11-24).
 Touches: docs/x.md
 (labels teleport)' && git add -A; out=$(git commit -qm "D-002" 2>&1); rc=$?; undo
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \"D-002 labels teleport, which meta's docs/glossary.md has no term for\"" "$out"
+msg="ideas labels: a labelled open entry in an unfolded log folds after the metarepo dropped its term: the fold moves the label unchanged"
+python3 -c "f='.jig/decisions.md'; s=open(f).read(); open(f,'w').write(s.replace('## Unreleased\n', '## Open\n\n### D-009 still in the old log\nOpen (2026-11-01).\nTouches: docs/x.md\n(labels teleport)\n\n## Unreleased\n', 1))"
+git add -A && git -c core.hooksPath=/dev/null commit -qm "an old open entry"
+$UP --apply >/dev/null 2>&1
+expect_pass sh -c "grep -qx '### D-009 still in the old log' .jig/ideas.md && ! grep -qx '## Open' .jig/decisions.md && git commit -qm 'jig update: fold'"
 msg="ideas labels: with the metarepo unreachable, a labelled idea's commit passes, warning that its labels pass unchecked"
 python3 -c "import json, sys; f=sys.argv[1]; d=json.load(open(f)); d.pop('meta'); json.dump(d, open(f,'w'))" "$JIG_CONFIG"
 uidea '### D-002 Can it teleport twice?

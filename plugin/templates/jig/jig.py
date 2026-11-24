@@ -557,6 +557,8 @@ def check_rules(root: Path, board: Board, *, staged: bool) -> list[str]:
     if LOG in guarded:
         out += log_rules(trunk, staged, on_trunk(trunk, branch))
         out += move_rules(trunk, staged, meta)
+    if LOG in guarded or GLOSSARY in guarded:
+        out += open_label_problems(trunk, staged)
     # A glossary change re-checks the ideas' labels, as it does the roadmap's: a term dropped or
     # renamed re-points the label in the same commit.
     if IDEAS in guarded or ((LOG in guarded or GLOSSARY in guarded) and in_index(IDEAS, staged)):
@@ -6249,31 +6251,49 @@ def ideas_rules(trunk: str, staged: bool, trunk_side: bool = False) -> list[str]
     if not new:
         return [f"{IDEAS} is the repo's ideas log: it is never deleted"] if old else []
     prefix = log_prefix(trunk)
-    glossary, kept = idea_label_check(new, old, prefix, staged)
     # An entry the fold brings from the log's ## Open is as trunk had it, not new: its Touches
-    # line is judged when it changes, as it would have been in the log.
+    # line is judged when it changes, as it would have been in the log, and so are its labels.
+    base = with_ideas(at_rev(since, LOG), old)
+    glossary, kept = idea_label_check(idea_entries(new, prefix), base, prefix, staged, IDEAS)
     return (ideas_problems(new, in_index(LOG, staged), prefix, trunk, trunk_side, glossary, kept)
-            + touches_problems(with_ideas(at_rev(since, LOG), old), new, prefix, trunk, staged, home=IDEAS))
+            + touches_problems(base, new, prefix, trunk, staged, home=IDEAS))
 
 
-def idea_label_check(new: str, old: str, prefix: str, staged: bool
+def open_label_problems(trunk: str, staged: bool) -> list[str]:
+    """A log not folded yet keeps its ideas under ## Open, which `jig ideas` lists: their
+    `(labels …)` lines are judged as the ideas file's are."""
+    prefix = log_prefix(trunk)
+    since = since_trunk(trunk)
+    pending = [e for e in log_entries(in_index(LOG, staged), prefix) if e["section"] == "Open"]
+    if not any(idea_labels(e) for e in pending):
+        return []
+    base = with_ideas(at_rev(since, LOG), at_rev(since, IDEAS))
+    glossary, kept = idea_label_check(pending, base, prefix, staged, LOG)
+    if glossary is None:
+        return []
+    return [f"M2 {x}" for e in pending for n, labels in idea_labels(e) if (e["id"], tuple(labels)) not in kept
+            for x in label_problems(labels, glossary[0], f"{LOG}:{n} {e['id']}", glossary[1])]
+
+
+def idea_label_check(ideas: list[dict], base: str, prefix: str, staged: bool, home: str
                      ) -> tuple[tuple[str | None, str] | None, set[tuple[str, tuple[str, ...]]]]:
-    """How the hook judges the ideas' labels: the glossary, or None to pass them unchecked, and
-    the label lines it leaves alone. This repo's own glossary changes in the commits it judges,
-    so every label line is checked. The metarepo's changes elsewhere, so only the label lines
-    this commit adds or changes are (a dropped term is the metarepo's commit, not this one's),
-    and with the metarepo out of reach they pass unchecked, as the roadmap's lines do."""
+    """How the hook judges the labels of IDEAS, in file HOME: the glossary, or None to pass them
+    unchecked, and the label lines it leaves alone. This repo's own glossary changes in the
+    commits it judges, so every label line is checked. The metarepo's changes elsewhere, so
+    only the label lines this commit adds or changes are: those of BASE, the ideas file and the
+    log's ## Open as trunk has them, are left alone (a dropped term is the metarepo's commit, not
+    this one's, and the fold moves a block unchanged). With the metarepo out of reach they pass
+    unchecked, as a roadmap's Scope: lines do."""
     fam = family()
     if not fam.reads_meta:
         return idea_glossary(staged), set()
-    labelled = [e["id"] for e in idea_entries(new, prefix) if idea_labels(e)]
     if fam.meta_loc is None:
-        if labelled:
+        if any(idea_labels(e) for e in ideas):
             print(f"jig: warning: {fam.meta_name or 'the metarepo'} isn't reachable here (`jig repos`), so "
-                  f"the (labels …) lines in {IDEAS} pass unchecked", file=sys.stderr)
+                  f"the (labels …) lines in {home} pass unchecked", file=sys.stderr)
         return None, set()
-    return (fam.glossary, fam.glossary_name), {(e["id"], tuple(ls)) for e in idea_entries(old, prefix)
-                                               for _, ls in idea_labels(e)}
+    return (fam.glossary, fam.glossary_name), {(e["id"], tuple(ls)) for e in log_entries(base, prefix)
+                                               if e["section"] in (IDEAS, "Open") for _, ls in idea_labels(e)}
 
 
 def replaced(e: dict, prefix: str) -> list[str]:
