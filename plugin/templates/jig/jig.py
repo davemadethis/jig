@@ -6542,7 +6542,7 @@ def moved_to(moves: dict[str, str], path: str, section: str | None) -> str | Non
     if section and (ptr := moves.get(move_key(f"{path} § {section}"))):
         return ptr
     # A log's section is an entry: its move line names it by its id alone (D-5 is D-005).
-    if path == LOG and section and (ptr := moves.get(section)):
+    if path in (LOG, IDEAS) and section and (ptr := moves.get(section)):
         return ptr
     if ptr := moves.get(path):
         return ptr if not section or " § " in ptr else f"{ptr} § {plain(section)}"
@@ -6603,7 +6603,8 @@ def move_rules(trunk: str, staged: bool, meta: dict | None) -> list[str]:
     added = [(line, m) for line in sorted(removed_lines(new) - removed_lines(old)) if (m := MOVE_LINE.match(line))]
     for _, m in added:
         seen[move_key(m.group("what"))] += 1
-    # An idea moves down as an entry does: it leaves the ideas file in the commit writing its line.
+    # An idea moves as an entry does, in any direction: it leaves the ideas file in the commit
+    # writing its line.
     since = since_trunk(trunk)
     old_all = with_ideas(old, at_rev(since, IDEAS))
     new_ideas = {id_number(e["id"], prefix) for e in idea_entries(in_index(IDEAS, staged), prefix)}
@@ -6962,7 +6963,7 @@ def removed_entry(want: str, prefix: str, rev: str = "HEAD",
     if "?" in want:
         return None
     # First parent, merges diffed against it: a job's D-?slug is numbered only in its merge.
-    # The ideas file too: an idea dropped or moved down left from there, and one decided moved
+    # The ideas file too: an idea dropped or moved away left from there, and one decided moved
     # its block into the log, where this finds it first.
     for c in git("log", "-m", "--first-parent", "-E", f"-G{history_re(want)}", "--format=%H", rev,
                  "--", LOG, IDEAS, cwd=cwd).splitlines():

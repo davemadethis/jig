@@ -11764,6 +11764,19 @@ gate_ok vj; grc2=$?; gated vj; mout=$($J merge vj 2>&1); mrc=$?
 expect_pass sh -c "test '$ntag' != v0.1.0 && test $grc2 = 0 && test $mrc = 0 && echo \"\$0\" | grep -q 'kept .jig/specs/move-docs-v-md.md' && test ! -e docs/v.md" "$mout"; [ "$fail" = 0 ] || echo "$ntag $rel $out $mout"
 msg="move (up, a contract page): rig then doesn't list the spec, and jig sync says the proposal is released"
 expect_pass sh -c "test '$(rigquiet move-docs-v-md && echo quiet)' = quiet && echo \"\$0\" | grep -q 'proposal propose/V-move-docs-v-md (.jig/specs/move-docs-v-md.md): released by'" "$($J sync 2>&1)"
+msg="move (an idea up, a cached pointer): after N releases an entry citing V/.jig/ideas.md § D-001 and V pins it, V moves the idea up; V's jig sync reads that pointer as moved, not missing"
+printf '\n### D-001 does v wake?\nOpen (2026-11-05).\nTouches: none — a question for V.\n' >> .jig/ideas.md && gplant "V: idea D-001"
+( cd "$GN" && git switch -q -c cite && python3 -c "
+f = '.jig/decisions.md'; s = open(f).read()
+s = s.replace('## Unreleased\n', '## Unreleased\n\n### D-001 cites\nAccepted (owner, 2026-11-05).\nTouches: none — cites V\n\nPer \`V/.jig/ideas.md § D-001\`.\n', 1)
+open(f, 'w').write(s)" && git add -A && git commit -qm "D-001: cites V's idea" && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-edit cite && $J release --feature ) >/dev/null 2>&1
+ntag=$(git -C "$GN" describe --tags --abbrev=0)
+python3 -c "import json,sys; f='.jig/para.json'; d=json.load(open(f)); d['pin']=sys.argv[1]; json.dump(d, open(f,'w'), indent=2)" "$ntag" && $J init --para N >/dev/null 2>&1 && git add -A && git commit -qm "TOOL: pin N $ntag" >/dev/null 2>&1
+$J move D-001 --to N --apply >/dev/null 2>&1 && git commit -qm "specs: move D-001" >/dev/null 2>&1
+( cd "$GN" && git switch -q propose/V-move-d-001 && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-commit propose/V-move-d-001 && $J merge --number >/dev/null 2>&1; git commit -qm "merge V's D-001" >/dev/null 2>&1 )
+GARGS="D-001 --to N"; gjob v1 .jig/specs/move-d-001.md "D-001: up to N" .jig/decisions.md .jig/ideas.md
+out=$($J sync 2>&1)
+expect_pass sh -c "test '$ntag' != v0.2.0 && test $grc = 0 && test $gcrc = 0 && test $mrc = 0 && echo \"\$0\" | grep -q '.jig/ideas.md § D-001 (moved: N/.jig/decisions.md § D-[0-9]*)' && ! echo \"\$0\" | grep -q 'ideas.md has no heading'" "$out"; [ "$fail" = 0 ] || echo "$ntag $gout $gcom $mout $out"
 cd "$GM"
 # roadmap-labels' rule on a propose/ branch, and the one exception a move's proposal has: the
 # items that follow the moved page into the receiver's section, each touching it, nothing else there.
