@@ -1,7 +1,7 @@
 {
   "moving-in-command": {
     "spec": ".jig/specs/moving-in-command.md",
-    "state": "claimed",
+    "state": "ready",
     "after": [],
     "owns": [],
     "shares": [
@@ -18,7 +18,7 @@
   },
   "bug-stale-gate-and-entry-files": {
     "spec": ".jig/specs/bug-stale-gate-and-entry-files.md",
-    "state": "claimed",
+    "state": "gated",
     "after": [],
     "owns": [],
     "shares": [
