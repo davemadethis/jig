@@ -1399,7 +1399,9 @@ def waiting_specs(root: Path, board: "Board") -> dict[str, str]:
             continue
         text = f.read_text(errors="replace")
         # A bug spec is built in the job it names and reaches trunk only with that job's merge.
-        if bug_for(text):
+        # A spec listing buffer rows (`jig propose --buffer`, `jig move-in`) is a proposal's
+        # record, not work: no job ever takes it.
+        if bug_for(text) or listed_rows(text):
             continue
         out[rel] = text
     return out
@@ -15732,6 +15734,9 @@ def rig_items(root: Path, board: "Board") -> list[dict]:
         items.append({"kind": "spec", "id": Path(path).stem, "path": path, "content": text,
                       "touches": touches_spans(text), "after": built_after(text),
                       "kept": sorted(kept_separate(text)), "scopes": spec_scopes(text)})
+        # A move's spec is its step 2's job, which can't start until the receiver's trunk holds it.
+        if wait := move_wait(root, text):
+            items[-1]["blocked"] = [wait]
     # A staged file a spec in flight carries, by its exact mark as `resolve` finds it, is that
     # spec's work: it waits on it, or on the job building it, and is never offered again. In
     # flight is a waiting spec, an open job's, or one whose only notes are partial. Only what
@@ -16902,51 +16907,47 @@ def move_records(root: Path, what: str, to: str, meta: str) -> list[dict]:
     return out
 
 
-def cmd_move(root: Path, args) -> int:
-    """A claim of this repo (an entry, a page, a section) moves to another repo of its family,
-    one step per --apply: step 1 lands it there with its moved-from line, by the route that
-    crosses repos in that direction; step 2, once the receiver's trunk holds it, removes it here
-    with its move line, closing the move's spec. Read from the repos and the spec's record each
-    run, with no state file."""
+def branch_there(loc: Path, branch: str) -> bool:
+    return bool(git("rev-parse", "-q", "--verify", f"refs/heads/{branch}", cwd=str(loc)))
+
+
+def move_state(root: Path, what: str, to: str) -> dict:
+    """A move's state, read from its record here and the receiver's trunk, with no state file:
+    `jig move` prints and applies it, and `jig rig` waits on it. STEP2 is "done" (the move line
+    is in the log), "next", "waiting" (on step 1) or "receiver" (on the receiver's trunk); ERROR,
+    when set, says why the move can't be read."""
     trunk = Board.trunk_name(root)
     meta, para = load_meta(trunk), load_para(trunk)
     paras, unread = family_names(trunk, meta)
     if unread:
-        die(f"can't reach {unread}: this repo's family can't be read until `jig repos` finds it", 2)
-    to = args.to
+        return {"error": f"can't reach {unread}: this repo's family can't be read until `jig repos` finds it"}
     if not paras:
-        die(f"this repo has no family (no {META} with pararepos, no {PARA}): a claim moves only "
-            "between a metarepo and its pararepos", 2)
+        return {"error": f"this repo has no family (no {META} with pararepos, no {PARA}): a claim moves "
+                         "only between a metarepo and its pararepos"}
     if not in_family(to, paras):
-        die(f"{to} isn't of this repo's family ({', '.join(sorted(paras))})", 2)
+        return {"error": f"{to} isn't of this repo's family ({', '.join(sorted(paras))})"}
     loc = repo_path(to)
     if loc is None or not loc.is_dir():
-        die(f"can't reach {to}: run `jig repos add` in its checkout, then again", 2)
+        return {"error": f"can't reach {to}: run `jig repos add` in its checkout, then again"}
     meta_loc = root if meta is not None else meta_checkout(root, para) if para else None
     up = para is not None and is_here_as(loc, meta_loc)
     me = meta.get("name") if meta is not None else name_in_family(meta_loc) if meta_loc else main_root().name
-    what = args.what.strip()
     path, section = thing_of(what)
-    log = in_index(LOG, True)
-    prefix = log_prefix(trunk)
-    entry = next((e for e in log_entries(log, prefix) if move_key(e["id"]) == move_key(section or "")), None) \
-        if path == LOG else None
-    as_ = (args.as_ or path) if path != LOG else LOG
-    their_meta = load_meta_at(loc)
-    their_prefix = their_meta["decision_prefix"] if their_meta else META_DEFAULTS["decision_prefix"]
-    slug = move_slug(what)
     meta_name = para["meta"] if up else ""
     recs = move_records(root, what, to, meta_name)
-    mtrunk = Board.trunk_name(meta_loc) if up and meta_loc is not None else ""
-
-    def there_now(b: str) -> bool:
-        return bool(git("rev-parse", "-q", "--verify", f"refs/heads/{b}", cwd=str(meta_loc)))
+    rec, state = None, "new"
     if up:
+        mtrunk = Board.trunk_name(meta_loc)
         took = [r for r in recs if r["branch"] and proposal_in(meta_loc, r["branch"], mtrunk)]
         live = [r for r in recs if r["live"] and r["branch"] and not took]
-        waiting = [r for r in live if there_now(r["branch"]) and not proposal_empty(meta_loc, r["branch"], mtrunk)]
+        waiting = [r for r in live if branch_there(meta_loc, r["branch"])
+                   and not proposal_empty(meta_loc, r["branch"], mtrunk)]
         rec, state = (took[0], "done") if took else (waiting[0], "done") if waiting else \
-            (live[0], "empty" if there_now(live[0]["branch"]) else "gone") if live else (None, "new")
+            (live[0], "empty" if branch_there(meta_loc, live[0]["branch"]) else "gone") if live else (None, "new")
+    elif recs:
+        # Down or sideways, the spec carrying the move's record is step 1 done: what the receiver
+        # does with the file is its owner's, and a drop is that owner's word, never read here.
+        rec, state = recs[0], "done"
     mine_ptr = f"{me}/{LOG} § {section}" if path == LOG else f"{me}/{path}" + (f" § {section}" if section else "")
     there_log = trunk_show(loc, LOG) or ""
     # The receiver's record of this thing: its moved-from line naming us, read on its trunk.
@@ -16954,64 +16955,97 @@ def cmd_move(root: Path, args) -> int:
                    if is_here(pointer_parts(frm)[0]) and same_thing(pointer_parts(frm)[1:], (path, section))), None)
     landed_as = next((m.group("what") for _, _, _, m in moved_from_lines(there_log)
                       if move_key(m.group("what")) == landed), None) if landed else None
-    landing = ""
-    if not up:
-        # Down or sideways, step 1's state is the receiver's: the file still staged there, or a
-        # branch of its landing it, waits; landed, step 2 is next; neither, it was dropped there.
-        rec = recs[0] if recs else None
-        if rec is None:
-            state = "new"
-        elif landed or (loc / STAGING / f"{rec['spec'].stem}.md").exists():
-            state = "done"
-        else:
-            refs = git("for-each-ref", "refs/heads", "--format=%(refname:short)", cwd=str(loc)).split()
-            hits = git("grep", "-l", "-F", f"moved from {mine_ptr}.", *refs, "--", LOG, cwd=str(loc)).splitlines() if refs else []
-            landing = hits[0].split(":", 1)[0] if hits else ""
-            state = "done" if landing else "dropped"
-    gone = bool(moves_in(log).get(what))
+    gone = bool(moves_in(in_index(LOG, True)).get(what))
     if gone:
         state = "done"      # its move line is the record once the spec has closed
     # A re-proposal after a withdrawal takes the next free name; the withdrawn spec stays.
-    spec = rec["spec"] if rec else free_name(root / SPECS, Path(f"move-{slug}.md"))
+    spec = rec["spec"] if rec else free_name(root / SPECS, Path(f"move-{move_slug(what)}.md"))
+    step2 = "done" if gone else "waiting" if state != "done" else \
+        "receiver" if not landed_as or "?" in landed_as else "next"
+    return {"trunk": trunk, "meta": meta, "para": para, "loc": loc, "meta_loc": meta_loc, "up": up,
+            "me": me, "path": path, "section": section, "rec": rec, "state": state, "spec": spec,
+            "mine_ptr": mine_ptr, "landed_as": landed_as, "step2": step2, "meta_name": meta_name}
+
+
+def move_wait(root: Path, text: str) -> str:
+    """What a spec carrying a move's record waits on before its job can start (step 2 next),
+    by `jig move`'s own reader; "" when nothing."""
+    m = MOVE_RECORD.search(text)
+    if not m:
+        return ""
+    what, to = m.group("what").strip(), m.group("to")
+    st = move_state(root, what, to)
+    if "error" in st:
+        return f"{to} being reached ({st['error']})"
+    numbered = ", its id numbered" if st["path"] == LOG else ""
+    return f"{to}'s moved-from line for {what}{numbered}" if st["step2"] in ("waiting", "receiver") else ""
+
+
+def cmd_move(root: Path, args) -> int:
+    """A claim of this repo (an entry, a page, a section) moves to another repo of its family,
+    one step per --apply: step 1 lands it there with its moved-from line, by the route that
+    crosses repos in that direction, and writes the move's spec; step 2, once the receiver's trunk
+    holds it, removes it here with its move line, in the job opened from that spec, whose merge
+    closes it. Read from the repos and the spec's record each run, with no state file."""
+    what, to = args.what.strip(), args.to
+    st = move_state(root, what, to)
+    if "error" in st:
+        die(st["error"], 2)
+    trunk, meta, para, loc, meta_loc, up, me = (st[k] for k in ("trunk", "meta", "para", "loc", "meta_loc", "up", "me"))
+    path, section, rec, state, spec, mine_ptr = (st[k] for k in ("path", "section", "rec", "state", "spec", "mine_ptr"))
+    landed_as, step2, meta_name = st["landed_as"], st["step2"], st["meta_name"]
+    entry = next((e for e in log_entries(in_index(LOG, True), log_prefix(trunk))
+                  if move_key(e["id"]) == move_key(section or "")), None) if path == LOG else None
+    as_ = (args.as_ or path) if path != LOG else LOG
+    their_meta = load_meta_at(loc)
+    their_prefix = their_meta["decision_prefix"] if their_meta else META_DEFAULTS["decision_prefix"]
+    rel = spec.relative_to(root)
     direction = "down" if meta is not None else "up" if up else "sideways"
     print(f"jig move: {what} from {me} to {to} ({direction})")
     if state == "done":
-        print(f"1. land it in {to}: done ({spec.relative_to(root)})")
+        print(f"1. land it in {to}: done ({rel})")
+        if not up and step2 == "receiver":
+            name = f"{spec.stem}.md"
+            if (loc / STAGING / name).exists():
+                print(f"   {to}'s staging holds {name}: it waits on {to}'s owner")
+            else:
+                print(f"   {name} isn't in {to}'s staging: a job there may be landing it. If {to}'s owner "
+                      f"turned it down, delete {rel} on that word, and run step 1 again")
     else:
         print(f"1. land it in {to}: next")
         if state == "empty":
             print(f"   {rec['branch']} is empty in {meta_name}: a run stopped before its commit; step 1 proposes it again")
         elif state == "gone":
-            print(f"   {rec['branch']}, which {spec.relative_to(root)} records, is gone from {meta_name} unmerged: "
+            print(f"   {rec['branch']}, which {rel} records, is gone from {meta_name} unmerged: "
                   "step 1 proposes it again")
-        elif state == "dropped":
-            print(f"   {to} has neither the file {spec.relative_to(root)} sent nor its moved-from line: dropped "
-                  "there, so step 1 sends it again")
-        print(f"   would write: {spec.relative_to(root)} here, and "
+        print(f"   would write: {rel} here, and "
               + (f"propose/{main_root().name}-{spec.stem} in {to}" if up else f"a staged file for {to}, forwarded")
               + f", with `moved-from: {mine_ptr}`")
-    if gone:
+    lists = f"--shares {LOG}" + ("" if path == LOG else f" {path}" if section else f" --owns {path}")
+    job = f"`jig open move-{move_slug(what)} --spec {rel} {lists}`"
+    if step2 == "done":
         print("2. remove it here: done (its move line is in the log)")
-    elif state != "done":
+    elif step2 == "waiting":
         print("2. remove it here: waiting on step 1")
-    elif not landed_as or "?" in landed_as:
+    elif step2 == "receiver":
         print(f"2. remove it here: waiting on {to}'s owner: its trunk needs the moved-from line naming "
-              f"{mine_ptr}" + (", its id numbered" if landed_as else "") + (f" ({landing} carries it)" if landing else ""))
+              f"{mine_ptr}" + (", its id numbered" if landed_as else ""))
     else:
-        print(f"2. remove it here: next — {to} holds it as {landed_as}")
+        print(f"2. remove it here: next — {to} holds it as {landed_as}; in the job opened from {rel} ({job})")
     if not args.apply:
         return 0
     if state != "done":
-        if up and rec is not None and there_now(rec["branch"]) and proposal_empty(meta_loc, rec["branch"], mtrunk):
+        if up and rec is not None and branch_there(meta_loc, rec["branch"]) \
+                and proposal_empty(meta_loc, rec["branch"], Board.trunk_name(meta_loc)):
             drop_proposal(meta_loc, rec["branch"])
         return move_step1(root, me, to, loc, meta, para, meta_loc, up, what, path, section,
                           entry, as_, their_prefix, spec, mine_ptr)
-    if gone or not landed_as or "?" in landed_as:
+    if step2 != "next":
         print("Nothing to apply: the next step waits on a yes.")
         return 0
-    if meta is not None and is_main_worktree(root) and git("branch", "--show-current") == trunk:
-        die(f"in a metarepo the removal is a job's (M4): open one from its spec (`jig open move-{slug} "
-            f"--spec {spec.relative_to(root)} --shares {LOG}`) and run `jig move` --apply in its worktree", 2)
+    if is_main_worktree(root) and git("branch", "--show-current") == trunk:
+        why = "in a metarepo the removal is a job's (M4)" if meta is not None else "the move's spec is a job's"
+        die(f"{why}: open one from it ({job}) and run `jig move` --apply in its worktree", 2)
     return move_step2(root, me, to, loc, meta, para, meta_loc, up, what, path, section, as_, spec, landed_as)
 
 
@@ -17061,7 +17095,9 @@ def move_step1(root, me, to, loc, meta, para, meta_loc, up, what, path, section,
     note = (f"# Move {what} to {to}\n\nSource: `jig move {what} --to {to}`\n\n## Intent\n"
             f"{what} moves from {me} to {to}, as {there} there. Step 1 lands it there with its "
             f"moved-from line; step 2, once {to}'s trunk holds it, removes it here with its move line.\n\n"
-            f"## Touches\n- `{LOG}`\n" + ("" if path == LOG else f"- `{path}`\n")
+            # The thing itself: its move line is an append to the log any job may make, so two
+            # moves meet only when they move one thing.
+            f"## Touches\n- `{path}" + (f" § {section}" if section else "") + "`\n"
             + "\n## Decisions\n" + f"- move: {what} → {to}/{there}\n")
     if up:
         meta_name = para["meta"]
@@ -17121,9 +17157,11 @@ def move_step1(root, me, to, loc, meta, para, meta_loc, up, what, path, section,
 
 def move_step2(root, me, to, loc, meta, para, meta_loc, up, what, path, section, as_,
                spec, landed_as) -> int:
-    """Remove the claim here with its move line naming the receiver's id or path, staged in
-    this checkout; a moved page's items follow by each plan's own route; sideways, propose the
-    metarepo's pointer rewrites; on a pararepo's trunk, close the move's spec in the same change."""
+    """In the job opened from the move's spec, in any repo: remove the claim with its move line
+    naming the receiver's id or path, staged in this worktree; a moved page's items follow by
+    each plan's own route; sideways, propose the metarepo's pointer rewrites, or answer P2 with
+    `meta: none` when there are none. `jig merge` closes the spec, or keeps it while it names a
+    metarepo branch, as it does any job's."""
     there = f"{to}/{LOG} § {landed_as}" if path == LOG else f"{to}/{landed_as}"
     logf = root / LOG
     text = logf.read_text() if logf.exists() else LOG_SEED
@@ -17147,39 +17185,35 @@ def move_step2(root, me, to, loc, meta, para, meta_loc, up, what, path, section,
     logf.write_text(log_with_line(text, "Removed", f"- {what}: moved to {there}."))
     git("add", "--", LOG, check=True)
     notes = [f"staged: {what} removed, with `- {what}: moved to {there}.`"]
-    trunk = Board.trunk_name(root)
-    on_trunk = is_main_worktree(root) and git("branch", "--show-current") == trunk
     plan = plan_items(family(), to, loc, meta_loc, path, as_) if path != LOG and not section else None
     if plan and plan["losing"]:
-        notes += move_items_here(root, me, to, meta, up, plan, spec, on_trunk)
-    branch = None
+        notes += move_items_here(me, to, plan, spec)
+    branch = spec_proposal(spec.read_text(errors="replace"), para["meta"])[0] if up else None
     if not meta and not up and meta_loc is not None:
-        # Sideways: built once from the metarepo's trunk, now the receiver holds the thing, so
-        # the metarepo can't merge a pointer to a page that isn't there yet.
+        # Sideways: built from the metarepo's trunk now the receiver holds the thing, so the
+        # metarepo can't merge a pointer to a page that isn't there yet.
         road = meta_road_after(plan, trunk_show(meta_loc, ROADMAP) or "") if plan and plan["losing"] else None
-        lines, branch = move_pointers(root, me, to, para, meta_loc, path, as_, spec, road)
+        lines, branch = move_pointers(root, me, to, para, meta_loc, path, section, landed_as, spec, road)
         notes += lines
-    if branch:
-        # A pararepo spec naming a pointers branch stays: `jig sync` follows the branch through
-        # it, and the close that takes such specs takes it once released.
-        notes.append(f"{spec.relative_to(root)} stays, naming {branch}, until {para['meta']} releases it")
-    elif on_trunk and meta is None:
-        # No job carries a pararepo's trunk step, so the move's spec closes here, with it.
-        if git("ls-files", "--", str(spec)):
-            git("rm", "-q", "--", str(spec), check=True)
-        else:
-            spec.unlink(missing_ok=True)
-        notes.append(f"closed {spec.relative_to(root)}: the move is done once this commits")
+        if not branch:
+            # P2's answer for a contract page with nothing to propose, on the job's branch.
+            ptr = f"{me}/{path}" + (f" § {section}" if section else "")
+            spec.write_text(spec.read_text().rstrip("\n")
+                            + f"\n- meta: none — {para['meta']} names nothing of {ptr}; it moved to {there}\n")
+            git("add", "--", str(spec), check=True)
+            notes.append(f"{spec.relative_to(root)} answers P2: `meta: none`, {para['meta']} naming nothing of {ptr}")
     print("\n".join(notes))
-    print("Commit it" + (" (a job opened from the move's spec, in a metarepo; `jig merge` closes it)" if meta else "")
-          + f"; the hook checks the move line against {to}'s moved-from line.")
+    print(f"Commit it in this job; the hook checks the move line against {to}'s moved-from line. "
+          + (f"`jig merge` keeps {spec.relative_to(root)}, which names {branch}, for `jig sync` to follow"
+             if branch and not meta else f"`jig merge` closes {spec.relative_to(root)}") + ".")
     return 0
 
 
-def move_items_here(root, me, to, meta, up, plan, spec, on_trunk) -> list[str]:
-    """Step 2's part of the items: this repo's own roadmap loses them on trunk in this change, or
-    by `jig merge` in a job; a receiver keeping a roadmap of its own gets its part staged. The
-    metarepo's roadmap, when this pararepo plans from it, changes by the step's proposal."""
+def move_items_here(me, to, plan, spec) -> list[str]:
+    """Step 2's part of the items, in the job: this repo's own roadmap loses them by `jig merge`
+    in the job's merge commit; a receiver keeping a roadmap of its own gets its part staged in
+    the main checkout, unforwarded until that merge. The metarepo's roadmap, when this pararepo
+    plans from it, changes by a `propose/` branch."""
     out = []
     moved = [f"`{SCOPE_LINE.fullmatch(l).group(1)}` → ## {h}" for h, l in plan["moved"]]
     if plan["kept"]:
@@ -17188,22 +17222,11 @@ def move_items_here(root, me, to, meta, up, plan, spec, on_trunk) -> list[str]:
         name = f"{spec.stem}-roadmap.md"
         body = (f"Items follow a page moved here from {me}:\n\n"
                 + "".join(f"## {h}\n{l}\n\n" for h, l in plan["moved"]))
-        if meta is not None and not on_trunk:
-            # The job may never merge: the hubnode forwards it after the merge, by staging resolve.
-            stage_roadmap(main_root(), to, name, body, forward_it=False)
-            out.append(f"staged {STAGING}/{name} for {to}, the page's items for its roadmap: once this job "
-                       f"merges, `jig staging resolve {name}` forwards it")
-        else:
-            stage_roadmap(root, to, name, body, forward_it=True)
-            out.append(f"staged {name} for {to}: the page's items, for its roadmap")
-    if plan["losing"] != "mine" or (plan["lost"] == plan["road"] and not plan["moved"]):
-        return out
-    if on_trunk and meta is None:
-        (root / ROADMAP).write_text(plan["lost"])
-        git("add", "--", ROADMAP, check=True)
-        out.append(f"{ROADMAP}: the page's items leave it here, on trunk, in this change"
-                   + (f" ({'; '.join(moved)})" if moved else ""))
-    else:
+        # The job may never merge: the hubnode forwards it after the merge, by staging resolve.
+        stage_roadmap(main_root(), to, name, body, forward_it=False)
+        out.append(f"staged {STAGING}/{name} for {to}, the page's items for its roadmap: once this job "
+                   f"merges, `jig staging resolve {name}` forwards it")
+    if plan["losing"] == "mine" and (plan["lost"] != plan["road"] or plan["moved"]):
         out.append("roadmap items touching the page: " + "; ".join(moved)
                    + ": `jig merge` moves them in this job's merge commit")
     return out
@@ -17219,19 +17242,58 @@ def stage_roadmap(root: Path, target: str, name: str, body: str, forward_it: boo
         forward(root, f, head)
 
 
-def move_pointers(root, me, to, para, meta_loc, path, as_, spec, road) -> tuple[list[str], str | None]:
-    """Sideways: the metarepo's pointers to the moved page rewritten to its new home, and its
+ENTRY_ID = re.compile(r"[A-Za-z][\w]*-(?:\d+|\?[a-z0-9-]+)")
+
+
+def pointers_moved(body: str, me: str, path: str, section: str | None, to: str, landed: str) -> str:
+    """BODY with only its pointers to the moved thing naming where it landed (TO/LANDED, the
+    receiver's id or path): an entry's `<me>/<log> § <id>` by the landed id, a section's
+    `<me>/<path> § <s>` and a page's `<me>/<path>`, with its § part, by the landed path. Every
+    other pointer into that page or log stays."""
+    new_path = LOG if path == LOG else pointer_parts(f"{to}/{landed}")[1]
+    out = []
+    for line in body.splitlines(keepends=True):
+        edits = []
+        for m in POINTER.finditer(line):
+            name, p = m.group("name"), m.group("path").rstrip(".")
+            if p != path or not (name_in(name, {me}) or is_here(name)):
+                continue
+            rest = m.group("rest")
+            code = m.start() > 0 and line[m.start() - 1] == "`" and not m.group("shut")
+            cited = (rest.split("`")[0].strip() if code else rest) if rest else None
+            if path == LOG:
+                ident = ENTRY_ID.match(cited or "")
+                if not ident or not same_thing((LOG, ident.group(0)), (LOG, section)):
+                    continue
+                at = m.start("rest")
+                edits.append((at, at + len(ident.group(0)), landed))
+            elif section:
+                # In prose the section runs on with the line: the moved heading must begin it.
+                if not cited or not (same_thing((path, cited), (path, section)) or
+                                     (not code and plain(cited).startswith(plain(section)))):
+                    continue
+            edits.append((m.start("name"), m.start("path") + len(p), f"{to}/{new_path}"))
+        for a, b, rep in sorted(edits, reverse=True):
+            line = line[:a] + rep + line[b:]
+        out.append(line)
+    return "".join(out)
+
+
+def move_pointers(root, me, to, para, meta_loc, path, section, landed, spec, road) -> tuple[list[str], str | None]:
+    """Sideways: the metarepo's pointers to the moved thing rewritten to where it landed, and its
     roadmap's items for the page moved when either side plans there, on a `propose/` branch this
     command writes, recorded here as `meta: <meta> pointers <branch>`, which P2 accepts."""
     mt = Board.trunk_name(meta_loc)
-    old, new = f"{me}/{path}", f"{to}/{as_}"
+    old = f"{me}/{path}" + (f" § {section}" if section else "")
+    new = f"{to}/{landed}" if path != LOG else f"{to}/{LOG} § {landed}"
     files: dict[str, str | None] = {}
-    for f in git("grep", "-l", "-F", old, mt, "--", "*.md", cwd=str(meta_loc)).splitlines():
+    for f in git("grep", "-l", "-F", f"{me}/{path}", mt, "--", "*.md", cwd=str(meta_loc)).splitlines():
         f = f.split(":", 1)[1] if ":" in f else f
         if f == LOG:
             continue    # a log's lines are history, frozen once released
         body = trunk_show(meta_loc, f) or ""
-        files[f] = re.sub(rf"(?<![\w.-]){re.escape(old)}(?![\w/-])", new, body)
+        if (moved := pointers_moved(body, me, path, section, to, landed)) != body:
+            files[f] = moved
     if road is not None:
         files[ROADMAP] = road
     if not files:

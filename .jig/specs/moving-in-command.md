@@ -150,17 +150,21 @@ same path.
    The step then waits on the receiver's owner.
 10. **Step 2, remove it here.** This step needs the receiver's trunk to hold a moved-from line
     naming this thing, with its id numbered. `--apply` removes the entry block, the page or the
-    section, and writes the move line naming the receiver's id or path. It stages the change in
-    the checkout it runs in. In a metarepo's trunk checkout it is refused, because M4 puts the
-    change in a job.
-    - **Sideways from a pararepo:** the metarepo's cached pointers to the moved thing are
-      rewritten from `<me>/<path>[ § s]` to `<to>/<as>[ § s]`. The rewrite is made on a
+    section, and writes the move line naming the receiver's id or path. It runs in the job
+    opened from the move's spec, in any repo. In a trunk checkout it is refused, naming that job
+    (bug-move-spec-lifecycle).
+    - **Sideways from a pararepo:** the metarepo's pointers to the moved thing are rewritten:
+      an entry's `<me>/.jig/decisions.md § <id>` to `<to>/.jig/decisions.md § <landed id>`, a
+      section's `<me>/<path> § s` to `<to>/<as> § s`, a page's `<me>/<path>[ § s]` to
+      `<to>/<as>[ § s]`; every other pointer into that page or log stays. The rewrite is made on a
       `propose/<me>-move-<slug>-pointers` branch, written by the command from the metarepo's
       trunk once the receiver holds the thing, with the metarepo's roadmap items for the page,
       and recorded as `meta: <meta> pointers <branch>`, which P2 accepts. That spec stays, as a
       pararepo spec naming a metarepo branch does, so `jig sync` follows the branch through it.
-    - Otherwise, step 2 closes the move's spec: on a pararepo's trunk in the same change, and in
-      a metarepo by the job opened from it, which `jig merge` closes.
+    - With nothing to propose sideways, step 2 writes `- meta: none — <meta> names nothing of
+      <me>/<path>[ § s]; it moved to <to>/<there>` into the spec, P2's answer on the job's branch.
+    - `jig merge` closes the move's spec as it closes any job's, keeping it in a pararepo while
+      it names a metarepo branch (an up move's proposal, a sideways move's pointers).
 11. **Roadmap items follow the page** (the owner, 2026-11-20: "roadmap items relating to the
     items being moved should move too"). A moved page's items that no spec or note takes go to
     the receiver's plan:
@@ -173,8 +177,8 @@ same path.
     `(touches …)`. The change is written by the route the losing roadmap's edits take:
     - in the metarepo's job merge commit, written by `jig merge`, when the metarepo loses the page;
     - in the step's proposal, when a pararepo that plans from the metarepo loses it;
-    - in step 2's change on its trunk, or by `jig merge` in a job, when a pararepo with a roadmap
-      of its own loses it (the hubnode's Interpreted line, Decisions).
+    - by `jig merge` in the job, when a pararepo with a roadmap of its own loses it (the
+      hubnode's Interpreted line, Decisions).
 12. **RULES.md and docs.** The changes:
     - Roadmap: Moving in, by `jig move-in`. Edits: names and new products stay the metarepo
       hubnode's, who decides a product a pararepo proposes with its phases at that proposal's
@@ -266,15 +270,17 @@ Part C (`jig move`):
 - [ ] (up) In `L`, `jig move D-003 --to M` makes `propose/L-move-d-003` in `M`, whose commit,
   the entry as `E-?…` with its moved-from line, passed `M`'s hook. The spec says `meta: M
   proposal propose/L-move-d-003`. After `M`'s job takes the proposal and numbers it, `--apply`
-  in `L` removes D-003 with its move line, and the commit passes.
+  in the job `L` opens from the move's spec removes D-003 with its move line, and the commit
+  passes; on `L`'s trunk checkout it is refused, naming that job.
 - [ ] (sideways) In `L`, `jig move docs/l.md --to K` stages it in `K`. After `K` lands it,
-  `--apply` in `L`:
+  `--apply` in the job `L` opens from the move's spec:
   - removes the page and writes its move line;
   - makes `propose/L-move-docs-l-md-pointers` in `M`, rewriting `M`'s `L/docs/l.md` to
     `K/docs/l.md`;
-  - records `meta: M pointers <branch>` in the move's spec, which stays, naming the branch.
+  - records `meta: M pointers <branch>` in the move's spec, which `jig merge` keeps, naming
+    the branch.
 
-  P2 passes on `L`'s commit.
+  P2 passes on the job's commit.
 - [ ] (no regression) `python3 .jig/jig.py queue -- bash tests/smoke.sh moves move movein pararepo
   metarepo roadmap rig boundary staging decisions supersede removals pin_bump claims sync_buffer`
   passes. `movein` is the new section holding Part A. `claude plugin validate ./plugin` passes.
@@ -348,13 +354,15 @@ Part C (`jig move`):
   target's existence only, so a hand-made move now needs the line at both ends.
 - Writes in this repo are staged, never committed: the hubnode commits on the owner's yes, as
   with `jig propose` and `jig update --apply`.
-- Interpreted (the hubnode, 2026-11-23): in a metarepo, the roadmap items that follow a moved
+- Interpreted (the hubnode), confirmed by the owner, 2026-11-24: "keep: jig merge moves them".
+  In a metarepo, the roadmap items that follow a moved
   page move in the job's merge commit, written by `jig merge` from the move lines the merge adds,
   as it re-points a renamed page. Rejected: widening R5 for job branches (the owner declined it
   for `## Proposals` jobs), and a staged roadmap file, which would need a second yes.
-- Interpreted (the hubnode, 2026-11-23): a pararepo keeping its own roadmap edits it in step 2's
-  change on its trunk, or `jig merge` does it in a job, as in a metarepo. Rejected: a staged
-  roadmap file, a second yes for the same repo's own roadmap.
+- Interpreted (the hubnode, 2026-11-23): a pararepo keeping its own roadmap loses a moved page's
+  items as a metarepo does: `jig merge` does it in the job, as in a metarepo. Its trunk route
+  (step 2's change on trunk) went with bug-move-spec-lifecycle, on the owner's OK, 2026-11-24.
+  Rejected: a staged roadmap file, a second yes for the same repo's own roadmap.
 - Built as parts A to C with `--partial`. A needs nothing new. B is the record, and C's step 2
   reads it.
 - FEATURES rows, for `marketing/FEATURES.md`:

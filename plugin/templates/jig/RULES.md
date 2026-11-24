@@ -63,7 +63,9 @@ shares, refusing one another open job owns.
 **Overlapping specs are answered before they open.** A spec is *waiting* when no open job names
 it, no handoff note's `Spec:` line names it, and the newest release tag doesn't hold it (any spec,
 with no tag yet), unless it carries `Bug-for: <job>` on a line of its own, outside fenced code: a bug spec
-is built in the job it names and reaches trunk only when that job merges, so it never waits. Two waiting specs overlap when their Touches sections meet, at any heading level: one path, a glob
+is built in the job it names and reaches trunk only when that job merges, so it never waits. Nor
+does a spec listing buffer rows (`jig propose --buffer`, `jig move-in`): it is a proposal's
+record, and no job takes it. Two waiting specs overlap when their Touches sections meet, at any heading level: one path, a glob
 covering the other's path, or the same `<page> § <term>` (a whole page meets any term on it).
 `jig consolidate` lists each group of overlapping waiting specs with the paths they share, as
 one proposed job. A group is answered one of two ways: one spec carries every input's `Source:`
@@ -820,7 +822,8 @@ overlap, with no `Kept separate` line, are one job to answer (merged, or kept ap
 that depends on another (a staged file's `after:` header, a spec's `Build after <name>` line)
 is in the same group and opens after it, with nothing to answer; one that depends on an open
 job, named or by its spec's name, or on an item not ready, waits on it, and a dependency
-cycle waits on the owner. An item that could start but overlaps any waiting spec, one that
+cycle waits on the owner. A move's spec (a `- move:` line) waits on its receiver until step 2
+is next, read by `jig move`'s own reader (Metarepo, moving claims). An item that could start but overlaps any waiting spec, one that
 waits included, is to answer first, since `jig open` refuses it. The order is
 fixed (kind, dependency, path), so the same state prints the same bytes. Its count of what
 waits on the owner's answers counts every question: each open or unjudged staged file, each
@@ -1585,36 +1588,40 @@ reads the pointer's new home in the pin-bump request.
 `jig move <what> --to <repo> [--as <path>]` does both ends, one step per `--apply`; without it,
 it prints each step's state and what the next would write, read from the repos each run. `<what>`
 is an entry id, a page, or `<page> § <heading>`; `--as` is the page's path there (the same path by
-default). Step 1 writes `.jig/specs/move-<slug>.md` here, the job that removes the claim, and
+default). Step 1 writes `.jig/specs/move-<slug>.md` here, the job that removes the claim, its
+Touches the moved thing alone (the move line is a log append any job may make), and
 sends the text with its `moved-from:` pointer by the route for its direction: a file staged with
 `target: <repo>` and forwarded down or sideways (an entry as `### <their prefix>?<slug>`, who and
 date kept, a `Supersedes` of this log's ids dropped); up, a `propose/<repo>-move-<slug>` branch in
 the metarepo whose one commit, the entry or page with its moved-from line, the metarepo's hook
 judges, recorded as `meta: <meta> proposal <branch>` with the metarepo's own citations of it
 listed. Step 2 waits for the receiver's trunk to hold the moved-from line, its id numbered; it
-then removes the entry, page or section here and writes the move line, staged in the checkout it
-runs in. In a metarepo's trunk checkout it is refused (M4): it runs in a job opened from the move's
-spec, which `jig merge` closes; on a pararepo's trunk the spec closes in step 2's own change. The
-spec's `- move:` and `meta:` lines are the move's record, found by scanning specs: a withdrawn up
-proposal is proposed again under the next free name, and down or sideways, step 1's state is the
-receiver's (its staged file or a branch landing it waits; landed, step 2 is next; neither, it was
-dropped there and step 1 sends it again). Sideways from a pararepo, step 2 also writes, from the
-metarepo's trunk once the receiver holds the thing, the metarepo's pointer rewrites and roadmap
-items on `propose/<repo>-move-<slug>-pointers`, recorded as `meta: <meta> pointers <branch>`,
-which P2 accepts; that spec stays, as a pararepo spec naming a metarepo branch does.
+then removes the entry, page or section here and writes the move line, staged in the job opened
+from the move's spec, in any repo: in a trunk checkout it is refused, naming that job (in a
+metarepo, M4). `jig merge` closes the spec as it closes any job's, keeping it in a pararepo while
+it names a metarepo branch. The spec's `- move:` and `meta:` lines are the move's record, found
+by scanning specs: a withdrawn up proposal is proposed again under the next free name, and down
+or sideways, step 1 is done once its spec records the move. What the receiver does with the file
+is its owner's: the plan says whether it is still in the receiver's staging, and a drop is the
+owner's word, given by deleting the move's spec, after which step 1 sends it again. Sideways from a
+pararepo, step 2 also writes, from the metarepo's trunk once the receiver holds the thing, the
+metarepo's rewrites of its pointers to the moved thing (an entry's by its landed id, a section's
+and a page's by the landed path; every other pointer into that page or log stays) and its roadmap
+items, on `propose/<repo>-move-<slug>-pointers`, recorded as `meta: <meta> pointers <branch>`,
+which P2 accepts; with nothing to propose, the spec answers P2 with `meta: none — <meta> names
+nothing of <pointer>; it moved to <pointer>`.
 
 A moved page's roadmap items follow it. An item a spec or note takes, or a spec leaves for later
 (`Later:`), stays, the page dropped from its `(touches …)`; any other goes to the receiver's plan, in its phase of the same name, else its
 No phase list: the receiver's product section of the metarepo's roadmap, the metarepo's own
 phases when it moves up, or, for a receiver keeping a roadmap of its own, a `kind: roadmap` file
-staged there (from a metarepo's job, it waits in staging until the job merges, and `jig staging
-resolve` forwards it). The metarepo's roadmap changes only by its own merge or a `propose/` branch:
+staged in the sender's main checkout, unforwarded until the job merges, when `jig staging
+resolve` forwards it. The metarepo's roadmap changes only by its own merge or a `propose/` branch:
 a page moving up takes its items in step 1's proposal, and sideways in step 2's pointers proposal,
 whatever roadmap the sending pararepo keeps; no roadmap file is staged to it. The losing roadmap
-changes by its own route: in a metarepo, `jig merge` moves the items in the job's merge commit,
-read from the move lines the merge adds, as it re-points a renamed page; in a pararepo planning
-from the metarepo, in the step's proposal; in a pararepo keeping a roadmap of its own, by `jig
-merge` in a job's merge, or in the same change on trunk.
+changes by its own route: in a pararepo planning from the metarepo, in the step's proposal;
+otherwise `jig merge` moves the items in the job's merge commit, read from the move lines the
+merge adds, as it re-points a renamed page.
 
 The metarepo's decisions are its `.jig/decisions.md` (Decision log), cited as
 `<meta>/.jig/decisions.md § D-012`. A superseded entry, and a released section's change lines,
