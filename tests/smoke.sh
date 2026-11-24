@@ -6316,6 +6316,9 @@ assert blocks in ideas and ideas.startswith('# Ideas'), ideas
 log = open('.jig/decisions.md').read()
 assert '## Open' not in log and '### D-003' not in log and '## Unreleased' in log, log
 \" && git commit -qm 'jig update: fold'"
+msg="ideas fold: after the fold, jig update lists the folded idea with no Touches line, in .jig/ideas.md, for the backfill"
+out=$($J update 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -q '^  .jig/ideas.md: D-006 asked before Touches has no Touches line'" "$out"
 msg="ideas fold: afterwards a commit adding ## Open is refused by line, naming .jig/ideas.md"
 python3 -c "f='.jig/decisions.md'; s=open(f).read(); open(f,'w').write(s.replace('## Unreleased\n', '## Open\n\n## Unreleased\n', 1))"
 git add -A; out=$(git commit -qm reopen 2>&1); rc=$?; undo
@@ -6334,6 +6337,11 @@ msg="ideas fold: jig survey on a page with ## Undefined names .jig/ideas.md for 
 printf '# Y\n\nY is a page.\n\n## Undefined\n- why y?\n' > docs/y.md && git add -A && git -c core.hooksPath=/dev/null commit -qm y
 out=$($J survey 2>&1)
 expect_pass sh -c "echo \"\$0\" | grep -q 'an open question → an idea in .jig/ideas.md'" "$out"
+msg="ideas fold: --merge-log numbers a folder of records above the ideas' ids, one counter for both"
+mkdir -p docs/decisions && printf '# 0001. Use A\n\n- **Date:** 2026-01-01\n- **Status:** in force\n\n## Context\n\nWe needed A.\n' > docs/decisions/0001-a.md
+printf '# 0002. Use B\n\n- **Date:** 2026-01-02\n- **Status:** in force\n\n## Context\n\nB too.\n' > docs/decisions/0002-b.md
+git add -A && git -c core.hooksPath=/dev/null commit -qm records && $UP --apply --merge-log >/dev/null 2>&1
+expect_pass sh -c "grep -qx '### D-008 Use A' .jig/decisions.md && grep -qx '### D-009 Use B' .jig/decisions.md && ! grep -q '^### D-00[1-7]' .jig/decisions.md"
 }
 
 # A metarepo's ideas: cited by its pararepos, folded, decided in place, moved down.
@@ -6397,13 +6405,19 @@ out=$(git commit -qm "$E3: moved down" 2>&1); rc=$?
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \"L's .jig/ideas.md on main has no entry D-009\"" "$out"
 git reset -q --hard && git switch -q main
 # A pararepo's idea is a use like any other: a metarepo change to what it cites is named for it.
-cd "$L" && printf '\n### D-002 does L follow x?\nOpen (2026-11-06).\nTouches: none — a question for L.\n\nPer `M/.jig/decisions.md § E-002`, and E-002 bare.\n' >> .jig/ideas.md && git add -A && git commit -qm "L: D-002 cites E-002" >/dev/null
+cd "$L" && printf '\n### D-002 does L follow x?\nOpen (2026-11-06).\nTouches: none — a question for L.\n\nPer `M/.jig/decisions.md § E-002`.\n\n### D-003 does L wake?\nOpen (2026-11-06).\nTouches: none — a question for L.\n\nAs E-001 answers.\n' >> .jig/ideas.md && git add -A && git commit -qm "L: D-002 cites E-002, D-003 cites E-001 bare" >/dev/null
 cd "$M" && rment E-002 && ulog '### E-004 x runs, and wakes
 Accepted (owner, 2026-11-06). Supersedes E-002.
 Touches: docs/products/x.md' && emerge sup "E-004: supersedes E-002" .jig/decisions.md
 msg="ideas meta: a pararepo idea citing a superseded entry is named in the pin-bump request"
 out=$($J release 2>&1); rc=$?
 expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q '^L: staged .jig/staging/pin-bump-M.md' && grep -qx -- '- E-002 (now E-004): cited in .jig/ideas.md:[0-9]*' '$L/.jig/staging/pin-bump-M.md'" "$out"
+msg="ideas meta: an idea citing a metarepo id bare only is named too (L's prefix differs from M's)"
+cd "$M" && rment E-001 && ulog '### E-005 x wakes on a long press
+Accepted (owner, 2026-11-07). Supersedes E-001.
+Touches: docs/products/x.md' && emerge sup2 "E-005: supersedes E-001" .jig/decisions.md
+out=$($J release 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && grep -qx -- '- E-001 (now E-005): cited in .*, .jig/ideas.md' '$L/.jig/staging/pin-bump-M.md'" "$out"
 msg="ideas meta: and L's jig sync names it, used in .jig/ideas.md"
 out=$(cd "$L" && $J sync 2>&1)
 expect_pass sh -c "echo \"\$0\" | grep -q 'E-002: used in .*\.jig/ideas.md'" "$out"
@@ -7918,6 +7932,7 @@ MR="$T/ml-records"; pcnew "$MR" && mlrecs && git add -A && git commit -qm init
 out=$($J init 2>&1)
 msg="merge-log records: init writes no log beside a folder of decision records, and names the folder"
 expect_pass sh -c "test ! -e .jig/decisions.md && echo \"\$0\" | grep -q 'not written: docs/decisions/ merge into it'" "$out"
+printf '\nAsked before the log: as record 0001 says.\n' >> .jig/ideas.md
 git add -A && git commit -qm board
 msg="merge-log records: update lists the folder to review, naming --merge-log"
 expect_pass sh -c "$UP 2>&1 | grep -q 'docs/decisions/: a folder of decision records, 3 records: merged into .jig/decisions.md on a yes — \`jig update --merge-log\`'"
@@ -7931,6 +7946,8 @@ git reset -q --hard
 out=$($UP --apply --merge-log 2>&1)
 msg="merge-log records: D-001 to D-003 in number order, titles without numbers, D-003 superseding D-002"
 expect_pass sh -c "test \"\$(grep '^### ' .jig/decisions.md)\" = \"\$(printf '### D-001 Use A\n### D-002 Use B\n### D-003 Use C')\" && grep -A1 -x '### D-001 Use A' .jig/decisions.md | grep -qx 'Accepted (not recorded, 2026-01-01).' && grep -A1 -x '### D-003 Use C' .jig/decisions.md | grep -qx 'Accepted (not recorded, 2026-01-03). Supersedes D-002.'"
+msg="merge-log records: a citation of a record in .jig/ideas.md is rewritten to its id, as in a page"
+expect_pass grep -qx 'Asked before the log: as D-001 says.' .jig/ideas.md
 msg="merge-log records: the log reads three entries, each with its Context paragraph, the link rebased, the record named last"
 expect_pass python3 -c "
 import importlib.util as u

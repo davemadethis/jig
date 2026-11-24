@@ -7278,12 +7278,10 @@ def placement_hints(root: Path, trunk: str) -> list[str]:
             if len(ws) > 1 and not any(keys_meet((SELF, page), k) for k in ours)]
 
 
-def untouched_entries(root: Path, trunk: str) -> list[str]:
-    """`jig update`: each live entry with no Touches line, for the backfill."""
-    path = root / LOG
-    if not path.exists():
-        return []
-    return [f"{e['id']} {e['title']}" for e in live_entries(path.read_text(), log_prefix(trunk))
+def untouched_entries(root: Path, trunk: str) -> list[tuple[str, str]]:
+    """`jig update`: each live entry or idea with no Touches line, for the backfill, with the
+    file it is in: an idea folded from an old log's ## Open may have none."""
+    return [(e["file"], f"{e['id']} {e['title']}") for e in live_entries(read_entries_text(root), log_prefix(trunk))
             if entry_touches(e["block"]) is None]
 
 
@@ -13466,8 +13464,8 @@ def cmd_update(root: Path, args) -> int:
     carried, gone_ids, held = approved_moves(root, plan["after"], new_board, read_after)
     review = files_to_review(root, plan, here.parent / "AGENTS.md", arriving)
     review += home_findings(root, plan, new_board, board_at, [f for f, _ in review])
-    review += [(LOG, f"{e} has no Touches line: add one under its status line, naming the pages "
-                f"it touches, a term as `{GLOSSARY} § <term>`, or {NONE_FORM} ({DIR}/RULES.md, Decision log)") for e in untouched_entries(root, trunk)]
+    review += [(f, f"{e} has no Touches line: add one under its status line, naming the pages "
+                f"it touches, a term as `{GLOSSARY} § <term>`, or {NONE_FORM} ({DIR}/RULES.md, Decision log)") for f, e in untouched_entries(root, trunk)]
     review += superseded_kept(root)
     review += check_levels_review(root)
     # jig's retired AGENTS.md lines are jig's words, so update replaces them; a metarepo's
@@ -14087,7 +14085,9 @@ def record_plan(root: Path, log: str, prefix: str) -> dict:
         if new is None or new["kind"] == "left":
             plan["problems"].append(f"{r['path']}: superseded by {r['by'] if r['by'] is not None else 'nothing named'}, "
                                     + ("which is left out of the log" if new else "which is no record here"))
-    next_id = highest_id(log, prefix, history=True) + 1
+    # Above the ideas' ids too: one counter names an entry or an idea.
+    ideas = (root / IDEAS).read_text(errors="replace") if (root / IDEAS).is_file() else ""
+    next_id = highest_id(with_ideas(log, ideas), prefix, history=True) + 1
     paths, nums, left = {}, {}, []
     for r in recs:
         if r["kind"] == "left":
@@ -14193,7 +14193,7 @@ def record_plan(root: Path, log: str, prefix: str) -> dict:
     gone = set(plan["remove"])
     skip = (f"{DIR}/specs/", f"{DIR}/ledgers/")
     for f in files:
-        if f in gone or (f.startswith(f"{DIR}/") and not f.startswith(skip) and f != LOG):
+        if f in gone or (f.startswith(f"{DIR}/") and not f.startswith(skip) and f not in (LOG, IDEAS)):
             continue
         if f.startswith(f"{DIR}/handoffs/"):
             continue
