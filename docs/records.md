@@ -51,6 +51,12 @@ the pages it touches. When two entries touch one page, the handoff has to say wh
 `python3 .jig/jig.py update` can fold an old changelog and decisions file into the log, when
 you say yes.
 
+What you still need to research before you can decide it lives beside the log, in the
+[ideas log](glossary.md#ideas-log), `.jig/ideas.md`. An idea keeps its decision id, so deciding
+it moves it into the log under that id. Ideas carry labels the way scopes do, and
+`python3 .jig/jig.py ideas` lists them. A log from an older jig kept its open questions in a
+section of its own, and `python3 .jig/jig.py update` moves them over, word for word.
+
 ## Roadmap
 
 Every stand-alone repo and metarepo keeps a roadmap, with its empty structure if nothing else.

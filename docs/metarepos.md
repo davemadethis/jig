@@ -22,7 +22,9 @@ Three rules do the work:
 
 A pararepo cites the metarepo as `<metarepo>/<path> § <heading>`, or a decision as
 `<metarepo>/.jig/decisions.md § D-012`. Each claim has one home and is stated only there.
-Everywhere else is a pointer to it.
+Everywhere else is a pointer to it. A question the pararepos have to wait on is an idea in the
+metarepo's `.jig/ideas.md`, cited the same way before it's answered, and it keeps its id when
+it's decided.
 
 A claim lives in the metarepo when another repo has to agree with it or build against it.
 Otherwise it lives with its one owner, and the metarepo points there.

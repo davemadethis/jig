@@ -1,24 +1,4 @@
 {
-  "ideas-log": {
-    "spec": ".jig/specs/ideas-log.md",
-    "state": "gated",
-    "after": [],
-    "owns": [],
-    "shares": [
-      "docs/commands.md",
-      "docs/glossary.md",
-      "docs/metarepos.md",
-      "docs/records.md",
-      "plugin/skills/redocument/SKILL.md",
-      "plugin/skills/retro/SKILL.md",
-      "plugin/skills/stage/SKILL.md",
-      "plugin/skills/update/SKILL.md",
-      "plugin/templates/jig/RULES.md",
-      "plugin/templates/jig/jig.py",
-      "tests/smoke.sh"
-    ],
-    "reserved": {}
-  },
   "moving-in-command": {
     "spec": ".jig/specs/moving-in-command.md",
     "state": "claimed",

@@ -116,8 +116,8 @@ never product text, and searches no words: a heading like `## Status`, "phase 3"
 old text is left alone unless the owner raises it.
 
 - An **`## Undefined` entry** is listed as the `## No phase` item it would become. Ask per entry:
-  parked work goes to `## No phase` (the default); an open product question becomes an `## Open` entry in
-  `.jig/decisions.md` that the page cites; a present-tense product fact goes into the page body,
+  parked work goes to `## No phase` (the default); an open product question becomes an idea in
+  `.jig/ideas.md` that the page cites; a present-tense product fact goes into the page body,
   undated. Make the second and third by hand first. Then `jig update --apply --sweep` moves the
   rest to `## No phase` in `.jig/roadmap.md`, creating it when absent, and removes the emptied
   sections; a section holding other text stays, to move by hand. In a pararepo with no roadmap
@@ -163,6 +163,14 @@ the log itself. Say each removal out loud. On a yes:
 
 Then, on a yes each, move what had no home and repoint the files it named. A refusal names rows the merged log wouldn't
 pass M2 with: show them, and fix the register with the owner first.
+
+A log from before the **ideas file** keeps its open questions under the log's `## Open`. `jig
+update` lists the fold: every entry there moves to `.jig/ideas.md`, ids and blocks byte for
+byte, and the heading goes; from then the hook refuses an `## Open` heading or an open entry the
+log adds. Say which ids move. On a yes: elsewhere, `jig update --apply` folds it on trunk with
+the rest of the update; **in a metarepo**, whose log changes only in a job, ask the hubnode to
+open one sharing `.jig/decisions.md` and `.jig/ideas.md`, run `jig update --apply --fold-ideas`
+in its worktree, commit there, and hand it off and merge it like any job.
 
 A **folder of decision records** (ADRs: one file per decision, `0001-slug.md`, each with a
 status) merges the same way, into an empty log or one already in use, its records taking the
