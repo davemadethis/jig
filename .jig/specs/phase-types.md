@@ -122,7 +122,7 @@ All parts:
   - Reused, not copied: `product_of`, `Family`.
 - `plugin/templates/jig/RULES.md`: Roadmap.
 - `docs/records.md`, `docs/commands.md`, `docs/glossary.md`.
-- `tests/smoke.sh`: roadmap, family.
+- `tests/smoke.sh`: roadmap, family, phase_types.
 - `marketing/FEATURES.md`: lives in the main checkout and isn't tracked. The row is under Decisions.
 - Process or product: product (jig's behaviour), homed in RULES.md.
 - No contract path: jig is not a pararepo.

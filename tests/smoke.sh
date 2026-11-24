@@ -5827,10 +5827,18 @@ msg="filters: a dead touch under Familiar App still prints with --product Walyt,
 python3 -c "f='.jig/roadmap.md'; t=open(f).read(); open(f,'w').write(t.replace('- \`f2\`: x', '- \`f2\`: x (touches docs/nope.md)'))" && plant "dead touch"
 out=$($J roadmap --product Walyt 2>&1); rc=$?
 expect_pass sh -c "test $rc = 1 && echo \"\$0\" | grep -q 'touches docs/nope.md' && echo \"\$0\" | grep -qx 'Walyt alpha  Prototype, current' && ! echo \"\$0\" | grep -q '^Familiar App'" "$out"
+msg="filters: in meta, --owner resolves aliases: Walyt's Owner: pa-alias, an alias of pa, matches --owner pa"
+python3 -c "import json,sys; f=sys.argv[1]; d=json.load(open(f)); d['pa']['aliases']=['pa-alias']; json.dump(d, open(f,'w'), indent=2)" "$JIG_CONFIG"
+sed -i.bak 's/^Owner: `pa`\.$/Owner: `pa-alias`./' docs/glossary.md && rm docs/glossary.md.bak && plant "GLOSSARY: Walyt by its alias"
+o1=$($J roadmap --owner pa 2>&1); o2=$($J roadmap --owner PA-ALIAS 2>&1)
+expect_pass sh -c "grep -qx 'Owner: .pa-alias.\.' docs/glossary.md && for o in \"\$0\" \"\$1\"; do echo \"\$o\" | grep -qx 'Walyt alpha  Prototype, current' && ! echo \"\$o\" | grep -q '^Familiar App' || exit 1; done" "$o1" "$o2"
 msg="filters: in a pararepo, --owner takes any name jig knows it by: this, its alias pa, its board name"
 cd "$FA_PT" && board "b['name'] = 'wallet-pa'" && plant "board name"
 o1=$($J roadmap --owner this 2>&1); o2=$($J roadmap --owner pa 2>&1); o3=$($J roadmap --owner wallet-pa 2>&1)
 expect_pass sh -c "for o in \"\$0\" \"\$1\" \"\$2\"; do echo \"\$o\" | grep -qx 'Walyt alpha  Prototype, current' && ! echo \"\$o\" | grep -q '^Familiar App' || exit 1; done" "$o1" "$o2" "$o3"
+msg="filters: in a pararepo, a filtered --view names the metarepo's ROADMAP.md as the whole"
+out=$($J roadmap --view --owner this 2>/dev/null)
+expect_pass sh -c "echo \"\$0\" | grep -q \"filtered it; meta's ROADMAP.md holds the whole\"" "$out"
 msg="filters: in a stand-alone repo, --type prototype prints alpha only"
 cd "$PT" && printf '# Roadmap\n\n## alpha\nScopes:\n- `a`: x\n\n## Pilot A\nScopes:\n- `p`: x\n\n## Launch\nScopes:\n- `l`: x\n' > .jig/roadmap.md && plant "three phases"
 out=$($J roadmap --type prototype 2>&1)
