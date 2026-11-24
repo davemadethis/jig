@@ -18335,8 +18335,10 @@ def move_step1(root, me, to, loc, meta, para, meta_loc, up, what, path, section,
             + "\n## Decisions\n" + f"- move: {what} → {to}/{there}\n")
     if up:
         meta_name = para["meta"]
-        cite = f"{me}/{LOG} § {section}" if path == LOG else f"{me}/{path}"
-        citations = git("grep", "-n", "-F", cite, Board.trunk_name(loc), "--", "*.md", cwd=str(loc)).splitlines()
+        # An id is cited in the log or the ideas file beside it.
+        cites = [f"{me}/{LOG} § {section}", f"{me}/{IDEAS} § {section}"] if path == LOG else [f"{me}/{path}"]
+        citations = git("grep", "-n", "-F", *[a for c in cites for a in ("-e", c)], Board.trunk_name(loc), "--",
+                        "*.md", cwd=str(loc)).splitlines()
         branch = open_proposal(para, loc, spec.stem)
         try:
             there_log = trunk_show(loc, LOG) or LOG_SEED
@@ -18499,15 +18501,17 @@ def pointers_moved(body: str, me: str, path: str, section: str | None, to: str, 
     """BODY with only its pointers to the moved thing naming where it landed (TO/LANDED, the
     receiver's id or path): an entry's `<me>/<log> § <id>` by the landed id, a section's
     `<me>/<path> § <s>` and a page's `<me>/<path>`, with its § part, by the landed path. Every
-    other pointer into that page or log stays. In prose, where a section runs on with the line,
-    the cited heading is the longest of the page's HEADS that begins it, a whole word or more."""
+    other pointer into that page or log stays. An id is cited in the log or the ideas file beside
+    it, and keeps the file it was cited by. In prose, where a section runs on with the line, the
+    cited heading is the longest of the page's HEADS that begins it, a whole word or more."""
     new_path = LOG if path == LOG else pointer_parts(f"{to}/{landed}")[1]
+    cited_in = (LOG, IDEAS) if path == LOG else (path,)
     out = []
     for line in body.splitlines(keepends=True):
         edits = []
         for m in POINTER.finditer(line):
             name, p = m.group("name"), m.group("path").rstrip(".")
-            if p != path or not (name_in(name, {me}) or is_here(name)):
+            if p not in cited_in or not (name_in(name, {me}) or is_here(name)):
                 continue
             rest = m.group("rest")
             code = m.start() > 0 and line[m.start() - 1] == "`" and not m.group("shut")
@@ -18526,7 +18530,7 @@ def pointers_moved(body: str, me: str, path: str, section: str | None, to: str, 
                     hit = bool(begins) and max(begins, key=len) == plain(section)
                 if not hit:
                     continue
-            edits.append((m.start("name"), m.start("path") + len(p), f"{to}/{new_path}"))
+            edits.append((m.start("name"), m.start("path") + len(p), f"{to}/{p if path == LOG else new_path}"))
         for a, b, rep in sorted(edits, reverse=True):
             line = line[:a] + rep + line[b:]
         out.append(line)
@@ -18543,7 +18547,9 @@ def move_pointers(root, me, to, para, meta_loc, path, section, landed, spec, roa
     files: dict[str, str | None] = {}
     # The page as it was before this step removed the section: HEAD, in the job.
     heads = [plain(h) for h in HEADING.findall(at_rev("HEAD", path) or "")] if section else []
-    for f in git("grep", "-l", "-F", f"{me}/{path}", mt, "--", "*.md", cwd=str(meta_loc)).splitlines():
+    files_for = [f"{me}/{LOG}", f"{me}/{IDEAS}"] if path == LOG else [f"{me}/{path}"]
+    for f in git("grep", "-l", "-F", *[a for c in files_for for a in ("-e", c)], mt, "--", "*.md",
+                 cwd=str(meta_loc)).splitlines():
         f = f.split(":", 1)[1] if ":" in f else f
         if f == LOG:
             continue    # a log's lines are history, frozen once released

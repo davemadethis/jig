@@ -11560,9 +11560,11 @@ rs=$($J rig 2>&1 | sed -n '/^Can start now:/,/^Waiting on you:/p')
 expect_pass sh -c "test $grc = 0 && test $gcrc = 0 && test $mrc = 0 && grep -q -- '- D-003: moved to M/.jig/decisions.md § E-' .jig/decisions.md && ! echo \"\$1\" | grep -q 'move-d-003'" "$gout $gcom $mout" "$rs"; [ "$fail" = 0 ] || echo "$gout $gcom $mout $rs"
 msg="move (an idea up): L's open D-004, in its ideas file, is proposed into M's .jig/ideas.md with its moved-from line in M's log"
 printf '\n### D-004 four-up\nOpen (2026-11-03).\nTouches: none — up\n\nFour?\n' >> .jig/ideas.md && gplant "idea D-004"
+( cd "$GM" && printf '\nIdea: `L/.jig/ideas.md § D-004`.\n' >> docs/products/walyt/walyt.md && gplant "M cites L's idea" )
 out=$($J move D-004 --to M --apply 2>&1); rc=$?
 mi=$(git -C "$GM" show propose/L-move-d-004:.jig/ideas.md 2>/dev/null); ml=$(git -C "$GM" show propose/L-move-d-004:.jig/decisions.md 2>/dev/null)
-expect_pass sh -c "test $rc = 0 && echo \"\$1\" | grep -q '^### E-?four-up four-up' && echo \"\$2\" | grep -qx -- '- E-?four-up: moved from L/.jig/decisions.md § D-004.' && ! echo \"\$2\" | grep -q '^### E-?four-up'" "$out" "$mi" "$ml"; [ $rc = 0 ] || echo "$out"
+expect_pass sh -c "test $rc = 0 && echo \"\$1\" | grep -q '^### E-?four-up four-up' && echo \"\$2\" | grep -qx -- '- E-?four-up: moved from L/.jig/decisions.md § D-004.' && ! echo \"\$2\" | grep -q '^### E-?four-up' \
+  && sed -n \"/^## M's citations/,\\\$p\" .jig/specs/move-d-004.md | grep -q 'walyt.md:.*L/.jig/ideas.md § D-004'" "$out" "$mi" "$ml"; [ "$fail" = 0 ] || { echo "$out"; cat .jig/specs/move-d-004.md; }
 git commit -qm "specs: move D-004" >/dev/null 2>&1
 ( cd "$GM" && git switch -q propose/L-move-d-004 && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-commit propose/L-move-d-004 && $J merge --number >/dev/null 2>&1; git commit -qm "merge L's D-004" >/dev/null 2>&1 )
 msg="move (an idea up): once M numbers it, step 2 in L's job takes D-004 out of L's ideas file with its move line, and the commit passes"
@@ -11682,7 +11684,7 @@ out=$($J move docs/products/walyt/dd.md --to L --apply 2>&1); rc=$?
 expect_pass sh -c "test $rc = 0 && test -f '$GL/.jig/staging/move-docs-products-walyt-dd-md.md' && test -f $DS && ! ls .jig/specs | grep -q 'move-docs-products-walyt-dd-md-2'" "$out"; [ $rc = 0 ] || echo "$out"
 git commit -qm "TOOL: move dd again" >/dev/null 2>&1
 # U's pages are all contract paths: every change to one needs P2's answer.
-cd "$GM" && printf '# U5\n\nSee `U/.jig/decisions.md § D-001` and `U/.jig/decisions.md § D-002`.\n\nSee `U/docs/s.md § A` and `U/docs/s.md § B`.\n\nPower: U/docs/p.md § Power of the cell.\n\nTrain: U/docs/p.md § Powertrain of the cart.\n\nCode: `U/docs/p.md § Powertrain`.\n' > docs/products/walyt/u5.md && gplant "M cites U"
+cd "$GM" && printf '# U5\n\nSee `U/.jig/decisions.md § D-001` and `U/.jig/decisions.md § D-002`.\n\nSee `U/docs/s.md § A` and `U/docs/s.md § B`.\n\nPower: U/docs/p.md § Power of the cell.\n\nTrain: U/docs/p.md § Powertrain of the cart.\n\nCode: `U/docs/p.md § Powertrain`.\n\nIdea: `U/.jig/ideas.md § D-003` and `U/.jig/ideas.md § D-004`.\n' > docs/products/walyt/u5.md && gplant "M cites U"
 cd "$GU" && mkdir -p docs && for f in n b; do printf '# %s\n\n%s is.\n' $f $f > docs/$f.md; done && printf '# S\n\n## A\n\nA is.\n\n## B\n\nB is.\n' > docs/s.md && printf '# P\n\n## Power\n\nPower is.\n\n## Powertrain\n\nPowertrain is.\n' > docs/p.md
 ulog '### D-001 one
 Accepted (owner, 2026-11-03).
@@ -11692,7 +11694,7 @@ One.' && ulog '### D-002 two
 Accepted (owner, 2026-11-03).
 Touches: none — two
 
-Two.' && gplant "U's pages, D-001, D-002"
+Two.' && printf '\n### D-003 three\nOpen (2026-11-03).\nTouches: none — three\n\nThree?\n\n### D-004 four\nOpen (2026-11-03).\nTouches: none — four\n\nFour?\n' >> .jig/ideas.md && gplant "U's pages, D-001, D-002, ideas D-003, D-004"
 msg="move (records aren't work): a jig propose --buffer spec committed on U's trunk is listed neither under Can start now nor under Waiting on"
 printf '# b\n\nb is, changed.\n' > docs/b.md && mkdir -p .jig/ledgers && sed -n '1,/^|---/p' "$P/ledgers/BUFFER.md" > .jig/ledgers/BUFFER.md \
   && printf '| B1 | M/docs/products/walyt/walyt.md § Walyt | b changed | owner, 2026-11-24 | Open |\n' >> .jig/ledgers/BUFFER.md
@@ -11727,6 +11729,13 @@ GARGS="'docs/p.md § Power' --to K --as docs/power.md"; gjob pwj .jig/specs/move
 mp=$(git -C "$GM" show propose/U-move-docs-p-md-power-pointers:docs/products/walyt/u5.md 2>/dev/null)
 expect_pass sh -c "test $grc = 0 && test $gcrc = 0 && test $mrc = 0 && echo \"\$0\" | grep -qx 'Power: K/docs/power.md § Power of the cell.' \
   && echo \"\$0\" | grep -qx 'Train: U/docs/p.md § Powertrain of the cart.' && echo \"\$0\" | grep -qx 'Code: .U/docs/p.md § Powertrain..'" "$mp"; [ "$fail" = 0 ] || echo "$gout $gcom $mout $mp"
+msg="move (pointers by the thing, an idea): U moves idea D-003 to K; the pointers proposal names K's id in M's ideas-file citation, and leaves U/.jig/ideas.md § D-004 as it was"
+$J move D-003 --to K --apply >/dev/null 2>&1 && git commit -qm "specs: move D-003" >/dev/null 2>&1
+( cd "$GK" && gland move-d-003.md ); kid=$(sed -n 's/^- \(D-[0-9]*\): moved from U\/.jig\/decisions.md § D-003.$/\1/p' "$GK/.jig/decisions.md")
+GARGS="D-003 --to K"; gjob d3k .jig/specs/move-d-003.md "D-003: to K" .jig/decisions.md .jig/ideas.md
+mp=$(git -C "$GM" show propose/U-move-d-003-pointers:docs/products/walyt/u5.md 2>/dev/null)
+expect_pass sh -c "test -n '$kid' && test $grc = 0 && test $gcrc = 0 && test $mrc = 0 && grep -q '^### $kid three' '$GK/.jig/ideas.md' \
+  && echo \"\$0\" | grep -qx 'Idea: .K/.jig/ideas.md § $kid. and .U/.jig/ideas.md § D-004..'" "$mp"; [ "$fail" = 0 ] || echo "$kid $gout $gcom $mout $mp"
 cd "$GM"
 # The up move of a contract page, in a family of its own: N's history is only reviewed merges
 # and .jig/ bookkeeping, so N can release the proposal for V's pin.

@@ -64,7 +64,8 @@ shares, refusing one another open job owns.
 it, no handoff note's `Spec:` line names it, and the newest release tag doesn't hold it (any spec,
 with no tag yet), unless it carries `Bug-for: <job>` on a line of its own, outside fenced code: a bug spec
 is built in the job it names and reaches trunk only when that job merges, so it never waits. Nor
-does a spec listing buffer rows (`jig propose --buffer`, `jig move-in`): it is a proposal's
+does a spec listing buffer rows (`jig propose --buffer`, `jig move-in`), or a move's spec whose
+proposal was withdrawn (a `- move:` line and a `meta: … withdrawn` line): each is a proposal's
 record, and no job takes it. Two waiting specs overlap when their Touches sections meet, at any heading level: one path, a glob
 covering the other's path, or the same `<page> § <term>` (a whole page meets any term on it).
 `jig consolidate` lists each group of overlapping waiting specs with the paths they share, as
@@ -1283,7 +1284,8 @@ across both), and the status `Open (date).` or `Proposed (date).`, optionally en
 `Supersedes <id>.`. `Proposed` means an answer is put forward. An idea changes in place, and
 leaves in one of three ways: decided, its block moves with its id to the log's `## Unreleased`
 as `Accepted (who, date).`; dropped, removed with no line, as a rejected entry is; or, in a
-metarepo, moved down with a move line (Released sections). A question that binds others is
+repo of a family, moved down, up or sideways with a move line, as an entry moves (Released
+sections). A question that binds others is
 written as an idea when it is asked, so it can be cited before it is answered. An idea is
 labelled the way a scope is: a line of its own after its status line, `(labels <term>, …)`, each
 label a term of the glossary a scope's labels name here, checked by the same rule and refused by
@@ -1347,9 +1349,11 @@ pararepos) the other is a move: a claim handed to the repo of the family that ow
 pararepo, up to the metarepo, or sideways to another pararepo (What the metarepo holds), whose
 line is its forwarding address, a pointer to its new home: `- D-040: moved to
 app/.jig/decisions.md § D-016.`, and for a page or a section `- docs/ui.md: moved to
-app/docs/ui.md.` or `- docs/ui.md § Build: moved to app/docs/ui.md § Build.`. An idea moves down
-the same way, its target the pararepo's `.jig/ideas.md § <id>`, or its log when it lands
-decided, and the hook looks the target id up in either file there. An idea or a page needs no
+app/docs/ui.md.` or `- docs/ui.md § Build: moved to app/docs/ui.md § Build.`. An idea moves
+the same way, in any direction: its target is `<repo>/.jig/decisions.md § <id>` or
+`<repo>/.jig/ideas.md § <id>`, the hook looking the id up in either file there (`jig move`
+writes the log form); its moved-from line is in the receiver's log, as an entry's is; and it
+leaves this ideas file in the commit writing its move line (`jig move` step 2). An idea or a page needs no
 line to leave, but takes it all the same, so readers see it moved, not removed.
 These are the only two reasons a `### Removed` line lets a released entry go; any other text
 lets nothing go, and the refusal names both lines. The hook checks a move line the commit adds:
