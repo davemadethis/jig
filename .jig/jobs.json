@@ -1,7 +1,7 @@
 {
   "moving-in-command": {
     "spec": ".jig/specs/moving-in-command.md",
-    "state": "ready",
+    "state": "gated",
     "after": [],
     "owns": [],
     "shares": [
