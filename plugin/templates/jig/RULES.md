@@ -1634,7 +1634,7 @@ describes, as often as testing needs, and commit and push each change. Every suc
 is a row in `.jig/ledgers/BUFFER.md` (the first row creates it from jig's ledger template): the
 claim at the pin, what this repo does now, who decided, and a state, `Open` or `Closed`. A change
 of mind edits the row. `jig release` in the pararepo, before its build, puts every `Open` row
-no proposal carries yet, as it stands, into one metarepo proposal (`jig propose --buffer`, also
+no proposal carries yet, as it stands, but a move-in row (`jig move-in`'s alone), into one metarepo proposal (`jig propose --buffer`, also
 run by hand): one branch, and a spec here that lists and copies the rows under `## Buffer rows`.
 A row edited after it was proposed goes again in the next one. When the metarepo releases a
 proposal, `jig sync` on the pararepo's trunk makes the pin commit itself: it moves the pin to
@@ -1648,7 +1648,8 @@ commits it alone. jig checks the release, not the claim: the reason is the owner
 `meta: none — <reason>` is. A proposal the metarepo will never release is withdrawn:
 `jig propose --withdraw <branch> --reason <text>` rewrites its spec's line to
 `meta: <name> withdrawn <branch> — <reason>`. Sync and gate stop waiting on it, it answers no
-change, and the rows it carried that are still `Open` go again in the next proposal. Its branch
+change, and the rows it carried that are still `Open` go again in the next proposal, a move-in
+row by `jig move-in`. Its branch
 in the metarepo is the metarepo's to delete. A proposal a release already holds can't be withdrawn: the
 pin moves instead, and sync closes its rows. One withdrawn and released anyway, sync names, with
 the `--answered` that closes its rows. Sync names a buffer proposal that carries no `Open`
@@ -1793,7 +1794,7 @@ jig roadmap [--write]       the roadmap's states on trunk; --write regenerates R
 jig gate <name>             hubnode: verify, set up the scratch checkout, print its check
 jig propose <spec> <slug>   pararepo: open a proposal branch on the metarepo
 jig propose <spec> <slug> --pointers  the same, recorded as pointer rewrites worked ahead of
-jig propose --buffer [slug]  pararepo: every Open row of the sync buffer, in one proposal
+jig propose --buffer [slug]  pararepo: every Open row of the sync buffer but a move-in row, in one proposal
 jig propose --withdraw <branch> --reason <text>  pararepo: a proposal the metarepo won't release
 jig move-in --product <Name> [--definition <text>] [--apply]  pararepo trunk: move its roadmap into the metarepo's, one step per --apply
 jig sync --answered <ids> --in <release> --reason <text>  pararepo trunk: close rows a release answered

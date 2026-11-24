@@ -52,7 +52,8 @@ claim describes, as often as testing needs. Every such difference is a row in
 `.jig/ledgers/BUFFER.md`: the claim at the pin, what the repo does now, who decided, and Open or
 Closed.
 
-Before its build, the pararepo's release puts every Open row into one metarepo proposal. When
+Before its build, the pararepo's release puts every Open row into one metarepo proposal, except the
+row `jig move-in` keeps for itself. When
 the metarepo releases it, the pararepo's next sync moves the pin and closes those rows in one
 commit.
 

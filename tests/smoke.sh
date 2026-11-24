@@ -10260,22 +10260,24 @@ $J move-in --product Wex --definition "The wex." --apply >/dev/null 2>&1 && git 
 msg="movein: a move-in branch reset to its opening commit reads empty in M2, and step 1 is next"
 git -C "$MM2" branch -q -f propose/pw-move-in propose/pw-move-in~1; out=$($J move-in 2>&1)
 expect_pass sh -c "echo \"\$0\" | grep -q 'propose/pw-move-in is empty in M2' && echo \"\$0\" | grep -q '^1. product and phases proposed: next'" "$out"
-msg="movein: step 1 again on that empty record with --product Wox proposes Wox under move-in.md, its own row alone; Wex's row stays Open"
+msg="movein: step 1 again on that empty record with --product Wox proposes Wox under move-in.md, its row alone; BUFFER.md holds one move-in row, B1, now Wox"
 out=$($J move-in --product Wox --definition "The wox." --apply 2>&1); rc=$?
 expect_pass sh -c "test $rc = 0 && grep -q '§ Wox: none yet' .jig/specs/move-in.md && sed -n '/^## Buffer rows/,/^\$/p' .jig/specs/move-in.md | grep -c '^- B' | grep -qx 1 \
-  && grep -q '| B1 | M2/.jig/roadmap.md § Wex: none yet .* | Open |' .jig/ledgers/BUFFER.md" "$out"
+  && grep -q '| B1 | M2/.jig/roadmap.md § Wox: none yet .* | Open |' .jig/ledgers/BUFFER.md && test \"\$(grep -c 'moving in' .jig/ledgers/BUFFER.md)\" = 1" "$out"
 git commit -qm "specs: move-in as Wox" >/dev/null 2>&1
 msg="movein: deleted unmerged, the branch reads gone"
 git -C "$MM2" branch -q -D propose/pw-move-in; out=$($J move-in 2>&1)
 expect_pass sh -c "echo \"\$0\" | grep -q 'propose/pw-move-in, which .jig/specs/move-in.md records, is gone from M2 unmerged'" "$out"
 $J move-in --definition "The wox." --apply >/dev/null 2>&1 && git commit -qm "specs: move-in again" >/dev/null 2>&1
-msg="movein: jig propose --buffer leaves the stale Wex move-in row out: nothing to propose, no buffer spec, no branch"
+msg="movein: jig propose --buffer leaves the move-in row out: nothing to propose, no buffer spec, no branch"
 nbr=$(git -C "$MM2" branch | wc -l); out=$($J propose --buffer 2>&1); rc=$?
 expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q 'nothing to propose' && ! ls .jig/specs | grep -q '^buffer-' && test \"\$(git -C '$MM2' branch | wc -l)\" = '$nbr'" "$out"
-$J propose --withdraw propose/pw-move-in --reason r >/dev/null 2>&1 && git add -A && git commit -qm "specs: withdraw" >/dev/null 2>&1
-msg="movein: withdrawn, jig propose --buffer still leaves both move-in rows out"
+msg="movein: the withdrawal says its move-in row goes again by jig move-in, not in the next proposal"
+out=$($J propose --withdraw propose/pw-move-in --reason r 2>&1); git add -A && git commit -qm "specs: withdraw" >/dev/null 2>&1
+expect_pass sh -c "echo \"\$0\" | grep -q 'Its move-in row (B1) goes again by .jig move-in.' && ! echo \"\$0\" | grep -q 'go again in the next proposal'" "$out"
+msg="movein: withdrawn, jig propose --buffer still leaves the move-in row out, and says it is left to jig move-in"
 out=$($J propose --buffer 2>&1); rc=$?
-expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q 'nothing to propose' && ! ls .jig/specs | grep -q '^buffer-' && test \"\$(git -C '$MM2' branch | wc -l)\" = '$nbr'" "$out"
+expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q 'nothing to propose' && echo \"\$0\" | grep -q 'a move-in row is left to .jig move-in.' && ! ls .jig/specs | grep -q '^buffer-' && test \"\$(git -C '$MM2' branch | wc -l)\" = '$nbr'" "$out"
 msg="movein: withdrawn, M2 keeping the old branch, step 1 makes propose/pw-move-in-2 and move-in-2.md; the withdrawn spec is untouched"
 out=$($J move-in --product Wex --definition "The wex." --apply 2>&1); rc=$?
 expect_pass sh -c "test $rc = 0 && git -C '$MM2' rev-parse -q --verify refs/heads/propose/pw-move-in-2 >/dev/null && test -f .jig/specs/move-in-2.md \

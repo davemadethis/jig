@@ -9372,7 +9372,10 @@ def cmd_propose(root: Path, args) -> int:
         slug = args.slug or args.spec or f"buffer-{date.today().isoformat()}"
         made = buffer_proposal(root, para, loc, slug)
         if made is None:
-            print(f"nothing to propose: {BUFFER} has no Open row that a proposal doesn't already carry as it stands.")
+            print(f"nothing to propose: {BUFFER} has no Open row that a proposal doesn't already carry as it stands"
+                  + ("; a move-in row is left to `jig move-in`, which proposes it again." if any(
+                      r[-1] == "Open" and r[2:3] == [MOVE_IN_NOW] for r in buffer_rows(
+                          (root / BUFFER).read_text() if (root / BUFFER).exists() else "")) else "."))
             return 0
         spec, branch = made
         print(f"made {branch} in {para['meta']} for every Open row of {BUFFER}, listed in "
@@ -9425,10 +9428,15 @@ def withdraw_proposal(root: Path, para: dict, loc: Path, branch: str, reason: st
         line = re.sub(r"meta: \S+ proposal \S+", lambda _: f"meta: {name} withdrawn {branch} — {reason}",
                       m.group(0), count=1)
         spec.write_text(text[:m.start()] + line + text[m.end():])
-        rows = [i for i in listed_rows(text) if i in {r[0] for r in buffer_rows(
-            (root / BUFFER).read_text() if (root / BUFFER).exists() else "") if r[-1] == "Open"}]
+        open_rows = {r[0]: r for r in buffer_rows((root / BUFFER).read_text() if (root / BUFFER).exists() else "")
+                     if r[-1] == "Open"}
+        rows = [i for i in listed_rows(text) if i in open_rows]
+        # A move-in row is `jig move-in`'s alone: no release or buffer proposal carries it.
+        moving = [i for i in rows if open_rows[i][2:3] == [MOVE_IN_NOW]]
+        rest = [i for i in rows if i not in moving]
         print(f"withdrew {branch} in {spec.relative_to(root)}. Commit that spec."
-              + (f" Its Open rows ({', '.join(rows)}) go again in the next proposal." if rows else ""))
+              + (f" Its Open rows ({', '.join(rest)}) go again in the next proposal." if rest else "")
+              + (f" Its move-in row ({', '.join(moving)}) goes again by `jig move-in`." if moving else ""))
     print(f"The branch stays in {name}; its owner deletes it there: git -C {loc} branch -D {branch}")
     return 0
 
@@ -16042,14 +16050,21 @@ def move_in_propose(root: Path, para: dict, loc: Path, product: str, me: str, ow
     before = ledger.read_text() if ledger.exists() else None
     text = before or BUFFER_SEED
     claim = f"{para['meta']}/{ROADMAP} § {product}: none yet"
-    # A run stopped part way, or a withdrawn proposal, left its row Open: it is this one, never a second.
-    again = next((r[0] for r in buffer_rows(text) if r[1] == claim and r[-1] == "Open"), None)
+    # A run stopped part way, or a withdrawn proposal, left its row Open: it is this one, never a
+    # second. Step 1 runs only while no proposal carries a move-in row live, so any Open one is
+    # this repo's; under another product, the row is edited, as a change of mind edits any row.
+    moving = [r for r in buffer_rows(text) if r[-1] == "Open" and r[2:3] == [MOVE_IN_NOW]
+              and re.fullmatch(rf"{re.escape(para['meta'])}/{re.escape(ROADMAP)} § .+: none yet", r[1])]
+    again = next((r for r in moving if r[1] == claim), moving[0] if moving else None)
     nums = [int(r[0][1:]) for r in buffer_rows(text) if re.fullmatch(r"B\d+", r[0])]
-    rid = again or f"B{max(nums, default=0) + 1}"
-    if not again:
-        ledger.parent.mkdir(parents=True, exist_ok=True)
+    rid = again[0] if again else f"B{max(nums, default=0) + 1}"
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    if again is None:
         ledger.write_text(text.rstrip("\n") + "\n" + f"| {rid} | {claim} | {MOVE_IN_NOW} | "
                           f"owner, {date.today().isoformat()} | Open |\n")
+    elif again[1] != claim:
+        ledger.write_text("".join(l.replace(again[1], claim, 1) if buffer_rows(l) and buffer_rows(l)[0][0] == rid
+                                  else l for l in text.splitlines(keepends=True)))
     slug = spec.stem
     branch = f"propose/{main_root().name}-{slug}"
     # Only a live record's spec is ever here: one whose run stopped before its commit.

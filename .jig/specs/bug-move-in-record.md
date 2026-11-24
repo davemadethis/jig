@@ -152,9 +152,14 @@ The reviewer's direction (score only re-headed headings, honour `want` above 0) 
      writes it: a spec carrying more rows is some other proposal's.
    - The move-in row is `jig move-in`'s alone. `unproposed` leaves out every row whose "This
      repo now" cell reads `its phases and list, moving in`, except for step 1's own call, so
-     neither `jig release` nor `jig propose --buffer` carries it. A row left Open by a withdrawal,
-     or by step 1 rerun under another `--product`, waits for `jig move-in` (review-change of
-     9ac1ee9, blocking: a withdrawn row swept into `buffer-<tag>.md` became step 2's record).
+     neither `jig release` nor `jig propose --buffer` carries it. A row left Open by a withdrawal
+     waits for `jig move-in` (review-change of 9ac1ee9, blocking: a withdrawn row swept into
+     `buffer-<tag>.md` became step 2's record). `jig propose --withdraw` says so of a move-in row
+     ("goes again by `jig move-in`"), apart from the rows that go in the next proposal, and `jig
+     propose --buffer`'s "nothing to propose" says a move-in row is left to `jig move-in`.
+   - Step 1 keeps one move-in row. Rerun, it takes the Open move-in row there is; under another
+     `--product` it edits that row's claim in place, as a change of mind edits any row, never
+     adding a second that nothing could carry (review-change of a9fc7c8).
 2. **The product at step 2** is the record's. `--product <Name>` at step 2 is the owner's word
    that M's hubnode renamed it at the merge. When it differs from the record, the plan prints
    both names. The map is `move_in_map(own, product, mine)`, with `mine` as today. Before step 2
@@ -229,9 +234,11 @@ Smoke, `movein` section, in its throwaway repos (`JIG_CONFIG`, `XDG_CONFIG_HOME`
 - [ ] (empty is not gone) With a move-in branch reset to its opening commit, the plan says it is
   empty in M and step 1 is next. With the branch deleted unmerged, the plan says gone.
 - [ ] (the move-in row stays move-in's) In `pw`, step 1 rerun with `--product Wox` on an empty
-  record proposes Wox under `move-in.md`, its own row listed alone, and Wex's row stays Open.
-  Then, before and after the withdrawal, `jig propose --buffer` says nothing to propose: no
-  `buffer-*` spec and no new branch in M2. The re-proposal as Wex reuses its row, B1, alone in
+  record proposes Wox under `move-in.md`, its row listed alone, and `BUFFER.md` holds one move-in
+  row, B1, which now reads Wox. Then, before and after the withdrawal, `jig propose --buffer`
+  says nothing to propose: no `buffer-*` spec and no new branch in M2. After the withdrawal it
+  says a move-in row is left to `jig move-in`, and the withdrawal itself said B1 goes again by
+  `jig move-in`, not in the next proposal. The re-proposal as Wex reuses its row, B1, alone in
   `move-in-2.md`.
 - [ ] (strike 1 stays fixed) "with the branch deleted by that merge, step 2 is next" still passes.
 - [ ] `grep -c 'def moved_in_as\|withdrawn-{n}' plugin/templates/jig/jig.py` prints 0.
@@ -254,13 +261,19 @@ Smoke, `movein` section, in its throwaway repos (`JIG_CONFIG`, `XDG_CONFIG_HOME`
     the two refusals, and empty told apart from gone;
   - `move_in_propose`: the slug from `free_name`, no `kept_as`;
   - `unproposed` and `buffer_proposal`: the move-in row left out of every proposal but step 1's;
+  - `withdraw_proposal` and `cmd_propose --buffer`: what each says of a move-in row;
   - `moved_in_as`: deleted;
   - `owner_dropped` and its call in `check_rules`: every parent, roadmap or glossary paths;
   - the `MOVE_IN` comment.
-- `plugin/templates/jig/RULES.md`: Roadmap, Moving in (steps 1 and 2).
+- `plugin/templates/jig/RULES.md`: Roadmap, Moving in (steps 1 and 2); Metarepo and pararepos,
+  the sync buffer ("every `Open` row" but a move-in row, and a withdrawn one's); Commands
+  (`jig propose --buffer`).
+- `docs/metarepos.md`: the release's buffer proposal, a move-in row left out.
 - `plugin/skills/hubnode/SKILL.md`: the move-in line.
 - `.jig/specs/moving-in-command.md`: Part A steps 1 and 2, the sentences in Change 4.
-- `tests/smoke.sh`: `sec_movein`, with the cases above and pf's and pr's fixtures as changed.
+- `tests/smoke.sh`: `sec_movein`, with the cases above and pf's and pr's fixtures as changed;
+  `sec_family` D's hand-made move-in row reads "moved in by hand", since "moving in" marks
+  `jig move-in`'s own row.
 
 ### Alternatives considered
 - **Score only headings a map re-heads, and honour `--product` whenever it scores above 0**
