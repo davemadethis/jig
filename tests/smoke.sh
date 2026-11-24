@@ -5235,7 +5235,8 @@ for r in pa pb; do
 done
 EA="$T/pa"
 cd "$EM"
-printf '# Roadmap\n\n## Walyt alpha\nScopes:\n- `pairing`: pairing (touches docs/p.md)\n\n## Familiar App alpha\nScopes:\n- `host`: the host\n\n## Demos\nScopes:\n- `d`: a demo\n' > .jig/roadmap.md
+# Familiar App alpha runs straight into ## Demos: a splice that respaced it would show.
+printf '# Roadmap\n\n## Walyt alpha\nScopes:\n- `pairing`: pairing (touches docs/p.md)\n\n## Familiar App alpha\nScopes:\n- `host`: the host\n## Demos\nScopes:\n- `d`: a demo\n' > .jig/roadmap.md
 git add -A && git commit -qm "GLOSSARY: roadmap"
 draft="$(cd "$EA" && git rev-parse --path-format=absolute --git-common-dir)/jig/roadmap-draft.md"
 edraft() { python3 -c "import sys; p=sys.argv[1]; s=open(p).read(); exec(sys.argv[2]); open(p,'w').write(s)" "$draft" "$1"; }
@@ -5253,6 +5254,13 @@ out=$($J roadmap --edit 2>&1); rc=$?
 br=$(git -C "$EM" for-each-ref --format='%(refname:short)' 'refs/heads/propose/pa-roadmap-*')
 msg="roadmap edit: --edit in pa writes propose/pa-roadmap-<date> in meta, z3 on it, only pa's sections differing from meta's trunk"
 expect_pass sh -c "test $rc = 0 && test -n '$br' && git -C '$EM' show '$br:.jig/roadmap.md' | grep -qx -- '- \`z3\`: the z3 work (labels teleport)' && test \"\$(git -C '$EM' diff main '$br' --stat | tail -1 | tr -d ' ')\" = '1filechanged,1insertion(+)'" "$out"
+msg="roadmap edit: outside pa's sections, the branch's roadmap is trunk's byte for byte"
+expect_pass python3 - "$EM" "$br" <<'PY'
+import subprocess, sys, re
+show = lambda rev: subprocess.run(["git", "-C", sys.argv[1], "show", f"{rev}:.jig/roadmap.md"], capture_output=True, text=True).stdout
+rest = lambda t: [c for c in re.split(r"(?m)^(?=## )", t) if not c.startswith("## Walyt ")]
+assert rest(show("main")) == rest(show(sys.argv[2])), (rest(show("main")), rest(show(sys.argv[2])))
+PY
 msg="roadmap edit: meta's trunk and every checkout's HEAD are unchanged, and the draft is gone"
 expect_pass sh -c "test \"\$(git -C '$EM' rev-parse main)\" = '$metamain' && test \"\$(git -C '$EM' rev-parse HEAD) \$(git rev-parse HEAD)\" = '$heads' && test ! -e '$draft' && test -z \"\$(git -C '$EM' status --porcelain)\""
 msg="roadmap edit: pa has a new Open BUFFER.md row and a roadmap-<date>.md spec citing the branch, uncommitted"
@@ -5270,6 +5278,26 @@ git add -A && git commit -qm "specs: roadmap proposal B2"
 msg="roadmap edit: jig propose --buffer in pa afterwards doesn't take the roadmap rows"
 out=$($J propose --buffer later 2>&1)
 expect_pass sh -c "echo \"\$0\" | grep -q 'nothing to propose' && test \$(git -C '$EM' for-each-ref 'refs/heads/propose/*' | wc -l) = 1" "$out"
+# An edit that changes no scope's id or text still changes the roadmap.
+reditb() { $J roadmap --draft >/dev/null 2>&1; edraft "$1"; out=$($J roadmap --edit 2>&1); rc=$?; git add -A && git commit -qm "specs: $2" >/dev/null 2>&1; }
+n0=$(git -C "$EM" rev-list --count "$br")
+reditb "s = s.replace('- \`pairing\`: pairing (touches docs/p.md)', '- \`pairing\`: pairing (touches docs/p.md) (labels teleport)')" label
+msg="roadmap edit: a label added to an existing scope is written on the branch, its row naming the scope changed"
+expect_pass sh -c "test $rc = 0 && git -C '$EM' show '$br:.jig/roadmap.md' | grep -q 'pairing (touches docs/p.md) (labels teleport)' && grep -q '| changed Walyt alpha/pairing |' .jig/ledgers/BUFFER.md" "$out"
+reditb "s = s.replace('(labels teleport)', '(labels teleport) (after Walyt alpha/z3)')" after
+msg="roadmap edit: an (after …) added to an existing scope is written on the branch"
+expect_pass sh -c "test $rc = 0 && git -C '$EM' show '$br:.jig/roadmap.md' | grep -q 'after Walyt alpha/z3'" "$out"
+reditb "s = s.replace('## Walyt alpha\nScopes:', '## Walyt alpha\nExit when:\n- [ ] pairs two phones\nScopes:')" exit
+msg="roadmap edit: an exit box added is written on the branch, its row saying the section changed"
+expect_pass sh -c "test $rc = 0 && git -C '$EM' show '$br:.jig/roadmap.md' | grep -qx -- '- \[ \] pairs two phones' && grep -q '| changed § Walyt alpha |' .jig/ledgers/BUFFER.md && test \$(git -C '$EM' rev-list --count '$br') = \$((n0 + 3))" "$out"
+msg="roadmap edit: a hand commit on pa's proposal branch changing pb's section is refused by meta's hook, as --edit refuses it"
+out=$(cd "$EM" && git switch -q "$br" && sed -i.bak 's/the host/the big host/' .jig/roadmap.md && rm .jig/roadmap.md.bak && git add -A && git commit -qm "GLOSSARY: host" 2>&1); rc=$?
+(cd "$EM" && git reset -q --hard && git switch -q main)
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '## Familiar App alpha is pb.s: pa changes only its own sections'" "$out"
+msg="roadmap edit: one changing pa's own section by hand commits"
+out=$(cd "$EM" && git switch -q "$br" && python3 -c "p='.jig/roadmap.md'; s=open(p).read(); open(p,'w').write(s.replace('- \`z4\`: the z4 work\n', '- \`z4\`: the z4 work\n- \`z5\`: z5, by hand\n', 1))" && git add -A && git commit -qm "GLOSSARY: z5 by hand" 2>&1); rc=$?
+(cd "$EM" && git switch -q main)
+expect_pass sh -c "test $rc = 0 && git -C '$EM' show '$br:.jig/roadmap.md' | grep -q 'z5, by hand'" "$out"
 before=$(state)
 $J roadmap --draft >/dev/null 2>&1
 msg="roadmap edit: a draft in pa changing a line under Familiar App alpha is refused by line, naming it and pb, writing nothing"

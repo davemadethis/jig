@@ -11328,15 +11328,52 @@ def roadmap_draft(root: Path, fam: "Family", trunk: str) -> int:
     return 0
 
 
-def changed_ids(old: str, new: str) -> list[str]:
-    """`added <id>`, `changed <id>`, `removed <id>` for each scope and item NEW differs from OLD in."""
-    def ids(text: str) -> dict[str, str]:
-        out = {sid: what for p in parse_roadmap(text) for sid, what in p["scopes"]}
-        out.update({i["sid"]: i["text"] for i in parse_no_phase(text)})
+def roadmap_changes(old: str, new: str, keep) -> tuple[list[str], list[str]]:
+    """(the headings KEEP accepts whose section NEW changes from OLD, what changed): `added`,
+    `changed` and `removed <id>` for each scope and item whose text, labels or waits differ,
+    and `changed § <heading>` for a section changed in nothing else (an exit box, a note, a
+    phase's own waits). Judged by the sections' text, so no edit is ever taken for none."""
+    old_s = {h: t for h, _, t in roadmap_sections(old) if keep(h)}
+    new_s = {h: t for h, _, t in roadmap_sections(new) if keep(h)}
+    heads = [h for h in list(old_s) + [h for h in new_s if h not in old_s]
+             if old_s.get(h, "").strip() != new_s.get(h, "").strip()]
+
+    def reading(text: str) -> dict[str, tuple]:
+        out = {}
+        for p in parse_roadmap(text):
+            for sid, what in p["scopes"]:
+                out[sid] = (what, p["after_of"].get(sid, (None, 0))[0], p["needed_of"].get(sid),
+                            p["labels_of"].get(sid, (None, 0))[0])
+        for i in parse_no_phase(text):
+            out[i["sid"]] = (i["text"], i["after"], i["needed"], i["labels"])
         return out
-    a, b = ids(old), ids(new)
-    return ([f"added {i}" for i in b if i not in a] + [f"changed {i}" for i in b if i in a and a[i] != b[i]]
-            + [f"removed {i}" for i in a if i not in b])
+    changes = []
+    for h in heads:
+        a, b = reading(old_s.get(h, "")), reading(new_s.get(h, ""))
+        ids = ([f"added {i}" for i in b if i not in a] + [f"changed {i}" for i in b if i in a and a[i] != b[i]]
+               + [f"removed {i}" for i in a if i not in b])
+        changes += ids or [f"changed § {h}"]
+    return heads, changes
+
+
+def section_refusals(old: str, new: str, may, owner_of, who: str, newcomer: bool) -> list[str]:
+    """By line, each section of roadmap NEW that differs from OLD under a heading MAY refuses:
+    another repo's (OWNER_OF names it), or, NEWCOMER, a new heading naming no product WHO owns.
+    `jig roadmap --edit` and the hook on a pararepo's proposal branch both ask it."""
+    old_s = {h: (n, t) for h, n, t in roadmap_sections(old)}
+    new_s = {h: (n, t) for h, n, t in roadmap_sections(new)}
+    out = []
+    for h in list(old_s) + [h for h in new_s if h not in old_s]:
+        if old_s.get(h, (0, ""))[1].strip() == new_s.get(h, (0, ""))[1].strip() or may(h):
+            continue
+        n = new_s[h][0] if h in new_s else old_s[h][0]
+        name = f"## {h}" if h else "the lines above the first heading"
+        if h not in old_s and newcomer:
+            out.append(f"line {n}: {name} names no product {who} owns: a new product is the metarepo "
+                       "hubnode's, its glossary term and Owner: line first")
+        else:
+            out.append(f"line {n}: {name} is {owner_of(h)}'s: {who} changes only its own sections")
+    return out
 
 
 def unknown_labels(text: str, fam: "Family", keep) -> dict[str, list[str]]:
@@ -11373,44 +11410,55 @@ def drop_labels(text: str, drop: set[str]) -> str:
 
 def splice_sections(text: str, new: str, keep) -> str:
     """TEXT with every section whose heading KEEP accepts replaced, whole, by NEW's: removed when
-    NEW lacks it, and NEW's own added after the last of them, or at the end."""
+    NEW lacks it, and NEW's own added after the last of them, or at the end. Every other section
+    stays byte for byte."""
     mine = [(h, t) for h, _, t in roadmap_sections(new) if h and keep(h)]
-    out, placed, last = [], set(), -1
+    out: list[tuple[str, int]] = []   # (text, 0 kept, 1 replaced, 2 added by this splice)
+    placed, last = set(), -1
     for h, _, t in roadmap_sections(text):
         if h and keep(h):
             got = next((nt for nh, nt in mine if nh == h), None)
             if got is not None:
-                out.append(got)
+                out.append((got, 1))
                 placed.add(h)
-            last = len(out) - 1 if got is not None else len(out)
+            last = len(out) - 1
             continue
-        out.append(t)
-    extra = [t for h, t in mine if h not in placed]
+        out.append((t, 0))
     at = last + 1 if last >= 0 else len(out)
-    out[at:at] = extra
-    # A section that ended its file may land mid-file: it keeps a blank line before the next
-    # heading. The file ends in one newline, as a roadmap does, whatever git's output kept.
-    out = [x if i == len(out) - 1 or x.endswith("\n\n") else x.rstrip("\n") + "\n\n" for i, x in enumerate(out) if x]
-    return "".join(out).rstrip("\n") + "\n"
+    out[at:at] = [(t, 2) for h, t in mine if h not in placed]
+    out = [(t, w) for t, w in out if t]
+    # A section written here that ended its file may land mid-file, and one may land after a
+    # section that ended it: each keeps a blank line before the next heading.
+    fixed = [t.rstrip("\n") + "\n\n" if i < len(out) - 1 and not t.endswith("\n\n")
+             and (w or out[i + 1][1] == 2) else t for i, (t, w) in enumerate(out)]
+    # The file ends in one newline, as a roadmap does, whatever git's output kept.
+    return "".join(fixed).rstrip("\n") + "\n"
 
 
 def plumb_commit(loc: Path, branch: str, path: str, text: str, message: str) -> str:
     """Commit TEXT as PATH on BRANCH in the checkout at LOC without moving any checkout: a
     temporary index, `commit-tree`, and `update-ref` from the old tip, so a tip moved meanwhile
-    refuses rather than being lost."""
-    tip = git("rev-parse", f"refs/heads/{branch}", cwd=str(loc), check=True)
-    blob = subprocess.run(["git", "hash-object", "-w", "--stdin"], input=text, text=True, capture_output=True,
-                          cwd=str(loc), check=True).stdout.strip()
+    refuses rather than being lost. Returns why it failed, "" once written."""
+    tip = git("rev-parse", "-q", "--verify", f"refs/heads/{branch}", cwd=str(loc))
+    if not tip:
+        return f"{branch} isn't there"
     with tempfile.TemporaryDirectory() as d:
         env = {**os.environ, "GIT_INDEX_FILE": str(Path(d) / "index")}
-        run = lambda *a: subprocess.run(["git", *a], cwd=str(loc), env=env, check=True,
-                                        capture_output=True, text=True).stdout.strip()
-        run("read-tree", tip)
-        run("update-index", "--add", "--cacheinfo", f"100644,{blob},{path}")
-        tree = run("write-tree")
-    new = git("commit-tree", tree, "-p", tip, "-m", message, cwd=str(loc), check=True)
-    git("update-ref", f"refs/heads/{branch}", new, tip, cwd=str(loc), check=True)
-    return new
+
+        def run(*a: str, stdin: str | None = None) -> str:
+            p = subprocess.run(["git", *a], cwd=str(loc), env=env, input=stdin, capture_output=True, text=True)
+            if p.returncode:
+                raise RuntimeError(p.stderr.strip() or f"git {a[0]} failed")
+            return p.stdout.strip()
+        try:
+            blob = run("hash-object", "-w", "--stdin", stdin=text)
+            run("read-tree", tip)
+            run("update-index", "--add", "--cacheinfo", f"100644,{blob},{path}")
+            new = run("commit-tree", run("write-tree"), "-p", tip, "-m", message)
+            run("update-ref", f"refs/heads/{branch}", new, tip)
+        except RuntimeError as e:
+            return str(e)
+    return ""
 
 
 BUFFER_HEAD = ("# BUFFER\n\n| Id | Metarepo claim (`<meta>/<path> § section`, at the pin) | This repo now "
@@ -11443,20 +11491,21 @@ def roadmap_base(root: Path, fam: "Family", trunk: str) -> str:
     return splice_sections(fam.text, on, lambda h: bool(h) and may_change(fam, h)) if on else fam.text
 
 
-def roadmap_proposal(root: Path, para: dict, loc: Path, row: list[str]) -> tuple[str, Path]:
-    """This repo's open roadmap proposal, the branch and its spec, ROW added to both: the open
-    one, or a new one, opened as `jig propose` opens one. Its spec lists roadmap rows only, so a
-    buffer proposal, which leaves out rows a proposal carries, never sweeps them."""
-    meta = para["meta"]
-    spec, branch = open_roadmap_proposal(root, meta, loc)
-    if spec is None:
-        slug = f"roadmap-{time.strftime('%Y-%m-%d')}"
-        n = 1
-        while (root / SPECS / f"{slug}.md").exists() or \
-                git("rev-parse", "-q", "--verify", f"refs/heads/propose/{root.name}-{slug}", cwd=str(loc)):
-            n += 1
-            slug = f"roadmap-{time.strftime('%Y-%m-%d')}-{n}"
-        branch, spec = open_proposal(para, loc, slug), root / SPECS / f"{slug}.md"
+def roadmap_spec_path(root: Path, loc: Path) -> Path:
+    """The spec a new roadmap proposal is recorded in, `roadmap-<date>.md`, its name free here
+    and as a branch in the metarepo at LOC."""
+    slug, n = f"roadmap-{time.strftime('%Y-%m-%d')}", 1
+    while (root / SPECS / f"{slug}.md").exists() or \
+            git("rev-parse", "-q", "--verify", f"refs/heads/propose/{root.name}-{slug}", cwd=str(loc)):
+        n += 1
+        slug = f"roadmap-{time.strftime('%Y-%m-%d')}-{n}"
+    return root / SPECS / f"{slug}.md"
+
+
+def record_roadmap_row(root: Path, meta: str, spec: Path, branch: str, row: list[str]) -> None:
+    """ROW added to the buffer and to SPEC, the record of BRANCH, this repo's open roadmap
+    proposal. The spec lists roadmap rows only, so a buffer proposal, which leaves out rows a
+    proposal carries, never sweeps them."""
     ledger = root / BUFFER
     text = ledger.read_text() if ledger.exists() else BUFFER_HEAD
     ledger.parent.mkdir(parents=True, exist_ok=True)
@@ -11473,7 +11522,6 @@ def roadmap_proposal(root: Path, para: dict, loc: Path, row: list[str]) -> tuple
         f"sections there are replaced whole, and no other section changes.\n\n"
         f"## Buffer rows\n" + "".join(f"- {i}\n" for i in ids) + f"\n{table}\n\n"
         f"## Decisions\n- meta: {meta} proposal {branch}\n")
-    return branch, spec
 
 
 def stage_label(fam: "Family", label: str, sids: list[str], repo: str) -> Path:
@@ -11515,19 +11563,8 @@ def roadmap_edit(root: Path, fam: "Family", trunk: str, file: str) -> int:
     if fam.kind != "para" and (root / ROADMAP).exists() and (root / ROADMAP).read_text().rstrip("\n") != base.rstrip("\n"):
         die(f"{ROADMAP} in the {trunk} checkout differs from {trunk}'s: commit or discard it first, "
             "so nothing uncommitted is overwritten")
-    old_s = {h: (n, t) for h, n, t in roadmap_sections(base)}
-    new_s = {h: (n, t) for h, n, t in roadmap_sections(new)}
-    out = []
-    for h in list(old_s) + [h for h in new_s if h not in old_s]:
-        if old_s.get(h, (0, None))[1] == new_s.get(h, (0, None))[1] or may_change(fam, h):
-            continue
-        n = new_s[h][0] if h in new_s else old_s[h][0]
-        name = f"## {h}" if h else "the lines above the first heading"
-        if h not in old_s and fam.kind == "para":
-            out.append(f"line {n}: {name} names no product this repo owns: a new product is "
-                       f"{fam.meta_name}'s hubnode's, its glossary term and Owner: line first")
-        else:
-            out.append(f"line {n}: {name} is {heading_owner(fam, h)}'s: this repo changes only its own sections")
+    out = section_refusals(base, new, lambda h: may_change(fam, h), lambda h: heading_owner(fam, h),
+                           "this repo", fam.kind == "para")
     keep = lambda h: bool(h) and may_change(fam, h) and fam.kind == "para"
     staged = unknown_labels(new, fam, lambda h: may_change(fam, h)) if fam.kind == "para" else {}
     result = splice_sections(trunk_text, drop_labels(new, set(staged)), keep) if fam.kind == "para" else new
@@ -11550,22 +11587,32 @@ def roadmap_edit(root: Path, fam: "Family", trunk: str, file: str) -> int:
         return 0
     para = load_para(trunk)
     # What this edit changes, against what the open proposal already holds.
-    ids = changed_ids(base, splice_sections(base, drop_labels(new, set(staged)), keep))
+    heads, ids = roadmap_changes(base, splice_sections(base, drop_labels(new, set(staged)), keep), keep)
     if not ids and not staged:
         draft.unlink()
         print("no change: nothing written")
         return 0
-    heads = sorted({h for h in set(old_s) | set(new_s) if keep(h)
-                    and old_s.get(h, (0, None))[1] != new_s.get(h, (0, None))[1]})
     num = max([int(r[0][1:]) for r in buffer_rows((root / BUFFER).read_text() if (root / BUFFER).exists() else "")
                if re.fullmatch(r"B\d+", r[0])] or [0]) + 1
     if ids:
         row = [f"B{num}", ", ".join(f"{fam.meta_name}/{ROADMAP} § {h}" for h in heads), "; ".join(ids),
                f"hubnode, {time.strftime('%Y-%m-%d')}", "Open"]
-        branch, spec = roadmap_proposal(root, para, fam.meta_loc, row)
+        # The branch first, then the row and the spec: a refused commit leaves nothing written.
+        spec, branch = open_roadmap_proposal(root, para["meta"], fam.meta_loc)
+        opened = not branch
+        if opened:
+            spec = roadmap_spec_path(root, fam.meta_loc)
+            branch = open_proposal(para, fam.meta_loc, spec.stem)
         on = git("show", f"refs/heads/{branch}:{ROADMAP}", cwd=str(fam.meta_loc))
-        plumb_commit(fam.meta_loc, branch, ROADMAP, splice_sections(on, drop_labels(new, set(staged)), keep),
-                     f"roadmap: {root.name}: {'; '.join(ids)}")
+        why = plumb_commit(fam.meta_loc, branch, ROADMAP, splice_sections(on, drop_labels(new, set(staged)), keep),
+                           f"roadmap: {root.name}: {'; '.join(ids)}")
+        if why:
+            if opened:
+                git("branch", "-D", branch, cwd=str(fam.meta_loc))
+            print(f"{branch} in {fam.meta_name} wasn't written ({why}): nothing written; "
+                  "`jig roadmap --edit` again")
+            return 1
+        record_roadmap_row(root, para["meta"], spec, branch, row)
         print(f"wrote {branch} in {fam.meta_name}: {'; '.join(ids)}")
         print(f"added {BUFFER} row B{num} and {spec.relative_to(root)}: commit them here")
     for label, sids in sorted(staged.items()):
@@ -12132,6 +12179,20 @@ def others_holding(dropped: set[str], fam: "Family") -> list[str]:
     return out
 
 
+def proposal_section_refusals(branch: str, old: str, text: str, fam: "Family", meta: dict) -> list[str]:
+    """section_refusals for a metarepo's `propose/<repo>-<slug>` branch changing roadmap OLD
+    (trunk's) to TEXT: the proposing repo, the longest pararepo name the branch starts with,
+    changes only the products it owns. A branch naming no pararepo is judged by no one's."""
+    repos = [r for r in meta.get("pararepos") or [] if branch.startswith(f"propose/{r}-")]
+    if not repos:
+        return []
+    repo = max(repos, key=len)
+    owns = lambda h: bool(h) and fam.owners.get(heading_product(h, fam.owners)) == repo
+    owner = lambda h: (lambda o: "this repo" if o in ("", THIS_REPO) else o)(
+        fam.owners.get(heading_product(h, fam.owners), ""))
+    return section_refusals(old, text, owns, owner, repo, True)
+
+
 def roadmap_rules(board: "Board", branch: str, staged: bool, paths: list[str],
                   guarded: list[str]) -> list[str]:
     """Scopes a spec cites must be the roadmap's. On trunk the commit's own roadmap counts, so
@@ -12152,9 +12213,12 @@ def roadmap_rules(board: "Board", branch: str, staged: bool, paths: list[str],
     if para is not None:
         return moving_in(para, staged)
     if load_meta(trunk) is not None and proposed_branch(branch, trunk) and ROADMAP in paths:
-        # A pararepo's proposal: its merge is judged on trunk; what it says is checked here too.
+        # A pararepo's proposal: its merge is judged on trunk; what it says is checked here too,
+        # as `jig roadmap --edit` checks it: only the proposing repo's sections change.
         text = in_index(ROADMAP, staged)
-        problems: list[str] = []
+        fork = git("merge-base", trunk, "HEAD")
+        problems = proposal_section_refusals(branch, at_rev(fork, ROADMAP) if fork else old, text, fam,
+                                             load_meta(trunk))
         parsed = parse_roadmap(text, problems)
         problems += ref_problems(parsed, parse_no_phase(text, problems))
         problems += roadmap_label_problems(text, in_index(GLOSSARY, staged) or None)
