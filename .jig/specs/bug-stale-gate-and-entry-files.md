@@ -218,7 +218,8 @@ From bug-merge-log-entry-files:
 
 ## Touches
 - `plugin/templates/jig/jig.py`: a new `gate_holds`, plus `chain_step`, `cmd_checked`, the
-  gated branch of `cmd_mark`, and `cmd_handoff` (bug-next-stale-gate); `cmd_merge_log` only
+  gated branch of `cmd_mark`, `cmd_handoff`, and `this_repo_names` (the name from the trunk
+  checkout's config alone, so a broken jobs.json there can't crash a handoff) (bug-next-stale-gate); `cmd_merge_log` only
   (`kept_entry`, its print, the META write into `planned`), on ideas-log's shape
   (bug-merge-log-entry-files). Nothing in `cmd_merge`, `cmd_gate`, `next_step`'s gated branch
   or `record_plan`.
