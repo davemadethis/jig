@@ -78,13 +78,16 @@ be reached, naming the repo.
      worktree of the metarepo that it then removes. The metarepo's hook checks that commit,
      reading the branch's own glossary for the product headings.
 
-   The branch waits on the metarepo's owner. Its hubnode merges it in a job (`## Proposals`).
+   The branch waits on the metarepo's owner. Its hubnode merges it in a job opened on that
+   branch (`jig open <job> --branch propose/<repo>-move-in`), or on trunk on its owner's yes.
    On trunk, the hook reads the commit's own glossary for a heading's product, as it reads the
    commit's own roadmap, so a term and the phases it owns land in one merge.
 2. **Its roadmap leaves.** This step needs every mapped scope and list id on the metarepo's
    trunk. One the metarepo lacks (the owner changed it before merging) is named, with each spec
    and note that takes it. `--apply` runs `git rm` on `.jig/roadmap.md` and `ROADMAP.md`,
    rewrites each `Scope:` line in tracked specs and handoff notes by the map, and stages it all.
+   The product is the one step 1's row names, read from the move-in spec's own copy of it, or the
+   name `--product` gives when the metarepo's hubnode renamed it at the merge.
    The hubnode commits it on trunk on the owner's yes, and `moving_in` checks that commit as it
    does today. An id left unmapped stays for the hubnode to re-point by hand, and the hook
    refuses the commit until it is.

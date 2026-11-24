@@ -230,9 +230,9 @@ Smoke, `movein` section, in its throwaway repos (`JIG_CONFIG`, `XDG_CONFIG_HOME`
 ### Out of scope
 - A `## Proposals` job that takes a roadmap proposal. R5, cross-repo-roadmap's rule for every
   roadmap proposal, refuses the roadmap change on an ordinary job branch [seen]. This spec points
-  move-in at the routes R5 allows and doesn't widen R5. Whether a `## Proposals` job should take
-  roadmap proposals at all is the owner's call. Its home is the hubnode's roadmap (No phase),
-  not this job.
+  move-in at the routes R5 allows and doesn't widen R5. The owner, 2026-11-23: "No, propose route
+  suffices": a roadmap proposal is taken by a job opened on its `propose/` branch, and nothing
+  is tracked.
 - Following a rename without the owner's word. Step 2 names the mismatch and the candidates,
   and `--product` carries the owner's answer (Decisions).
 

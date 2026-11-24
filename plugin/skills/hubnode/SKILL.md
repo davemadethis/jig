@@ -305,8 +305,11 @@ next and whose yes it waits on. Step 1 stages a `BUFFER.md` row and `.jig/specs/
 here (commit them) and makes the metarepo's `propose/<repo>-move-in`, with the product's
 glossary term when the metarepo has none. Step 2, once the metarepo merged it, stages the
 roadmap's removal and the re-pointed `Scope:` lines: re-point any id it names by hand, then
-commit. In the metarepo, that branch is one roadmap change, the term with it: show the owner the
-name, the definition and the phases, change any on the branch on their word, and merge in a job.
+commit; if the metarepo renamed the product at the merge, pass the new name, `--product <Name>`,
+on the owner's word. In the metarepo, that branch is one roadmap change, the term with it: show
+the owner the name, the definition and the phases, change any on the branch on their word, and
+merge it in a job opened on it (`jig open <job> --branch propose/<repo>-move-in`), or on trunk.
+A job merging it from another branch is refused by R5.
 
 Work with no phase yet, parked mid-build (naming the pages it will touch) or not started, is
 an item under `## No phase` in `.jig/roadmap.md`, proposed the same way. A roadmap change asks

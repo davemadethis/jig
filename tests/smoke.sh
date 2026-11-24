@@ -10024,7 +10024,7 @@ expect_pass sh -c "$J move-in | grep -q 'pd has moved in' && $J rig | grep -q 'D
 msg="movein: in M, a glossary change dropping Delta's Owner: while ## Delta alpha still heads the roadmap is refused"
 out=$(cd "$MM" && git switch -q -c noowner && sed -i.bak '/^Owner: `pd`.$/d' docs/glossary.md && rm docs/glossary.md.bak && git add -A && git commit -qm "GLOSSARY: no owner" 2>&1); rc=$?
 (cd "$MM" && git reset -q --hard && git switch -q main && git branch -q -D noowner)
-expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '## Delta loses its .Owner:. line, but .jig/roadmap.md still heads ## Delta alpha'" "$out"
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '## Delta has no .Owner:. line here, though HEAD gives it one, and .jig/roadmap.md heads ## Delta alpha'" "$out"
 # The product renamed at the merge, the old term kept: step 2 reads the name M's roadmap holds the
 # phases under; the text above the first heading rides along, item-shaped lines and all.
 mpara pr '# Roadmap\n\nThe plan for rex.\n- `z`: not a scope\n\n## alpha\nScopes:\n- `r`: the r\n'
@@ -10038,9 +10038,12 @@ expect_pass sh -c "git -C '$MM' show propose/pr-move-in:.jig/roadmap.md | grep -
   && git switch -q main && git merge -q --no-ff --no-edit propose/pr-move-in ) >/dev/null 2>&1
 msg="movein: M keeps Rex and adds Rover at the merge; the item-shaped preamble line is no scope in M's roadmap"
 expect_pass sh -c "cd '$MM' && grep -qx '## Rex' docs/glossary.md && grep -qx '## Rover alpha' .jig/roadmap.md && ! $J roadmap | grep -q 'alpha/z'"
-msg="movein: step 2 with no --product reads Rover from M's roadmap, re-points to Rover alpha/r, and --product Rex says the new name"
-out=$($J move-in --product Rex 2>&1)
-expect_pass sh -c "echo \"\$0\" | grep -q 'names the product Rover now, not Rex' && $J move-in --apply >/dev/null 2>&1 && grep -qx 'Scope: Rover alpha/r' .jig/specs/sr.md && git commit -qm 'move in' >/dev/null 2>&1" "$out"
+msg="movein: step 2 with no --product reads Rex from its record and is refused, naming ## Rex alpha missing, Rex and Rover, and --product; nothing staged"
+out=$($J move-in --apply 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '## Rex alpha' && echo \"\$0\" | grep -q 'Rex, Rover' && echo \"\$0\" | grep -q -- '--product' && test -z \"\$(git diff --cached --name-only)\"" "$out"
+msg="movein: with --product Rover, the owner's word, step 2 says the record says Rex, stages Scope: Rover alpha/r, and the commit passes"
+out=$($J move-in --product Rover --apply 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q 'says Rex' && grep -qx 'Scope: Rover alpha/r' .jig/specs/sr.md && git commit -qm 'move in' >/dev/null 2>&1" "$out"
 msg="movein: in M, an unrelated glossary edit on a branch cut before Rex and Rover reached trunk passes: only what the commit drops counts"
 out=$(cd "$MM" && git switch -q behind && printf '\n## Foo\n\nA foo.\n' >> docs/glossary.md && ulog '- docs/glossary.md § Foo: added.' && git add -A && git commit -qm "GLOSSARY: Foo" 2>&1); rc=$?
 (cd "$MM" && git reset -q --hard && git switch -q main)
@@ -10065,29 +10068,84 @@ out=$($J move-in --product Widget --apply 2>&1); rc=$?
 ( cd "$MM" && git -c core.hooksPath=/dev/null revert --no-edit HEAD >/dev/null )
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '/jig:update in M first' && ! git -C '$MM' rev-parse -q --verify refs/heads/propose/pg-move-in" "$out"
 $J move-in --product Widget --apply >/dev/null 2>&1 && git commit -qm "specs: move-in" >/dev/null 2>&1
-( cd "$MM" && git switch -q propose/pg-move-in && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-edit propose/pg-move-in ) >/dev/null 2>&1
+( cd "$MM" && git switch -q propose/pg-move-in && $J reviewed >/dev/null && git switch -q main ) >/dev/null 2>&1
+msg="movein: M drops Widget's Owner: through a reviewed branch merged to main, no Widget heading there yet, and it passes"
+out=$(cd "$MM" && git switch -q -c dropw && sed -i.bak '/^Owner: `pg`.$/d' docs/glossary.md && rm docs/glossary.md.bak && ulog '- docs/glossary.md § Widget: its owner dropped.' \
+  && git add -A && git commit -qm "GLOSSARY: Widget unowned" && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-edit dropw 2>&1); rc=$?
+expect_pass test $rc = 0; [ $rc = 0 ] || echo "$out"
+msg="movein: merging propose/pg-move-in into M's main is then refused, naming ## Widget and ## Widget beta, and main's tip is unchanged"
+mtip=$(git -C "$MM" rev-parse main)
+out=$(cd "$MM" && git merge -q --no-ff --no-edit propose/pg-move-in 2>&1); rc=$?; (cd "$MM" && git merge --abort 2>/dev/null; git reset -q --hard)
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '## Widget has no .Owner:. line here' && echo \"\$0\" | grep -q '## Widget beta' && test \"\$(git -C '$MM' rev-parse main)\" = '$mtip'" "$out"
+msg="movein: with that merge made hooks off, pg's step 2 is refused, naming Widget and Owner:, and nothing is staged"
+( cd "$MM" && git -c core.hooksPath=/dev/null merge -q --no-ff --no-edit propose/pg-move-in )
+out=$($J move-in --apply 2>&1); rc=$?
+( cd "$MM" && git reset -q --hard HEAD~1 )
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'give Widget to pg: ## Widget has no .Owner:. line' && test -z \"\$(git diff --cached --name-only)\"" "$out"
+( cd "$MM" && git switch -q -c restorew && printf 'Owner: `pg`.\n' >> docs/glossary.md && ulog '- docs/glossary.md § Widget: its owner back.' \
+  && git add -A && git commit -qm "GLOSSARY: Widget is pg's" && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-edit restorew ) >/dev/null 2>&1
+msg="movein: with the owner restored, the merge passes"
+out=$(cd "$MM" && git merge -q --no-ff --no-edit propose/pg-move-in 2>&1); rc=$?
+expect_pass test $rc = 0; [ $rc = 0 ] || echo "$out"
 msg="movein: pg's ## Widget beta, already its term, moves in unchanged, and step 2 runs, its Scope: line kept"
 out=$($J move-in --product Widget --apply 2>&1); rc=$?
 expect_pass sh -c "test $rc = 0 && grep -qx 'Scope: Widget beta/w' .jig/specs/sw.md && git diff --cached --name-status | grep -q '^D	.jig/roadmap.md' && git commit -qm 'move in' >/dev/null 2>&1" "$out"
-# A pararepo whose product M already names, with a heading under a term it owns.
+# A pararepo whose product M already names, with headings under another term it owns.
 ( cd "$MM" && printf '\n## Foxy\n\nThe fox app.\n\nOwner: `pf`.\n\n## Gadget\n\nThe gadget.\n\nOwner: `pf`.\n' >> docs/glossary.md && mplant "Foxy and Gadget" )
-mpara pf '# Roadmap\n\n## beta\nScopes:\n- `b`: the b\n\n## Gadget beta\nScopes:\n- `g`: the g (after beta/b)\n'
+mpara pf '# Roadmap\n\n## alpha\nScopes:\n- `a`: the a\n\n## Gadget gamma\nScopes:\n- `g`: the g (after alpha/a)\n\n## Gadget delta\nScopes:\n- `d`: the d\n'
+mspec sa alpha/a && mplant "sa"
 msg="movein: ## Up next in pf is refused, naming jig update --apply"
 printf '\n## Up next\n- `n`: n\n' >> .jig/roadmap.md && mplant "up next"
 out=$($J move-in --product Foxy --apply 2>&1); rc=$?
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'jig update --apply'" "$out"
 git reset -q --hard HEAD~1
-msg="movein: with ## Foxy beta already on M's trunk, --apply is refused, naming it, and no branch is made"
-( cd "$MM" && printf '# Roadmap\n\n## Foxy beta\nScopes:\n- `q`: q\n' > .jig/roadmap.md && mplant "Foxy beta" )
+msg="movein: with ## Foxy alpha already on M's trunk, --apply is refused, naming it, and no branch is made"
+( cd "$MM" && printf '\n## Foxy alpha\nScopes:\n- `q`: q\n' >> .jig/roadmap.md && mplant "Foxy alpha" )
 out=$($J move-in --product Foxy --apply 2>&1); rc=$?
-expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '## Foxy beta' && ! git -C '$MM' rev-parse -q --verify refs/heads/propose/pf-move-in && test -z \"\$(git status --porcelain)\"" "$out"
-( cd "$MM" && git rm -q .jig/roadmap.md && mplant "no Foxy beta" )
-msg="movein: Foxy owned by pf already: no glossary change, no --definition, and ## Gadget beta proposed unchanged"
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '## Foxy alpha' && ! git -C '$MM' rev-parse -q --verify refs/heads/propose/pf-move-in && test -z \"\$(git status --porcelain)\"" "$out"
+( cd "$MM" && git -c core.hooksPath=/dev/null revert --no-edit HEAD >/dev/null )
+msg="movein: Foxy owned by pf already: no glossary change, no --definition, ## Gadget gamma kept, its ref (after Foxy alpha/a)"
 out=$($J move-in --product Foxy --apply 2>&1); rc=$?
 expect_pass sh -c "test $rc = 0 && ! git -C '$MM' diff --name-only main propose/pf-move-in | grep -q glossary \
-  && git -C '$MM' show propose/pf-move-in:.jig/roadmap.md | grep -qx '## Gadget beta' && git -C '$MM' show propose/pf-move-in:.jig/roadmap.md | grep -qx '## Foxy beta' \
-  && git -C '$MM' show propose/pf-move-in:.jig/roadmap.md | grep -q '(after Foxy beta/b)'" "$out"
+  && git -C '$MM' show propose/pf-move-in:.jig/roadmap.md | grep -qx '## Gadget gamma' && git -C '$MM' show propose/pf-move-in:.jig/roadmap.md | grep -qx '## Foxy alpha' \
+  && git -C '$MM' show propose/pf-move-in:.jig/roadmap.md | grep -qx -- '- \`g\`: the g (after Foxy alpha/a)'" "$out"
 [ $rc = 0 ] || echo "$out"
+git commit -qm "specs: move-in" >/dev/null 2>&1
+( cd "$MM" && git switch -q propose/pf-move-in && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-edit propose/pf-move-in ) >/dev/null 2>&1
+msg="movein: step 2 in pf, with no --product and with --product Foxy, moves in as Foxy, ## alpha → ## Foxy alpha, never Gadget alpha"
+o1=$($J move-in 2>&1); o2=$($J move-in --product Foxy 2>&1)
+expect_pass sh -c "for o in \"\$0\" \"\$1\"; do echo \"\$o\" | grep -q 'as Foxy\$' && echo \"\$o\" | grep -q '## alpha → ## Foxy alpha' && ! echo \"\$o\" | grep -q 'Gadget alpha' || exit 1; done" "$o1" "$o2"
+msg="movein: --apply stages Scope: Foxy alpha/a in sa.md, and the commit passes"
+out=$($J move-in --apply 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && grep -qx 'Scope: Foxy alpha/a' .jig/specs/sa.md && git commit -qm 'move in' >/dev/null 2>&1" "$out"
+# A withdrawn proposal, then step 1 again, against a metarepo of its own that can release.
+MM2="$T/M2"; mnew M2 && git add -A && git commit -qm init && $J init --meta --name M2 >/dev/null && git add -A && git commit -qm meta-init && $J release $(mf) >/dev/null
+python3 .jig/jig.py repos add meta "$MM2" --name M2 >/dev/null
+mnew pw && mkdir -p docs && printf '# P\n\nP is.\n' > docs/p.md && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
+$J init --para M2 --location "$MM2" >/dev/null 2>&1 && git add -A && git commit -qm para-init && python3 .jig/jig.py repos add para "$T/pw" --name pw >/dev/null
+printf '# Roadmap\n\n## alpha\nScopes:\n- `x`: the x\n' > .jig/roadmap.md && git add -A && git commit -qm own && $J roadmap --write >/dev/null && git add -A && git commit -qm view
+( cd "$MM2" && python3 -c "import json; f='.jig/meta.json'; d=json.load(open(f)); d['pararepos']=['pw']; json.dump(d, open(f,'w'), indent=2)" && mplant "pw joins" )
+$J move-in --product Wex --definition "The wex." --apply >/dev/null 2>&1 && git commit -qm "specs: move-in" >/dev/null 2>&1
+msg="movein: a move-in branch reset to its opening commit reads empty in M2, step 1 next; deleted unmerged, it reads gone"
+git -C "$MM2" branch -q -f propose/pw-move-in propose/pw-move-in~1; o1=$($J move-in 2>&1)
+git -C "$MM2" branch -q -D propose/pw-move-in; o2=$($J move-in 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -q 'propose/pw-move-in is empty in M2' && echo \"\$0\" | grep -q '^1. product and phases proposed: next' \
+  && echo \"\$1\" | grep -q 'propose/pw-move-in, which .jig/specs/move-in.md records, is gone from M2 unmerged'" "$o1" "$o2"
+$J move-in --definition "The wex." --apply >/dev/null 2>&1 && git commit -qm "specs: move-in again" >/dev/null 2>&1
+$J propose --withdraw propose/pw-move-in --reason r >/dev/null 2>&1 && git add -A && git commit -qm "specs: withdraw" >/dev/null 2>&1
+msg="movein: withdrawn, M2 keeping the old branch, step 1 makes propose/pw-move-in-2 and move-in-2.md; the withdrawn spec is untouched"
+out=$($J move-in --product Wex --definition "The wex." --apply 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && git -C '$MM2' rev-parse -q --verify refs/heads/propose/pw-move-in-2 >/dev/null && test -f .jig/specs/move-in-2.md \
+  && test -z \"\$(git diff HEAD -- .jig/specs/move-in.md)\" && grep -q 'meta: M2 withdrawn propose/pw-move-in ' .jig/specs/move-in.md && ! ls .jig/specs/ | grep -q withdrawn" "$out"
+[ $rc = 0 ] || echo "$out"
+git commit -qm "specs: move-in-2" >/dev/null 2>&1
+( cd "$MM2" && git switch -q propose/pw-move-in-2 && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-edit propose/pw-move-in-2 && $J release $(mf) >/dev/null ) >/dev/null 2>&1
+msg="movein: after M2 merges and releases it, pw's sync says propose/pw-move-in-2 is released, with no 'withdrawn, but released' advice"
+out=$($J sync 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -q 'propose/pw-move-in-2 (.jig/specs/move-in-2.md): released by' && ! echo \"\$0\" | grep -q 'withdrawn, but released'" "$out"
+msg="movein: then jig move-in in pw says step 2 is next, as Wex"
+out=$($J move-in 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -q 'as Wex\$' && echo \"\$0\" | grep -q '^2. roadmap leaves: next'" "$out"
 }
 
 UNITS="rules merge_derived update board_split worktree_setup metarepo,staging pararepo release r6_takes,r6_ints merge_after_sync repos workflow init_old_board ledger_rows hardware update_per_file pararepo_commands entry_globs report_fixes sync_buffer buffer_answered pointers removals feedback slash_names homes structure meta_docs agents_lines page_contract roadmap family boundary decisions supersede touches,touches_terms sweep staging_batches merge_log findings glossary headings check_levels role_line consolidate cheaper_rounds next svg update_roles holders rig rig_batch close versioning pin_bump moves movein claims inbox rigger queue"

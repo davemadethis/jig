@@ -1036,22 +1036,28 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
      `### Added`, so one yes decides the product and its phases. A term another repo owns, a
      mapped heading the metarepo's roadmap already has, or a `## Up next` here is refused before
      anything is written. `--apply` adds one `BUFFER.md` row, opens `propose/<repo>-move-in`
-     carrying that row alone (`.jig/specs/move-in.md`), and commits the sections there in a
-     temporary worktree of the metarepo, whose hook judges the commit. On the metarepo's trunk
+     carrying that row alone, listed in `.jig/specs/move-in.md` (the next free name, `move-in-2`
+     and its branch, once a withdrawn proposal holds it), and commits the sections there in a
+     temporary worktree of the metarepo, whose hook judges the commit. That spec is step 1's
+     record, found by scanning specs as `jig sync` finds a proposal: its copy of the row names
+     the product, its `meta:` line the branch. The metarepo's hubnode merges the branch in a job
+     opened on it (`jig open <job> --branch propose/<repo>-move-in`), or on its trunk on the
+     owner's yes; a job merging it from another branch is refused (R5). On the metarepo's trunk
      the hook reads a heading's product by the commit's own glossary, as by its own roadmap, so
-     the term and the phases it owns land in one merge; it refuses a glossary change that takes
-     a product's `Owner:` away while the roadmap's headings still name it. The text above the
+     the term and the phases it owns land in one merge; it refuses a commit or a merge that
+     leaves a product's headings without the `Owner:` either side gave. The text above the
      roadmap's first heading, its `# ` title aside, is kept as the first phase's note. A refused
      or failed step undoes what it wrote on both sides; a run interrupted part way may leave an
      empty `propose/` branch or its row, and a rerun recovers from either and starts the step
-     again. A withdrawn `move-in.md` is kept beside the new one.
+     again. A withdrawn proposal's spec stays as it is.
   2. *Its roadmap leaves*, once the metarepo's trunk has the proposal. `--apply` stages
      `git rm` of `.jig/roadmap.md` and `ROADMAP.md` and each `Scope:` line in tracked specs and
-     handoff notes re-pointed by the map, under the product's name as the metarepo's glossary now
-     gives it (its hubnode may rename it at the merge: the term the metarepo's roadmap holds the phases
-     under); an id the metarepo's trunk lacks (its
-     owner changed it before merging) is named with what takes it, and left for the hubnode to
-     re-point by hand.
+     handoff notes re-pointed by the map, under the product its row names, or the name
+     `--product` gives when the metarepo's hubnode renamed it at the merge (the owner's word:
+     nothing is guessed from the metarepo). It is refused, naming what it read, while the
+     metarepo's glossary doesn't give the product to this repo, or its roadmap holds none of the
+     mapped headings. An id the metarepo's trunk lacks (its owner changed it before merging) is
+     named with what takes it, and left for the hubnode to re-point by hand.
      The hubnode commits it on trunk on the owner's yes, and the hook checks every `Scope:` line
      it keeps against the metarepo's trunk.
 
