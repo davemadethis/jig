@@ -14208,15 +14208,19 @@ def insert_entries(text: str, prefix: str, add: dict[str, list[list[str]]]) -> s
     return "\n".join(lines) + "\n"
 
 
-def record_plan(root: Path, log: str, prefix: str) -> dict:
+def record_plan(root: Path, log: str, prefix: str, seed: dict[str, str] | None = None,
+                removed: set[str] = frozenset()) -> dict:
     """What `--merge-log` does with the record folders, onto the log text LOG: the log it
-    writes, the files it rewrites, removes and keeps, and what it says. PROBLEMS refuse it."""
+    writes, the files it rewrites, removes and keeps, and what it says. PROBLEMS refuse it.
+    SEED is every file's text the run has already planned and REMOVED what it removes, as
+    glossary_plan seeds its own: the citation pass reads a planned text before the disk and
+    skips a planned removal, so no file gets two texts."""
     files = tracked(root)
     read = lambda f: (root / f).read_text(errors="replace") if (root / f).is_file() else ""
     folders = record_folders(root, files, read)
     plan = {"folders": folders, "text": log, "notes": [], "problems": [], "undated": [], "remove": [],
-            "keep": [], "write": {}, "rewrites": [], "left": [], "named": [], "hook": [], "ids": [],
-            "ideas": []}
+            "keep": [], "write": dict(seed or {}), "rewrites": [], "left": [], "named": [], "hook": [],
+            "ids": [], "ideas": []}
     if not folders:
         return plan
     recs = []
@@ -14350,9 +14354,9 @@ def record_plan(root: Path, log: str, prefix: str) -> dict:
             plan["keep"].append(f)
     # Citations, in the same change. History stays as written: handoffs, fenced code, released
     # sections, and the log's own entries, which change only by superseding.
-    gone = set(plan["remove"])
+    gone = set(plan["remove"]) | set(removed)
     skip = (f"{DIR}/specs/", f"{DIR}/ledgers/")
-    for f in files:
+    for f in dict.fromkeys([*files, *plan["write"]]):
         if f in gone or (f.startswith(f"{DIR}/") and not f.startswith(skip) and f not in (LOG, IDEAS)):
             continue
         if f.startswith(f"{DIR}/handoffs/"):
@@ -14792,16 +14796,22 @@ def cmd_merge_log(root: Path, apply: bool) -> int:
         keep = {}
         text = (root / LOG).read_text() if in_use else LOG_SEED
         prefix = log_prefix_of(text) if in_use else (old_prefix(root) or META_DEFAULTS["decision_prefix"])
-    rp = record_plan(root, text, prefix)
+    # One plan of every file's final text, as glossary_plan builds its own: the log and what the
+    # old files keep go in before the citation pass, which reads them first and skips what goes.
+    gone = [f for f, _ in files_in if f not in keep]
+    rp = record_plan(root, text, prefix, {LOG: text, **keep}, set(gone))
     text = rp["text"]
     problems += rp["problems"]
+    # The new ideas go last, after the pass, so a block's `Record N before this log.` stays.
     new_ideas = m["ideas"] + rp["ideas"]
-    ideas_text = (root / IDEAS).read_text() if (root / IDEAS).is_file() else IDEAS_SEED
+    ideas_text = rp["write"].get(IDEAS) or ((root / IDEAS).read_text() if (root / IDEAS).is_file() else IDEAS_SEED)
     for block in new_ideas:
         ideas_text = ideas_text.rstrip("\n") + f"\n\n{block}\n"
+    planned = {**rp["write"], LOG: text}
+    if new_ideas or not (root / IDEAS).exists():
+        planned[IDEAS] = ideas_text
     if not rp["problems"]:
         problems += log_problems(text, prefix) + ideas_problems(ideas_text, text, prefix)
-    gone = [f for f, _ in files_in if f not in keep]
     print("Merging into " + LOG + ":")
     for f, what in sources:
         print(f"  {f} ({what}), " + ("kept for what has no home" if f in keep else "removed after"))
@@ -14814,7 +14824,7 @@ def cmd_merge_log(root: Path, apply: bool) -> int:
     if rp["remove"]:
         print(f"  removed after: {', '.join(rp['remove'])}")
     for f in rp["keep"]:
-        print(f"  kept, as no record: {f}" + (" (its rows linking to records removed)" if f in rp["write"] else ""))
+        print(f"  kept, as no record: {f}" + (" (its rows linking to records removed)" if f in rp["write"] and f not in keep else ""))
     entry = json.loads(meta.read_text() or "{}").get("entry_files", []) if meta.exists() else None
     kept_entry = [LOG, *[e for e in entry if e not in gone and e != LOG]] if entry is not None else None
     if entry is not None and files_in:
@@ -14859,26 +14869,21 @@ def cmd_merge_log(root: Path, apply: bool) -> int:
         print("Dry run: nothing changed. On the owner's yes: "
               + (job if branch_needed else "jig update --apply --merge-log"))
         return 0
-    (root / LOG).write_text(text)
-    if new_ideas or not (root / IDEAS).exists():
-        (root / IDEAS).write_text(ideas_text)
-    for f in gone + rp["remove"]:
-        git("rm", "-q", "--", f, check=True)
-    for f, rest in keep.items():
-        (root / f).write_text(rest)
-    for f, new in rp["write"].items():
-        (root / f).write_text(new)
     if entry is not None and files_in:
         d = json.loads(meta.read_text())
         d["entry_files"] = kept_entry
-        meta.write_text(json.dumps(d, indent=2) + "\n")
+        planned[META] = json.dumps(d, indent=2) + "\n"
     if on_trunk_now:
-        (root / CONFIG).write_text(json.dumps(data, indent=2) + "\n")
-    git("add", "--", LOG, IDEAS, *keep, *rp["write"], *([META] if entry is not None and files_in else []),
-        *([CONFIG] if on_trunk_now else []), check=True)
-    removed = gone + rp["remove"]
-    print(f"\nWritten {LOG}" + (f" and {IDEAS}" if new_ideas else "")
-          + (f"; {', '.join(removed)} removed" if removed else "")
+        planned[CONFIG] = json.dumps(data, indent=2) + "\n"
+    # Each path once, from the plan; then what the run removes.
+    removals = [f for f in dict.fromkeys(gone + rp["remove"]) if f not in planned]
+    for f in removals:
+        git("rm", "-q", "--", f, check=True)
+    for f, new in planned.items():
+        (root / f).write_text(new)
+    git("add", "--", *planned, check=True)
+    print(f"\nWritten {', '.join(planned)}"
+          + (f"; {', '.join(removals)} removed" if removals else "")
           + (f"; {', '.join(keep)} kept, holding only what has no home: move it by hand" if keep else "")
           + ". Staged, nothing committed: commit it here"
           + ("" if on_trunk_now or not said else

@@ -6468,6 +6468,8 @@ msg="ideas fold: jig survey on a page with ## Undefined names .jig/ideas.md for 
 printf '# Y\n\nY is a page.\n\n## Undefined\n- why y?\n' > docs/y.md && git add -A && git -c core.hooksPath=/dev/null commit -qm y
 out=$($J survey 2>&1)
 expect_pass sh -c "echo \"\$0\" | grep -q 'an open question → an idea in .jig/ideas.md'" "$out"
+msg="ideas fold: among the skills, RULES.md and docs/, only RULES.md and the update skill name ## Open (the fold, a log not folded yet, the refusal)"
+expect_pass sh -c "test \"\$(grep -rlw -- '## Open' '$P/../skills' '$P/jig/RULES.md' '$P/../../docs' | sed -e 's|.*/skills/|skills/|' -e 's|.*/jig/RULES.md|RULES.md|' | sort | tr '\n' ' ')\" = 'RULES.md skills/update/SKILL.md '"
 msg="ideas fold: --merge-log numbers a folder of records above the ideas' ids, one counter for both"
 mkdir -p docs/decisions && printf '# 0001. Use A\n\n- **Date:** 2026-01-01\n- **Status:** in force\n\n## Context\n\nWe needed A.\n' > docs/decisions/0001-a.md
 printf '# 0002. Use B\n\n- **Date:** 2026-01-02\n- **Status:** in force\n\n## Context\n\nB too.\n' > docs/decisions/0002-b.md
@@ -8182,6 +8184,61 @@ expect_pass sh -c "grep -qx 'Status: in force, amended by D-002' .jig/decisions.
 msg="merge-log records: that output commits unedited"
 expect_pass git commit -qm "TOOL: merge the decision records"
 cd "$MR"
+
+# One plan, one write: what --merge-log shows, checks and writes is one text per file.
+mlone() {  # mlone <dir> <register|none>: two records (accepted, proposed), an idea citing record 0001, and perhaps a register
+  pcnew "$1" && mkdir -p docs/decisions
+  printf '# 0001. Use markdown\n\n- **Date:** 2026-01-01\n- **Status:** accepted\n\n## Context\n\nWe needed a format.\n' > docs/decisions/0001-use-markdown.md
+  printf '# 0002. Use a log\n\n- **Date:** 2026-01-02\n- **Status:** proposed\n\n## Context\n\nMaybe a log.\n' > docs/decisions/0002-use-a-log.md
+  case "$2" in
+    prose) printf '# Cross-product decisions\n\nWhat binds every product, as record 0001 says.\n\n| Id | Decision | Status | Date |\n|---|---|---|---|\n| D-001 | a | accepted (Ann) | 2026-01-01 |\n\nA note naming no row.\n' > DECISIONS.md
+           printf '# Release notes\n\nPer record 0001.\n\n## Unreleased\n- D-001 a\n' > CHANGELOG.md ;;
+    row) printf '| Id | Decision | Status | Date |\n|---|---|---|---|\n| D-001 | a, as record 0001 says | accepted (Ann) | 2026-01-01 |\n' > DECISIONS.md ;;
+  esac
+  git add -A && git commit -qm init && $J init >/dev/null 2>&1; git add -A && git commit -qm board
+  echo "as record 0001 says." >> .jig/ideas.md && git add -A && git commit -qm cite; }
+mlone "$T/ml-once" none
+msg="merge-log one write: the dry run's .jig/ideas.md is the text --apply then writes, byte for byte"
+$UP --merge-log > "$T/ml-once.dry" 2>&1
+$UP --apply --merge-log >/dev/null 2>&1
+expect_pass python3 -c "
+import sys
+dry = open(sys.argv[1]).read().split('--- .jig/ideas.md, as it would be written ---\n', 1)[1].split('\nDry run: ', 1)[0]
+assert dry == open('.jig/ideas.md').read(), (dry, open('.jig/ideas.md').read())" "$T/ml-once.dry"
+msg="merge-log one write: the proposed record lands as idea D-002, and the idea's citation of record 0001 reads D-001; it commits"
+expect_pass sh -c "grep -qx '### D-002 Use a log' .jig/ideas.md && grep -qx 'Proposed (2026-01-02).' .jig/ideas.md && grep -qx 'Record 0002 before this log.' .jig/ideas.md && grep -qx 'as D-001 says.' .jig/ideas.md && git commit -qm 'TOOL: merge the records'"
+mlone "$T/ml-kept" prose
+msg="merge-log one write: a kept register and changelog keep only what had no home, their citations rewritten"
+$UP --apply --merge-log >/dev/null 2>&1
+expect_pass sh -c "! grep -q '^|' DECISIONS.md && grep -qx 'What binds every product, as D-002 says.' DECISIONS.md && ! grep -q 'Unreleased' CHANGELOG.md && grep -qx 'Per D-002.' CHANGELOG.md && grep -qx '### D-003 Use a log' .jig/ideas.md"
+mlone "$T/ml-gone" row
+msg="merge-log one write: a register whose only citation is in a row is removed, and stays removed"
+$UP --apply --merge-log >/dev/null 2>&1
+expect_pass sh -c "test ! -e DECISIONS.md && git status --short | grep -qx 'D  DECISIONS.md'"
+mlone "$T/ml-count" prose
+msg="merge-log one write: in-process, every path is written once, and none after the run removes it"
+out=$(python3 -c "
+import sys, pathlib, importlib.util as u
+s = u.spec_from_file_location('j', '$P/jig/jig.py'); m = u.module_from_spec(s); s.loader.exec_module(m)
+wrote, gone = [], set()
+for name in ('write_text', 'write_bytes'):
+    orig = getattr(pathlib.Path, name)
+    def wrap(self, *a, _orig=orig, **k):
+        wrote.append(str(self.resolve()))
+        return _orig(self, *a, **k)
+    setattr(pathlib.Path, name, wrap)
+git = m.git
+def rm_seen(*a, **k):
+    if a[:1] == ('rm',):
+        gone.update(str((pathlib.Path('.') / f).resolve()) for f in a if f not in ('rm', '-q', '--'))
+    return git(*a, **k)
+m.git = rm_seen
+rc = m.cmd_merge_log(pathlib.Path('.').resolve(), True)
+twice = sorted({w for w in wrote if wrote.count(w) > 1})
+after = sorted(set(wrote) & gone)
+print('rc', rc, 'twice', twice, 'removed then written', after)
+sys.exit(1 if rc or twice or after else 0)" 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0" "$out"; [ $rc = 0 ] || echo "$out"
 }
 
 # ---------------------------------------------------------------- a heading is a page's address
