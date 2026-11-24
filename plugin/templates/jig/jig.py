@@ -9973,7 +9973,13 @@ def staged_refusal(what: str, pin_bumps_wait: bool = True) -> list[str]:
 
 
 def this_repo_names(root: Path) -> set[str]:
-    names = {"this", Board.load(root, working_tree=True).data.get("name") or main_root().name}
+    # The name from the trunk checkout's config alone: its jobs.json may be mid-edit, and a
+    # handoff reading this must not fail on it.
+    try:
+        name = json.loads((main_root() / CONFIG).read_text()).get("name")
+    except (OSError, ValueError, AttributeError):
+        name = None
+    names = {"this", name or main_root().name}
     # and any alias you gave this checkout in repos.json
     names |= {lb for n, e in load_repos().items() if Path(e["path"]).resolve() == main_root().resolve()
               for lb in {n} | repo_names(e)}
