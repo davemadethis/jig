@@ -18024,7 +18024,7 @@ def roadmap_takers(fam: "Family") -> set[str]:
 
 
 def phase_part(heading: str, owners: dict[str, str]) -> str:
-    """A roadmap heading without its product: `Walyt alpha` is `alpha`, `Walyt No phase` is No phase."""
+    """A roadmap heading without its product: `Prod alpha` is `alpha`, `Prod No phase` is No phase."""
     if is_list_heading(heading):
         return NO_PHASE
     p = product_of(heading, owners)
