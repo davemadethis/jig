@@ -213,7 +213,9 @@ owner's yes, with `.github/workflows/jig-check.yml` from jig's template in the s
 4. **Do not re-review the diff.** The review role's review is the review. You are checking
    that it happened and that the result matches the spec.
 5. `jig mark <name> gated` (it refuses until `jig checked` recorded the checkout's commit,
-   then removes the checkout) and commit `jobs.json`.
+   then removes the checkout) and commit `jobs.json`. A checkout built from an older note than
+   the job's newest is stale: `jig next` says gate, and checked and mark refuse it; run `jig
+   gate <name>` again. A gated job can't hand off again until you `jig mark <name> ready`.
 
 ## Merging (merge)
 

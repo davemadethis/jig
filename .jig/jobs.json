@@ -15,19 +15,5 @@
       "plugin/templates/ledgers/BUFFER.md"
     ],
     "reserved": {}
-  },
-  "bug-stale-gate-and-entry-files": {
-    "spec": ".jig/specs/bug-stale-gate-and-entry-files.md",
-    "state": "gated",
-    "after": [],
-    "owns": [],
-    "shares": [
-      "plugin/templates/jig/jig.py",
-      "plugin/templates/jig/RULES.md",
-      "plugin/skills/hubnode/SKILL.md",
-      "tests/smoke.sh",
-      ".jig/decisions.md"
-    ],
-    "reserved": {}
   }
 }

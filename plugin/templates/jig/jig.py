@@ -1511,6 +1511,27 @@ def gate_scratch(name: str) -> str:
     return f"{worktrees_dir()}/gate-{file_safe(name)}"
 
 
+def gate_holds(board: "Board", name: str, where: Path) -> str | None:
+    """Why the gate checkout at WHERE doesn't hold the commit job NAME's newest note names, or
+    None when it does. A gate's check counts only for that commit: `jig gate` checks it out and
+    merges trunk in, so HEAD is the note's commit or a merge whose first parent is."""
+    branch = board.branch(name)
+    notes = handoff_notes(branch, name)
+    m = re.search(r"^Commit: (\w+)", git("show", f"{branch}:{notes[-1]}"), re.M) if notes else None
+    if not m:
+        return None
+    want = git("rev-parse", "-q", "--verify", f"{m.group(1)}^{{commit}}") or m.group(1)
+    head = git("rev-parse", "HEAD", cwd=str(where))
+    # First parent only of the merge `jig gate` makes: a commit added on top of the note's
+    # commit in the checkout has it as first parent too, and holds what no note named.
+    merged = git("rev-parse", "-q", "--verify", "HEAD^2", cwd=str(where))
+    first = git("rev-parse", "-q", "--verify", "HEAD^1", cwd=str(where)) if merged else ""
+    if want in (head, first):
+        return None
+    return (f"{gate_scratch(name)} holds {head[:12]}, not {want[:12]} that {notes[-1]} names: "
+            f"`jig gate {name}`")
+
+
 def gate_scratch_problem(where: Path, shown: str) -> str | None:
     """Why the checkout at WHERE can't be removed as gate scratch, or None when it can. The
     gate's checkout is detached; anything on a branch at that path is someone's work. Untracked
@@ -1583,6 +1604,10 @@ def cmd_mark(root: Path, args) -> int:
         problem = gate_scratch_problem(where, scratch)
         if problem:
             die(f"{problem}, and `jig mark {args.name} gated` again")
+        stale = gate_holds(board, args.name, where)
+        if stale:
+            die(f"{stale}, run the complete check there, `jig checked` there, then "
+                f"`jig mark {args.name} gated`")
         head = git("rev-parse", "HEAD", cwd=str(where))
         if not any(r["commit"] == head for r in checked_records()):
             die(f"no complete check is recorded for {head[:12]} in {scratch}: run the check "
@@ -1696,6 +1721,19 @@ def ci_run_passed(url: str, head: str) -> str:
     return run.get("url") or url
 
 
+def gate_job(root: Path) -> None:
+    """Refuse a check recorded in a job's gate checkout that doesn't hold the commit the job's
+    newest note names: `jig mark gated` and `jig merge` would read it as covering that note."""
+    here = Path(git("rev-parse", "--show-toplevel") or ".").resolve()
+    board = Board.load(root)
+    for name in board.jobs:
+        if here == (main_root() / gate_scratch(name)).resolve():
+            stale = gate_holds(board, name, here)
+            if stale:
+                die(f"nothing recorded: {stale}, and run the complete check in the new checkout")
+            return
+
+
 def cmd_checked(root: Path, args) -> int:
     """Record that the complete check passed on HEAD; with --trace, how to find the merge that
     broke trunk since its last recorded one. jig records and prints; it never runs a check."""
@@ -1731,6 +1769,7 @@ def cmd_checked(root: Path, args) -> int:
     head = git("rev-parse", "HEAD")
     if not head:
         die("no commit to record")
+    gate_job(root)
     url = ci_run_passed(args.ci, head) if args.ci else ""
     log = checked_log()
     log.parent.mkdir(parents=True, exist_ok=True)
@@ -2644,6 +2683,10 @@ def chain_step(board: "Board", name: str) -> tuple[str, str, str, str]:
         where = main_root() / scratch
         if not where.exists():
             return "gate", "hubnode", hub, f"Job; `jig gate {name}`"
+        # Before the check log: a check of a checkout built from an older note covers nothing.
+        stale = gate_holds(board, name, where)
+        if stale:
+            return "gate", "hubnode", hub, f"Job; {stale}"
         head = git("rev-parse", "HEAD", cwd=str(where))
         if not any(r["commit"] == head for r in checked_records()):
             return "check", "check", "new session", f"Job; the complete check in {scratch}"
@@ -2854,6 +2897,21 @@ def cmd_handoff(root: Path, args) -> int:
     name, job = board.job_for_branch(branch)
     if not name:
         name = branch or "work"          # solo: no job, the branch is the unit
+    # The trunk checkout's jobs too: `jig mark gated` writes them there before the hubnode
+    # commits them, and a note filed in between would merge on the older note's check. A copy
+    # that doesn't parse may hold just that mark, mid-write or hand-edited: wait for it.
+    marked = None
+    if job is not None:
+        try:
+            marked = (json.loads((main_root() / JOBS).read_text()).get(name) or {}).get("state")
+        except FileNotFoundError:
+            pass
+        except (OSError, ValueError, AttributeError):
+            die(f"the trunk checkout's {JOBS} doesn't parse: hand off once the hubnode's edit is done")
+    if job is not None and "gated" in (job.get("state"), marked):
+        # Gated covers the note it was gated on; a newer note would merge on that gate's check.
+        die(f"{name} is gated on {board.trunk}: the hubnode marks it back (`jig mark {name} ready`) "
+            "before a new handoff, which is gated again")
     if git("status", "--porcelain"):
         die("commit everything first: a handoff names one commit")
     head = git("rev-parse", "HEAD")
@@ -9914,7 +9972,13 @@ def staged_refusal(what: str, pin_bumps_wait: bool = True) -> list[str]:
 
 
 def this_repo_names(root: Path) -> set[str]:
-    names = {"this", Board.load(root, working_tree=True).data.get("name") or main_root().name}
+    # The name from the trunk checkout's config alone: its jobs.json may be mid-edit, and a
+    # handoff reading this must not fail on it.
+    try:
+        name = json.loads((main_root() / CONFIG).read_text()).get("name")
+    except (OSError, ValueError, AttributeError):
+        name = None
+    names = {"this", name or main_root().name}
     # and any alias you gave this checkout in repos.json
     names |= {lb for n, e in load_repos().items() if Path(e["path"]).resolve() == main_root().resolve()
               for lb in {n} | repo_names(e)}
@@ -15949,8 +16013,13 @@ def cmd_merge_log(root: Path, apply: bool) -> int:
     for f in rp["keep"]:
         print(f"  kept, as no record: {f}" + (" (its rows linking to records removed)" if f in rp["write"] and f not in keep else ""))
     entry = json.loads(meta.read_text() or "{}").get("entry_files", []) if meta.exists() else None
-    kept_entry = [LOG, *[e for e in entry if e not in gone and e != LOG]] if entry is not None else None
-    if entry is not None and files_in:
+    # An item is dropped only when it is a path the run removes: a glob names a place, and a
+    # new file there is meant to match.
+    kept_entry = [LOG, *[e for e in entry if e not in removals and e != LOG]] if entry is not None else None
+    # A folder-only run rewrites META only when it names something removed: kept_entry puts the
+    # log first, which would reorder the owner's list for nothing.
+    entry_changes = entry is not None and bool(files_in or any(e in removals for e in entry))
+    if entry_changes:
         print(f"  {META} entry_files: {entry} → {kept_entry}")
     # What a kept file holds is no log any more: lines are appended to the log now.
     # The index counts as merged whether it went or kept its prose: its rows are the log's now.
@@ -15992,7 +16061,7 @@ def cmd_merge_log(root: Path, apply: bool) -> int:
         print("Dry run: nothing changed. On the owner's yes: "
               + (job if branch_needed else "jig update --apply --merge-log"))
         return 0
-    if entry is not None and files_in:
+    if entry_changes:
         d = json.loads(meta.read_text())
         d["entry_files"] = kept_entry
         planned[META] = json.dumps(d, indent=2) + "\n"

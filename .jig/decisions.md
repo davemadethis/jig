@@ -13,6 +13,10 @@ A breaking change is one that a reader taking the release must act on: a `**Brea
 ### Changed
 - Every stand-alone repo and metarepo keeps a roadmap, its empty structure if nothing else: `jig init` writes the roadmap and its view, `ROADMAP.md`, `jig update --apply` adds them where missing, and `jig roadmap`, rig, reading-list, survey, staging, the gate and the merge commit them on trunk in the trunk checkout when trunk has none (elsewhere they say where it is written). On trunk the hook refuses a commit removing it, and with none on trunk refuses a spec's `Scope:` or `Later:` line. A repo whose root `ROADMAP.md` is its own gets none until that content moves into the roadmap. A pararepo keeps none: `jig init --para` removes the empty structure a plain init wrote, and `jig update --apply --sweep` there refuses, naming the metarepo's glossary `Owner:` term and `jig move-in`, unless the pararepo keeps a roadmap of its own.
 
+### Fixed
+- A gate's check counts only for the commit the job's newest handoff note names: a gate checkout built from an older note is stale, so `jig next` says gate, `jig checked` there and `jig mark <job> gated` refuse it naming `jig gate <job>`, and `jig handoff` refuses while trunk's board has the job gated until the hubnode marks it ready.
+- In a metarepo, `jig update --apply --merge-log` drops from `.jig/meta.json`'s `entry_files` any path it removes, a record folder's index included, with the log in its place, whether or not a register or a changelog merges in the same run. A glob item stays as written.
+
 ## v0.15.0 - 2026-11-19
 
 ### Added
