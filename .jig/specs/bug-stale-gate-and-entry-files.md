@@ -243,8 +243,12 @@ From bug-next-stale-gate:
   (cmd_gate, jig.py:3288-3440).
 - Compare by "the note's commit is an ancestor of the checkout's HEAD" instead of HEAD or
   first parent. It works too, since trunk never holds a job's commits before its merge. Rejected
-  because first parent names exactly what `jig gate` builds — reason is [assumed] (judgment, not a
-  failure case).
+  because HEAD or a merge's first parent names exactly what `jig gate` builds: `cmd_gate` checks
+  out the note's commit detached, and `merge_trunk` runs `git merge --no-edit <trunk>`, which
+  leaves HEAD at the commit when it already holds trunk, or makes a merge whose first parent is
+  the commit (a fast-forward would need trunk to hold the job's commit, which it doesn't before
+  the merge). An ancestor test would also accept commits added on top in the checkout — reason
+  is [seen] (`cmd_gate`, `merge_trunk`).
 - For Repro B, store the gated commit on the job's board entry and have `next` and `merge`
   compare against it. Rejected as a new record for a guarantee the handoff refusal gives with
   none (a need jig already handles uses that path) — reason is [seen] (`next_step`'s gated branch

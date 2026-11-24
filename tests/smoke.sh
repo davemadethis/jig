@@ -2460,14 +2460,24 @@ $J gate kt >/dev/null 2>&1
 want=$(git rev-parse kt~1)
 msg="gate: run again, the checkout holds the new note's commit, and next says check"
 expect_pass sh -c "cd .git/jig/worktrees/gate-kt && { test \$(git rev-parse HEAD) = $want || test \$(git rev-parse HEAD^1) = $want; } && cd '$NX' && $J next kt | grep -q '^kt: check — '"
+# A commit added on top of the note's in the checkout holds what no note named, though its first parent is the note's.
+git -C .git/jig/worktrees/gate-kt -c core.hooksPath=/dev/null commit -q --allow-empty -m "on top"
+msg="next and checked: a commit added on top in the gate checkout is stale, not the note's"
+out=$(cd .git/jig/worktrees/gate-kt && $J checked --tier 3 --effort 4 --seconds 1 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -qF 'jig gate kt' && $J next kt | grep -q '^kt: gate — hubnode, continue the hubnode (Job; .git/jig/worktrees/gate-kt holds '" "$out"
+git -C .git/jig/worktrees/gate-kt reset -q --hard HEAD~1
 (cd .git/jig/worktrees/gate-kt && $J checked --tier 3 --effort 4 --seconds 1 >/dev/null)
 msg="mark gated and merge: the rebuilt checkout's check gates the job, and it merges"
 expect_pass sh -c "$J mark kt gated >/dev/null && git add -A && git commit -qm 'kt gated' && $J merge kt >/dev/null 2>&1"
 # Repro B: a gated job can't hand off again until it is marked back.
 $J gate ks >/dev/null 2>&1
 (cd .git/jig/worktrees/gate-ks && $J checked --tier 3 --effort 4 --seconds 1 >/dev/null)
-$J mark ks gated >/dev/null && git add -A && git commit -qm "ks gated"
+$J mark ks gated >/dev/null
 (cd .git/jig/worktrees/ks && printf 'z\n' >> ks/x.txt && git commit -qam fix2 && $J reviewed --change >/dev/null)
+msg="handoff: refused while the trunk checkout has the job marked gated, before the hubnode commits it"
+out=$(cd .git/jig/worktrees/ks && $J handoff 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -qF 'jig mark ks ready' && test -z \"\$(git -C .git/jig/worktrees/ks status --porcelain)\"" "$out"
+git add -A && git commit -qm "ks gated"
 msg="handoff: refused while trunk's board has the job gated, naming jig mark ready"
 out=$(cd .git/jig/worktrees/ks && $J handoff 2>&1); rc=$?
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -qF 'jig mark ks ready' && test -z \"\$(git -C .git/jig/worktrees/ks status --porcelain)\"" "$out"

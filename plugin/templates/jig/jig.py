@@ -1522,7 +1522,10 @@ def gate_holds(board: "Board", name: str, where: Path) -> str | None:
         return None
     want = git("rev-parse", "-q", "--verify", f"{m.group(1)}^{{commit}}") or m.group(1)
     head = git("rev-parse", "HEAD", cwd=str(where))
-    first = git("rev-parse", "-q", "--verify", "HEAD^1", cwd=str(where))
+    # First parent only of the merge `jig gate` makes: a commit added on top of the note's
+    # commit in the checkout has it as first parent too, and holds what no note named.
+    merged = git("rev-parse", "-q", "--verify", "HEAD^2", cwd=str(where))
+    first = git("rev-parse", "-q", "--verify", "HEAD^1", cwd=str(where)) if merged else ""
     if want in (head, first):
         return None
     return (f"{gate_scratch(name)} holds {head[:12]}, not {want[:12]} that {notes[-1]} names: "
@@ -2894,7 +2897,10 @@ def cmd_handoff(root: Path, args) -> int:
     name, job = board.job_for_branch(branch)
     if not name:
         name = branch or "work"          # solo: no job, the branch is the unit
-    if job is not None and job.get("state") == "gated":
+    # The trunk checkout's board too: `jig mark gated` writes it there before the hubnode
+    # commits it, and a note filed in between would merge on the older note's check.
+    if job is not None and "gated" in (job.get("state"),
+                                       Board.load(root, working_tree=True).jobs.get(name, {}).get("state")):
         # Gated covers the note it was gated on; a newer note would merge on that gate's check.
         die(f"{name} is gated on {board.trunk}: the hubnode marks it back (`jig mark {name} ready`) "
             "before a new handoff, which is gated again")
