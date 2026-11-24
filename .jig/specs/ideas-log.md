@@ -160,7 +160,7 @@ Part C:
 - [ ] (labels) An idea with `(labels teleport)`, where `teleport` passes roadmap-labels' check for a scope, commits. One with a label that check refuses is refused by line, with the same message a scope gets.
 - [ ] (one label reader) `grep -c '^LABELS = re.compile' plugin/templates/jig/jig.py` prints 1, and the ideas code reads and checks labels only through `split_labels` and `label_problems`.
 - [ ] (list) `jig ideas` lists every idea with its labels. `jig ideas --label teleport` lists only those carrying it. In `M`, `jig ideas` also lists `L`'s ideas, named `L`. With `L` dropped from the repos file, it names `L` as not read.
-- [ ] (none left) The smoke assertion in `ideas_fold` ("among the skills, RULES.md and docs/, only RULES.md and the update skill name ## Open") passes: the files holding `## Open` as a word are exactly `plugin/templates/jig/RULES.md` and `plugin/skills/update/SKILL.md`, and review reads each of their hits, which name the fold, a log not folded yet, or the hook's refusal. jig.py is checked by Parts A and B's observables instead (`.jig/specs/bug-merge-log-one-write.md`, Change 5).
+- [ ] (none left) The smoke assertion in `ideas_fold` ("among the skills, RULES.md and docs/, only RULES.md and the update skill name ## Open") passes: the files holding `## Open` as a word are exactly `plugin/templates/jig/RULES.md` and `plugin/skills/update/SKILL.md`, and review reads each of their hits, which name the fold, a log not folded yet, or the hook's refusal. jig.py is checked by Parts A and B's observables instead (`.jig/specs/bug-merge-log-one-write.md`, Change 5). Confirmed by the owner, 2026-11-24: "keep the smoke assertion".
 - [ ] (complete) `python3 .jig/jig.py queue -- bash tests/smoke.sh` passes, and so does `claude plugin validate ./plugin`.
 
 ## Out of scope
@@ -177,7 +177,7 @@ Part C:
 - `plugin/templates/jig/RULES.md`: The rules (R3), Documentation (Product and project), Decision log (sections, Ideas, Released sections' move line, Checked, `--merge-log`, decision records), Staging, Metarepo and pararepos (a question that binds pararepos, an open question's home, M2's row), Commands (`jig ideas`).
 - `plugin/skills/stage/SKILL.md`, `plugin/skills/update/SKILL.md`, `plugin/skills/redocument/SKILL.md`, `plugin/skills/retro/SKILL.md`
 - `docs/records.md`, `docs/glossary.md`, `docs/commands.md`, `docs/metarepos.md`
-- `tests/smoke.sh`: decisions, supersede, removals, claims, touches, init_old_board, update, staging, merge_log, sweep, pin_bump, moves, pararepo, metarepo, entry_globs, and a new `ideas` section for the checks above
+- `tests/smoke.sh`: decisions, supersede, removals, claims, touches, init_old_board, update, staging, merge_log, sweep, pin_bump, moves, pararepo, metarepo, entry_globs, rules, boundary, versioning, close, and new `ideas`, `ideas_fold` and `ideas_meta` sections for the checks above
 - Process or product: product (jig's behaviour), written in RULES.md and the skills as their homes.
 
 ## Alternatives considered

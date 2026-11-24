@@ -557,7 +557,9 @@ def check_rules(root: Path, board: Board, *, staged: bool) -> list[str]:
     if LOG in guarded:
         out += log_rules(trunk, staged, on_trunk(trunk, branch))
         out += move_rules(trunk, staged, meta)
-    if IDEAS in guarded or (LOG in guarded and in_index(IDEAS, staged)):
+    # A glossary change re-checks the ideas' labels, as it does the roadmap's: a term dropped or
+    # renamed re-points the label in the same commit.
+    if IDEAS in guarded or ((LOG in guarded or GLOSSARY in guarded) and in_index(IDEAS, staged)):
         out += ideas_rules(trunk, staged, on_trunk(trunk, branch))
 
     # R1 the trunk checkout stays on trunk (only when jobs are open: solo, one checkout
@@ -5909,7 +5911,9 @@ LOG_HEAD = (
     "A breaking change is one that a reader taking the release must act on: a `**Breaking:**` line "
     "says what to change, and it doesn't set the version's level.\n")
 LOG_SEED = "# Decisions and changes\n\n" + LOG_HEAD + "\n## Unreleased\n"
-# The seeds earlier jigs wrote, with ## Open or the old versioning header, still read as an empty log.
+# Logs that are still a seed, and read as an empty one: the two earlier jigs wrote, with ## Open
+# (today's header and the old one), and the old-header seed once `--fold-ideas` has run before
+# `jig update` swapped its header.
 OLD_LOG_SEEDS = ("# Decisions and changes\n\n" + LOG_HEAD + "\n## Open\n\n## Unreleased\n",
                  "# Decisions and changes\n\n" + OLD_LOG_HEAD + "\n## Open\n\n## Unreleased\n",
                  "# Decisions and changes\n\n" + OLD_LOG_HEAD + "\n## Unreleased\n")
@@ -6118,9 +6122,11 @@ def open_problems(old: str, new: str, prefix: str) -> list[str]:
     return out
 
 
-def ideas_problems(text: str, log: str, prefix: str, trunk: str = "", trunk_side: bool = False) -> list[str]:
+def ideas_problems(text: str, log: str, prefix: str, trunk: str = "", trunk_side: bool = False,
+                   glossary: tuple[str | None, str] | None = None) -> list[str]:
     """M2 for the ideas file: each idea's heading and status line, one block per id across it
-    and the log, its supersedes links, and on trunk numbered ids only."""
+    and the log, its supersedes links, and on trunk numbered ids only. With GLOSSARY (its text
+    and name), each `(labels …)` line too, by label_problems: a scope's check, word for word."""
     out: list[str] = []
     for n, line in enumerate(text.splitlines(), 1):
         if line.startswith("## "):
@@ -6158,7 +6164,75 @@ def ideas_problems(text: str, log: str, prefix: str, trunk: str = "", trunk_side
         if trunk_side and "?" in e["id"]:
             out.append(f"M2 {at} isn't numbered, and {trunk} takes numbers only: `jig merge "
                        f"--number` numbers what a merge in progress brings in")
+        if glossary is not None:
+            for n, labels in idea_labels(e):
+                out += [f"M2 {x}" for x in label_problems(labels, glossary[0], f"{IDEAS}:{n} {e['id']}", glossary[1])]
     return out
+
+
+def idea_labels(e: dict) -> list[tuple[int, list[str]]]:
+    """Each `(labels …)` line of idea E, a line of its own after its status line, with its line
+    number in the ideas file. Read by split_labels, as a scope's labels are: one reader for both."""
+    out, lines = [], e["block"].splitlines()
+    status = next((k for k in range(1, len(lines)) if lines[k].strip()), len(lines))
+    for k in range(status + 1, len(lines)):
+        rest, labels = split_labels(lines[k].strip())
+        if labels is not None and not rest:
+            out.append((e["line"] + k, labels))
+    return out
+
+
+def idea_glossary(staged: bool | None = None) -> tuple[str | None, str]:
+    """The glossary an idea's labels name terms of, and its name as a refusal says it: the one a
+    scope's labels are checked against here, the metarepo's in a family that plans from its
+    roadmap, this repo's own otherwise, as the change being committed has it (STAGED), or as
+    trunk has it when None."""
+    fam = family()
+    if fam.reads_meta:
+        return fam.glossary, fam.glossary_name
+    if staged is None:
+        return fam.glossary, GLOSSARY
+    return in_index(GLOSSARY, staged) or None, GLOSSARY
+
+
+def cmd_ideas(root: Path, args) -> int:
+    """`jig ideas [--label L]…`: the research list. Each idea with its id, title, status, labels
+    and the pages it touches; in a metarepo each registered pararepo's too, read on its trunk as
+    peers are, named by repo. --label keeps those carrying it, matched as `jig roadmap --label` is."""
+    trunk = Board.load(root).trunk
+    prefix = log_prefix(trunk)
+    glossary, _ = idea_glossary()
+    want = None
+    if args.label:
+        if bad := sorted(v for v in args.label if label_problems([v], glossary, "")):
+            terms = glossary_terms(glossary or "")
+            die(f"--label {', '.join(bad)}: no glossary term" + (f"; known: {', '.join(terms)}" if terms else
+                                                                 ": this repo's labels have no glossary"))
+        want = {label_fold(v) for v in args.label}
+    read = lambda f: (root / f).read_text(errors="replace") if (root / f).is_file() else ""
+    sources = [("", idea_entries(read(IDEAS), prefix))]
+    unread: list[str] = []
+    if load_meta(trunk):
+        logs, unread = peer_logs(root, trunk)
+        sources += [(f"{w}/", [e for e in log_entries(text, log_prefix_of(text)) if e["section"] == IDEAS])
+                    for w, _, text in logs if w != META_KEY]
+    shown = 0
+    for repo, ideas in sources:
+        for e in ideas:
+            labels = [l for _, ls in idea_labels(e) for l in ls]
+            if want is not None and not {label_fold(l) for l in labels} & want:
+                continue
+            shown += 1
+            touches = entry_touches(e["block"])
+            print(f"{repo}{e['id']} {e['title']}")
+            print(f"    {e['status']}"
+                  + (f"  labels: {', '.join(labels)}" if labels else "")
+                  + (f"  touches: {', '.join(touches)}" if touches else ""))
+    if not shown:
+        print("no ideas" + (f" labelled {', '.join(args.label)}" if args.label else ""))
+    for u in unread:
+        print(f"not read: {u}")
+    return 0
 
 
 def ideas_rules(trunk: str, staged: bool, trunk_side: bool = False) -> list[str]:
@@ -6171,7 +6245,7 @@ def ideas_rules(trunk: str, staged: bool, trunk_side: bool = False) -> list[str]
     prefix = log_prefix(trunk)
     # An entry the fold brings from the log's ## Open is as trunk had it, not new: its Touches
     # line is judged when it changes, as it would have been in the log.
-    return (ideas_problems(new, in_index(LOG, staged), prefix, trunk, trunk_side)
+    return (ideas_problems(new, in_index(LOG, staged), prefix, trunk, trunk_side, idea_glossary(staged))
             + touches_problems(with_ideas(at_rev(since, LOG), old), new, prefix, trunk, staged, home=IDEAS))
 
 
@@ -12306,9 +12380,10 @@ def family_report(root: Path, trunk: str) -> dict | None:
     def repo_of(product: str) -> str:
         owner = owners.get(product, THIS_REPO)
         return meta_name if owner == THIS_REPO else owner
-    log = trunk_show(meta_loc, LOG) or ""
+    # The pending rulings: the metarepo's ideas, a log not folded yet's ## Open, and ## Unreleased.
+    log = with_ideas(trunk_show(meta_loc, LOG) or "", trunk_show(meta_loc, IDEAS) or "")
     for e in log_entries(log, log_prefix_of(log)):
-        if e["section"] not in ("Open", "Unreleased"):
+        if e["section"] not in ("Open", "Unreleased", IDEAS):
             continue
         for ptr in entry_touches(e["block"]) or []:
             page, term = pointer_term(ptr)
@@ -17115,6 +17190,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="check the draft (or FILE) and write it: trunk's checkout, or a pararepo's open proposal")
     sub.add_parser("family", help="what a metarepo's family has let sit: staged files, proposals, "
                                   "entries touching labelled work, two names for one thing")
+    ie = sub.add_parser("ideas", help=f"the research list: each idea in {IDEAS}, and in a metarepo its pararepos'")
+    ie.add_argument("--label", action="append", default=[], metavar="LABEL", help="only ideas carrying this label; repeatable")
     rl = sub.add_parser("reading-list", help="what to read before touching these files")
     rl.add_argument("paths", nargs="+", metavar="path")
     rl.add_argument("--claims", action="store_true",
@@ -17190,7 +17267,7 @@ def main(argv: list[str] | None = None) -> int:
     load_genres(root)
     fn = {
         "init": cmd_init, "install-hooks": cmd_install_hooks, "status": cmd_status,
-        "open": cmd_open, "reserve": cmd_reserve, "consolidate": cmd_consolidate, "share": cmd_share, "mark": cmd_mark, "merge": cmd_merge, "rules": cmd_rules, "check": cmd_rules, "checked": cmd_checked, "queue": cmd_queue, "decision": cmd_decision,
+        "open": cmd_open, "reserve": cmd_reserve, "consolidate": cmd_consolidate, "share": cmd_share, "mark": cmd_mark, "merge": cmd_merge, "rules": cmd_rules, "check": cmd_rules, "checked": cmd_checked, "queue": cmd_queue, "decision": cmd_decision, "ideas": cmd_ideas,
         "job": cmd_job, "sync": cmd_sync, "reviewed": cmd_reviewed,
         "handoff": cmd_handoff, "gate": cmd_gate, "hook": cmd_hook,
         "workflow": cmd_workflow, "roles": cmd_roles, "flows": cmd_flows, "next": cmd_next,

@@ -1238,9 +1238,14 @@ across both), and the status `Open (date).` or `Proposed (date).`, optionally en
 leaves in one of three ways: decided, its block moves with its id to the log's `## Unreleased`
 as `Accepted (who, date).`; dropped, removed with no line, as a rejected entry is; or, in a
 metarepo, moved down with a move line (Released sections). A question that binds others is
-written as an idea when it is asked, so it can be cited before it is answered. `jig decision`,
-`jig reading-list` and peers read both files; `jig reading-list <paths>` shows each page's
-ideas. A log from before the ideas file kept them under `## Open`: `jig update --apply` folds
+written as an idea when it is asked, so it can be cited before it is answered. An idea is
+labelled the way a scope is: a line of its own after its status line, `(labels <term>, …)`, each
+label a term of the glossary a scope's labels name here (the metarepo's in a family, read where
+the roadmap is; the repo's own otherwise), checked by the same rule and refused by line, a
+glossary change that drops a term an idea names included. `jig decision`, `jig reading-list` and
+peers read both files; `jig reading-list <paths>` shows each page's ideas. `jig ideas [--label
+<term>]` is the research list: each idea with its status, labels and touched pages, in a
+metarepo each registered pararepo's too, read on its trunk and named by repo. A log from before the ideas file kept them under `## Open`: `jig update --apply` folds
 that section into `.jig/ideas.md`, ids and blocks byte for byte (in a metarepo, `jig update
 --apply --fold-ideas` in a job), and then the hook refuses an `## Open` heading or an open or
 proposed entry the log adds.
@@ -1740,7 +1745,7 @@ committed), `stale` past 7 days; **Proposals**, every `propose/` branch in the m
 merged into its trunk, or with nothing written on it, with its age (its opening commit's date;
 for an older branch, its first commit past trunk), `empty`, `stale` past 7 days, and the
 pararepo specs citing it (`meta: <meta> proposal <branch>`) or `cited by no spec`; **Entries
-touching labelled work**, each entry in the metarepo's log under `## Open` or `## Unreleased`
+touching labelled work**, each idea in the metarepo's `.jig/ideas.md` and each entry in its log under `## Unreleased`
 whose `Touches:` names `docs/glossary.md § <term>` for a term labelling a scope or item not done
 (Roadmap, Labels), with those scopes and their owning repos: a pending ruling each should read
 before its next pin; **Two names**, two glossary terms equal once folded as labels are, and two
@@ -1858,6 +1863,7 @@ jig rig --store-put|--store-get <path>   store, or print, a model's judgment of 
 jig rig --close              hubnode, on trunk: remove the finished specs in one commit, their Scope: and Later: kept on their notes
 jig share <job> <path>…     hubnode: add paths to an open job's shares
 jig reading-list <paths>    what to read before touching these files, and the pages above
+jig ideas [--label <term>]  the research list: each idea, its status, labels and touched pages; in a metarepo its pararepos' too
 jig install-hooks           rewrite the hooks
 jig status                  jobs, states, distance from trunk, dirt
 jig open <name> --spec … --owns … --shares … --after … --reserve schema

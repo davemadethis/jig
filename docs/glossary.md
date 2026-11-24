@@ -99,6 +99,12 @@ One file per repo, `.jig/decisions.md`, holding every decision (who, when, what 
 and every change line, grouped by release. It isn't a wiki. A changed mind is a new entry
 that replaces the old one.
 
+## Ideas log
+
+One file per repo, `.jig/ideas.md`, beside the decision log. It holds the questions and ideas
+still to research before they can be decided, scoped, built and documented. Each keeps a
+decision id and can carry labels. Deciding one moves it into the decision log.
+
 ## Roadmap
 
 The owner's plan for a repo: its phases in order, each phase's scopes, and work named but not

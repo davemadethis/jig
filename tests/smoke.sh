@@ -5269,12 +5269,12 @@ git -c core.hooksPath=/dev/null worktree add -q "$T/mz" propose/pa-z && (cd "$T/
 git -c core.hooksPath=/dev/null merge -q --no-ff --no-edit propose/pa-z
 expect_pass sh -c "! $J family | grep -q 'propose/pa-z'"
 python3 - <<'PY'
-p='.jig/decisions.md'; s=open(p).read()
-s=s.replace('## Open\n', '## Open\n\n### D-?tp Teleport keeps the session\nProposed (owner, 2026-11-23).\nTouches: docs/glossary.md § Teleport\n\nIt keeps it.\n', 1)
+p='.jig/ideas.md'; s=open(p).read()
+s=s.rstrip('\n')+'\n\n### D-?tp Teleport keeps the session\nProposed (owner, 2026-11-23).\nTouches: docs/glossary.md § Teleport\n\nIt keeps it.\n'
 open(p,'w').write(s)
 PY
 git add -A && git -c core.hooksPath=/dev/null commit -qm "D-?tp"
-msg="family report: an Open entry touching the Teleport term lists Walyt alpha/pairing and pa"
+msg="family report: a proposed idea touching the Teleport term lists Walyt alpha/pairing and pa"
 expect_pass sh -c "$J family | sed -n '/^Entries/,/^Two/p' | grep -q 'Teleport keeps the session  (docs/glossary.md § Teleport): Walyt alpha/pairing (pa)'"
 msg="family report: once pairing is done, the entry isn't listed"
 cd "$RA" && mkdir -p .jig/specs && printf '# pr\n\nSource: smoke\nScope: Walyt alpha/pairing\n\n## Intent\nx\n' > .jig/specs/pr.md && git add -A && git commit -qm pr
@@ -6926,6 +6926,76 @@ Open (2026-11-23).
 Touches: docs/x.md' && git add -A && git commit -qm "D-003" >/dev/null
 python3 -c "import re; f='.jig/ideas.md'; s=open(f).read(); open(f,'w').write(re.sub(r'(?ms)^### D-003 .*?(?=^### |\Z)', '', s))"
 git add -A; expect_pass git commit -qm "drop D-003"
+}
+
+# Ideas carry labels as scopes do, read and checked by the roadmap's one label reader, and
+# `jig ideas` lists them, family-wide in a metarepo.
+sec_ideas_labels() {
+IL="$T/il"; pcnew "$IL" && mkdir -p docs && printf '# X\n\nThe x page.\n' > docs/x.md
+printf '# Glossary\n\n## Teleport\n\nMoving a wallet between devices.\n' > docs/glossary.md
+git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
+msg="ideas labels: an idea with (labels teleport), a term a scope's label may name, commits"
+uidea '### D-001 Can a wallet teleport?
+Open (2026-11-24).
+Touches: docs/x.md
+(labels teleport)
+
+Nobody has tried.' && git add -A
+expect_pass git commit -qm "D-001: an idea"
+msg="ideas labels: a label naming no term is refused by line, with the message a scope's label gets"
+uidea '### D-002 Does it fly?
+Open (2026-11-24).
+Touches: docs/x.md
+
+(labels flight)' && git add -A; out=$(git commit -qm bad 2>&1); rc=$?; undo
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'M2 .jig/ideas.md:[0-9]* D-002 labels flight, which docs/glossary.md has no term for: a label is a term of it, any case and spacing'" "$out"
+msg="ideas labels: so is (labels) naming nothing, as a scope's"
+uidea '### D-002 Does it fly?
+Open (2026-11-24).
+Touches: docs/x.md
+(labels)' && git add -A; out=$(git commit -qm empty 2>&1); rc=$?; undo
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'D-002 has (labels) naming nothing'" "$out"
+msg="ideas labels: a glossary commit dropping the term a label names is refused, naming the idea"
+printf '# Glossary\n' > docs/glossary.md && git add -A; out=$(git commit -qm "glossary: drop teleport" 2>&1); rc=$?; undo
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'D-001 labels teleport, which docs/glossary.md has no term for'" "$out"
+msg="ideas labels: one label reader: LABELS is compiled once, and the ideas code reads and checks labels only through split_labels and label_problems"
+expect_pass python3 -c "
+import sys
+s = open(sys.argv[1]).read()
+assert s.count('LABELS = re.compile') == 1
+fns = {c.split('(', 1)[0]: c for c in s.split('def ')}
+for f in ('idea_labels', 'cmd_ideas', 'ideas_problems', 'idea_glossary'):
+    assert 'LABELS' not in fns[f] and 're.' not in fns[f], f
+assert 'split_labels(' in fns['idea_labels'] and 'label_problems(' in fns['ideas_problems']
+assert 'label_problems(' in fns['cmd_ideas'] and 'label_fold(' in fns['cmd_ideas']" "$P/jig/jig.py"
+uidea '### D-002 Does it fly?
+Open (2026-11-24).
+Touches: docs/x.md' && git add -A && git commit -qm "D-002" >/dev/null
+msg="ideas labels: jig ideas lists every idea, with its status, labels and touched pages"
+out=$($J ideas 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -qx 'D-001 Can a wallet teleport?' && echo \"\$0\" | grep -qx '    Open (2026-11-24).  labels: teleport  touches: docs/x.md' && echo \"\$0\" | grep -qx 'D-002 Does it fly?'" "$out"
+msg="ideas labels: --label teleport, any case and spacing, lists only the ideas carrying it"
+out=$($J ideas --label Teleport 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -qx 'D-001 Can a wallet teleport?' && ! echo \"\$0\" | grep -q 'D-002'" "$out"
+msg="ideas labels: --label naming no term is refused, as jig roadmap --label is"
+out=$($J ideas --label flight 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q -- '--label flight: no glossary term; known: Teleport'" "$out"
+# In a metarepo, each pararepo's ideas too, read on its trunk.
+IM="$T/il-meta"; pcnew "$IM" && mkdir -p docs && printf '# Glossary\n\n## Teleport\n\nMoving a wallet.\n' > docs/glossary.md
+git add -A && git commit -qm init && $J init --meta --name IM --prefix E- >/dev/null && git add -A && git commit -qm "TOOL: meta-init"
+python3 -c "import json; f='.jig/meta.json'; d=json.load(open(f)); d['pararepos']=['IL']; json.dump(d, open(f,'w'), indent=2)"
+printf '\n### E-001 Do all products teleport?\nOpen (2026-11-24).\nTouches: none — a family question.\n(labels teleport)\n' >> .jig/ideas.md
+git add -A && git -c core.hooksPath=/dev/null commit -qm "E-001" && $J repos add repo "$IL" --name IL >/dev/null
+msg="ideas labels: in a metarepo, jig ideas lists its own ideas and each pararepo's, named by repo"
+out=$($J ideas 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -qx 'E-001 Do all products teleport?' && echo \"\$0\" | grep -qx 'IL/D-001 Can a wallet teleport?' && echo \"\$0\" | grep -qx 'IL/D-002 Does it fly?'" "$out"
+msg="ideas labels: and --label teleport keeps the family's ideas carrying it, across repos"
+out=$($J ideas --label teleport 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -qx 'E-001 Do all products teleport?' && echo \"\$0\" | grep -qx 'IL/D-001 Can a wallet teleport?' && ! echo \"\$0\" | grep -q 'D-002'" "$out"
+msg="ideas labels: with the pararepo dropped from the repos file, it is named as not read"
+python3 -c "import json, sys; f=sys.argv[1]; d=json.load(open(f)); d.pop('IL'); json.dump(d, open(f,'w'))" "$JIG_CONFIG"
+out=$($J ideas 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -qx 'E-001 Do all products teleport?' && echo \"\$0\" | grep -q '^not read: IL' && ! echo \"\$0\" | grep -q 'IL/D-001'" "$out"
 }
 
 # A log from before the ideas file: its open questions under ## Open, folded by update.
@@ -9846,6 +9916,16 @@ msg="versioning: a log equal to the old seed still counts as the seed"
 expect_pass python3 -c "
 import sys; from pathlib import Path; sys.path.insert(0, '.jig'); import jig
 assert jig.log_is_seed(Path('.')), open('.jig/decisions.md').read()"
+msg="versioning: every seed a jig wrote counts as the seed: today's, and the two older ones with ## Open"
+expect_pass python3 -c "
+import sys; from pathlib import Path; sys.path.insert(0, '.jig'); import jig
+f = Path('.jig/decisions.md'); was = f.read_bytes()
+try:
+    for seed in (jig.LOG_SEED, *jig.OLD_LOG_SEEDS):
+        f.write_text(seed)
+        assert jig.log_is_seed(Path('.')), seed
+finally:
+    f.write_bytes(was)"
 msg="versioning: jig update lists the header swap"
 expect_pass sh -c "$UP 2>&1 | grep -q 'swap .jig/decisions.md.s two versioning header lines'"
 msg="versioning: --apply swaps exactly those two lines, and the commit passes the hook"
@@ -10965,7 +11045,7 @@ msg="queue config: the overflow key with the owner's words commits"
 expect_pass setq '{"width": "all", "overflow": {"to": "github", "reason": "the owner: keep the standing yes"}}'
 }
 
-UNITS="rules merge_derived update board_split worktree_setup metarepo,staging pararepo release r6_takes,r6_ints merge_after_sync repos workflow init_old_board ledger_rows hardware update_per_file pararepo_commands entry_globs report_fixes sync_buffer buffer_answered pointers removals feedback slash_names homes structure meta_docs agents_lines page_contract roadmap labels family family_report roadmap_edit phase_types boundary decisions ideas ideas_fold ideas_meta supersede touches,touches_terms sweep staging_batches merge_log findings glossary headings check_levels role_line consolidate cheaper_rounds next svg update_roles holders rig rig_batch close versioning pin_bump moves claims inbox rigger queue"
+UNITS="rules merge_derived update board_split worktree_setup metarepo,staging pararepo release r6_takes,r6_ints merge_after_sync repos workflow init_old_board ledger_rows hardware update_per_file pararepo_commands entry_globs report_fixes sync_buffer buffer_answered pointers removals feedback slash_names homes structure meta_docs agents_lines page_contract roadmap labels family family_report roadmap_edit phase_types boundary decisions ideas ideas_fold ideas_meta ideas_labels supersede touches,touches_terms sweep staging_batches merge_log findings glossary headings check_levels role_line consolidate cheaper_rounds next svg update_roles holders rig rig_batch close versioning pin_bump moves claims inbox rigger queue"
 
 if [ "${1:-}" = --list ]; then echo $UNITS | tr ' ,' '\n\n'; exit 0; fi
 if [ "${1:-}" = --unit ]; then        # --unit <run folder> <unit>: one unit, its output to a file
