@@ -54,30 +54,5 @@
       "plugin/templates/ledgers/BUFFER.md"
     ],
     "reserved": {}
-  },
-  "bug-deferred-scope": {
-    "spec": ".jig/specs/bug-deferred-scope.md",
-    "state": "gated",
-    "after": [],
-    "owns": [],
-    "shares": [
-      "docs/glossary.md",
-      "docs/jobs.md",
-      "docs/records.md",
-      "plugin/templates/jig/RULES.md",
-      "plugin/templates/jig/jig.py",
-      "plugin/templates/specs/_template.md",
-      "tests/smoke.sh",
-      "plugin/skills/spec/SKILL.md",
-      "plugin/skills/review/SKILL.md",
-      "plugin/skills/bug/SKILL.md",
-      "plugin/skills/hubnode/SKILL.md",
-      "plugin/skills/rig/SKILL.md",
-      "plugin/skills/retro/SKILL.md",
-      "plugin/skills/init/SKILL.md",
-      "plugin/skills/update/SKILL.md",
-      "tests/fixtures/**"
-    ],
-    "reserved": {}
   }
 }

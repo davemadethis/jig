@@ -40,8 +40,11 @@ Nothing else. The spec template, the two ledgers and `process.md` stay in the pl
 first used: `/jig:spec` copies the template, the first ledger row creates its ledger, and the
 first process placed there creates `.jig/process.md`.
 
-Then run `python3 .jig/jig.py init` — it writes the board and installs the git hooks that
-enforce the rules. Those hooks are the real enforcement and work with or without any AI tool.
+Then run `python3 .jig/jig.py init` — it writes the board, the decision log, the roadmap's
+empty structure (`.jig/roadmap.md` and `ROADMAP.md`, its view: every stand-alone repo and
+metarepo keeps one, and a pararepo plans from its metarepo's, so `init --para` writes none), and
+installs the git hooks that enforce the rules. A root `ROADMAP.md` of the repo's own holds the
+roadmap back: init says so, and its content moves into `.jig/roadmap.md` first. Those hooks are the real enforcement and work with or without any AI tool.
 Jobs' worktrees go in `.git/jig/worktrees/`, so nothing needs gitignoring.
 
 **A metarepo** holds shared definitions, decisions and conventions for several other repos, and
