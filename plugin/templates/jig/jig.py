@@ -8604,6 +8604,8 @@ def sync_answered(root: Path, ids: str, release: str | None, reason: str | None)
         die(f"{name} {release} is above the pin, {pin}: take it first (`jig sync` says how)", 2)
     if git("status", "--porcelain"):
         die("commit or stash first: the answered rows close in a commit of their own", 2)
+    if busy := in_progress(root):
+        die(f"{busy} is in progress here: finish it first, so the answered rows close in a commit of their own", 2)
     want = [i for i in re.split(r"[,\s]+", ids) if i]
     ledger = (root / BUFFER).read_text().splitlines(keepends=True) if (root / BUFFER).exists() else []
     state = {r[0]: r[-1] for l in ledger for r in buffer_rows(l)}
@@ -10584,12 +10586,13 @@ def laters_in(path: str, text: str) -> list[str]:
     return spec_laters(note_head(text) if path.startswith(HANDOFFS) else text)
 
 
-def cited(path: str, text: str, bad) -> str:
+def cited(path: str, text: str, bad, *, notes_later: bool = False) -> str:
     """What PATH's `Scope:` and `Later:` lines name that BAD holds, as a refusal says it:
-    "takes a, b", "leaves c for later", or both; "" when none."""
+    "takes a, b", "leaves c for later", or both; "" when none. A note's `Later:` is history,
+    so the owner drops a deferred item without rewriting it: it counts only with NOTES_LATER,
+    when moving in changes every id's form and a note left behind would name nothing."""
     took = [s for s in scopes_in(path, text) if bad(s)]
-    # A note's Later: is history: the owner drops a deferred item without rewriting it.
-    left = [s for s in laters_in(path, text) if bad(s)] if is_spec(path) else []
+    left = [s for s in laters_in(path, text) if bad(s)] if notes_later or is_spec(path) else []
     return " and ".join(x for x in (f"takes {', '.join(took)}" if took else "",
                                      f"leaves {', '.join(left)} for later" if left else "") if x)
 
@@ -10663,10 +10666,13 @@ def finished_specs(snap: Snapshot, board: "Board", job: str = "", named: set[str
         if not is_spec(f):
             continue
         bug = bug_for(snap.show(f))
+        carry = ""
         if bug:
             if bug in board.jobs or job and bug != job:
                 continue
             note = ""
+            # What it leaves for later outlives it on its job's note, as its job's spec's does.
+            carry = job_note(snap, bug)
         else:
             note = note_for(f, notes)
             if not note or f in held or Path(f).name in {Path(h).name for h in held}:
@@ -10678,10 +10684,23 @@ def finished_specs(snap: Snapshot, board: "Board", job: str = "", named: set[str
         text = snap.show(f)
         follows = para and (any(m.group("branch") or m.group("pbranch") for m in PROPOSAL.finditer(text))
                             or bool(WITHDRAWN.search(text)))
-        out.append({"spec": f, "note": note,
+        out.append({"spec": f, "note": note, "carry": carry or note,
                     "kept": "a cached metarepo pointer names it" if f in pointed else
                     "it names a metarepo proposal or pointers branch `jig sync` follows" if follows else ""})
     return out
+
+
+def job_note(snap: Snapshot, job: str) -> str:
+    """JOB's newest landed handoff note that isn't partial, by its `# Handoff:` title, or ""."""
+    best = ("", "")
+    for n in snap.ls(HANDOFFS):
+        body = snap.show(n)
+        commit = re.search(r"^Commit: (\w+)", body, re.M)
+        if (re.search(rf"^# Handoff: {re.escape(job)}[ \t]*$", body, re.M) and commit
+                and not re.search(r"^Partial: yes", body, re.M) and snap.landed(commit.group(1))):
+            date = re.search(r"^Date: (\S+)", body, re.M)
+            best = max(best, ((date.group(1) if date else ""), n))
+    return best[1]
 
 
 def note_head(text: str) -> str:
@@ -10707,19 +10726,33 @@ def close_specs(finished: list[dict], snap: Snapshot) -> list[str]:
             out.append(f"kept {f}: {x['kept']}")
             continue
         text = snap.show(f)
-        if note:
-            body = read_raw(root / note)
+        carry = x.get("carry", note)
+        if carry:
+            body = read_raw(root / carry)
             head = note_head(body)
+            add = [l for l in MARK_LINE.findall(text) if l not in head.splitlines()]
             # Later: is carried as Scope: is: what the spec left for later outlives it on the note,
-            # where rig lists each id until a spec takes it or the owner drops it.
-            add = [m.group(0) for key in ("Scope:", "Later:")
-                   if (m := re.search(rf"^{key}[ \t]*.*$", text, re.M)) and not re.search(rf"^{key}", head, re.M)] \
-                + [l for l in MARK_LINE.findall(text) if l not in head.splitlines()]
+            # where rig lists each id until a spec takes it or the owner drops it. A job's bug spec
+            # closes onto the same note, so a line already there gains its ids.
+            for key, ids in (("Scope:", spec_scopes(text)), ("Later:", spec_laters(text))):
+                have = re.search(rf"^{key}[ \t]*(.*)$", head, re.M)
+                if not ids:
+                    continue
+                if not have:
+                    add.insert(0 if key == "Scope:" else len([a for a in add if a.startswith("Scope:")]),
+                               f"{key} {', '.join(ids)}")
+                    continue
+                old = [i.strip().strip("`") for i in have.group(1).split(",") if i.strip()]
+                if new := [i for i in ids if i not in old]:
+                    line = f"{key} {', '.join(old + new)}"
+                    body = body.replace(have.group(0), line, 1)
+                    head = head.replace(have.group(0), line, 1)
             if add:
                 body = re.sub(r"^(Spec: .*\n)", lambda m: m.group(1) + "".join(f"{l}\n" for l in add),
                               body, count=1, flags=re.M)
-                write_raw(root / note, body)
-                git("add", "--", note, check=True, cwd=str(root))
+            if body != read_raw(root / carry):
+                write_raw(root / carry, body)
+                git("add", "--", carry, check=True, cwd=str(root))
         # -f: mid-merge the spec is staged from the job, as a new file.
         git("rm", "-q", "-f", "--", f, check=True, cwd=str(root))
         out.append(f"closed {f}")
@@ -11149,7 +11182,9 @@ def roadmap_withheld(here: Path, trunk: str = "") -> str:
     root ROADMAP.md that is the repo's own would become jig's generated view beside one."""
     if (here / PARA).is_file() or trunk and load_para(trunk) is not None:
         return "para"
-    if (here / ROADMAP_VIEW).is_file() or trunk and at_rev(trunk, ROADMAP_VIEW):
+    # Beside a .jig/roadmap.md in the work tree (a seed a refused commit left staged, say), the
+    # view is jig's: seed_held says what to do with them.
+    if not (here / ROADMAP).exists() and ((here / ROADMAP_VIEW).is_file() or trunk and at_rev(trunk, ROADMAP_VIEW)):
         return (f"{ROADMAP_VIEW} is the repo's own, and with {ROADMAP} it would be jig's generated "
                 f"view: move what it holds into {ROADMAP} first (`jig update` lists it)")
     return ""
@@ -11222,6 +11257,17 @@ def ensure_roadmap(root: Path, trunk: str = "", *, init: bool = False, write: bo
     print(f"jig: committed {ROADMAP} and {ROADMAP_VIEW} on {trunk}: {subject}", file=sys.stderr)
 
 
+def in_progress(where: Path) -> str:
+    """The git operation under way in WHERE's checkout, or "": a commit jig makes there by itself
+    would otherwise become that merge's or pick's commit, under jig's subject. A clean tree
+    doesn't show it: a clean `git merge --no-commit` stages nothing a status reports."""
+    return next((what for ref, what in (("MERGE_HEAD", "a merge"), ("CHERRY_PICK_HEAD", "a cherry-pick"),
+                                         ("REVERT_HEAD", "a revert"), ("rebase-apply", "a rebase or `git am`"),
+                                         ("rebase-merge", "a rebase"))
+                 if Path(git("rev-parse", "--path-format=absolute", "--git-path", ref, cwd=str(where))).exists()),
+                "")
+
+
 def seed_held(root: Path, main: Path, trunk: str, write: bool) -> str:
     """Why the seed isn't committed here, said as what to do, or "" when it may be: its commit
     is the trunk checkout's own, and never lands inside someone's merge or staged work."""
@@ -11232,11 +11278,7 @@ def seed_held(root: Path, main: Path, trunk: str, write: bool) -> str:
         return later
     if git("branch", "--show-current") != trunk:
         return f"the {trunk} checkout is on another branch: {later} once it is back on {trunk}"
-    state = next((what for ref, what in (("MERGE_HEAD", "a merge"), ("CHERRY_PICK_HEAD", "a cherry-pick"),
-                                          ("REVERT_HEAD", "a revert"), ("rebase-apply", "a rebase or `git am`"),
-                                          ("rebase-merge", "a rebase"))
-                  if Path(git("rev-parse", "--path-format=absolute", "--git-path", ref, cwd=str(main))).exists()),
-                 "")
+    state = in_progress(main)
     if state:
         return f"{state} is in progress here: finish it, then {later}"
     if (main / ROADMAP).exists() or (main / ROADMAP_VIEW).exists():
@@ -11692,7 +11734,8 @@ def moving_in(para: dict, staged: bool) -> list[str]:
     known = roadmap_scopes(text)
     out = []
     for f in git("-c", "core.quotePath=false", "ls-files", "--", SPECS, HANDOFFS).splitlines():
-        if takes_scopes(f) and (what := cited(f, in_index(f, staged), lambda sc: sc not in known)):
+        if takes_scopes(f) and (what := cited(f, in_index(f, staged), lambda sc: sc not in known,
+                                              notes_later=True)):
             out.append(f"{f} {what}, which {para['meta']}'s {ROADMAP} on its trunk doesn't "
                        f"have: this commit removes {ROADMAP}, so re-point it to {para['meta']}'s ids here")
     return out
@@ -15672,6 +15715,8 @@ def rig_close(root: Path, board: "Board") -> int:
         die(f"close finished specs in the {trunk} checkout: specs leave {trunk} there")
     if git("status", "--porcelain", "--untracked-files=no"):
         die("commit or stash first: the close commit carries the closed specs, nothing else")
+    if busy := in_progress(root):
+        die(f"{busy} is in progress here: finish it first, so the close commit carries the closed specs, nothing else")
     os.chdir(root)
     snap = Snapshot(where="index")
     lines = close_specs(finished_specs(Snapshot(trunk), board), snap)

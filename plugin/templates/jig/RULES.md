@@ -668,7 +668,8 @@ else stops with the files named, and a person resolves it.
    A merge also leaves nothing of the job in flight: in the merge commit it removes the job's
    spec, once the notes this job filed complete it and no other open job names it, and each
    `Bug-for: <job>` spec, and writes each removed spec's `Scope:` and `Later:` lines on its
-   completing note, in the note's header after its `Spec:` line, which the roadmap and rig then
+   completing note (a `Bug-for:` spec's on its job's newest note, merged into any line already
+   there), in the note's header after its `Spec:` line, which the roadmap and rig then
    read, printing `left for later by <spec>: <ids>`, and beside them each
    `Source: … (staged as …)` line the spec carried, which `resolve` then reads (Staging). In a
    pararepo a spec naming a metarepo proposal or pointers branch stays: `jig sync` follows the
@@ -856,7 +857,7 @@ landed handoff note that isn't partial names it) that no open job names, and eac
 spec whose job has left the board, with the note that completed it. A spec a cached metarepo
 pointer names is kept, saying so, as is a pararepo's spec naming a metarepo proposal or
 pointers branch. `jig rig --close`, on trunk in the trunk checkout with a
-clean tree, removes them in one commit, `close finished specs: <names>`, each one's `Scope:`
+clean tree and no merge, cherry-pick, revert or rebase in progress, removes them in one commit, `close finished specs: <names>`, each one's `Scope:`
 and `Later:` on its note as a merge writes them, and rewrites `ROADMAP.md`; then, closing anything or not,
 it runs `jig staging resolve` on each built staged file, printing resolve's line. Anywhere else
 it refuses and writes nothing.
@@ -1061,8 +1062,8 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
   the product with its `Owner:` line; the pararepo proposes its phases as
   `## <Product> <phase>` and its `## No phase` items as `## <Product> No phase`, and the
   metarepo merges it; then the pararepo's next commit removes its `.jig/roadmap.md` and
-  `ROADMAP.md`, its `Scope:` lines re-pointed to the metarepo's ids, which the hook checks on the
-  metarepo's trunk. After it, the pararepo's hook refuses a `.jig/roadmap.md` while the
+  `ROADMAP.md`, its `Scope:` lines and its specs' and notes' `Later:` lines re-pointed to the
+  metarepo's ids, which the hook checks on the metarepo's trunk. After it, the pararepo's hook refuses a `.jig/roadmap.md` while the
   metarepo's roadmap holds a product it owns, and `jig update --sweep` writes none there: its
   `## Undefined` entries are proposed under `## <Product> No phase`.
 - **Unconfirmed waits.** A scope or phase may say what waits on it, `(needed by <ref>, …)`,
@@ -1620,7 +1621,7 @@ commit `meta: <name> v0.3.0 → v0.4.0` (or, when the pin already holds the rele
 A claim the metarepo answered by some other change, its proposal never released, closes on the
 owner's word: `jig sync --answered B1,B2 --in <release> --reason <text>`, on trunk, with the pin
 at or above that release, writes `Closed (answered in <release>: <reason>)` in each row and
-commits it alone. jig checks the release, not the claim: the reason is the owner's, as
+commits it alone, refusing while a merge, cherry-pick, revert or rebase is in progress there. jig checks the release, not the claim: the reason is the owner's, as
 `meta: none — <reason>` is. A proposal the metarepo will never release is withdrawn:
 `jig propose --withdraw <branch> --reason <text>` rewrites its spec's line to
 `meta: <name> withdrawn <branch> — <reason>`. Sync and gate stop waiting on it, it answers no

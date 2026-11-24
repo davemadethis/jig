@@ -5081,6 +5081,7 @@ fnew pd && mkdir -p docs src && printf '# P\n\nP is.\n' > docs/p.md && printf 'x
 git add -A && git commit -qm init && $J init >/dev/null && board "b['docmap'] = {'docs/p.md': ['src/**']}" && git add -A && git commit -qm board
 $J init --para meta --location "$FM" >/dev/null 2>&1 && git add -A && git commit -qm para-init && python3 .jig/jig.py repos add para "$T/pd" --name pd >/dev/null
 printf '# Roadmap\n\n## alpha\nScopes:\n- `x`: the x\n\n## No phase\n- `u`: parked u (touches docs/p.md)\n- `v`: later v\n' > .jig/roadmap.md && fspec sx alpha/x && git add -A && git commit -qm own && $J roadmap --write >/dev/null && git add -A && git commit -qm view
+mkdir -p .jig/handoffs && printf '# Handoff: old\n\nCommit: %s\nDate: 2026-11-01\nSpec: .jig/specs/old.md\nLater: No phase/v\n\n## Built\nx\n' "$(git rev-parse HEAD)" > .jig/handoffs/old-2026-11-01.md && plant "a landed note leaving No phase/v for later"
 FD="$T/pd"
 ( cd "$FM" && printf '\n## Delta\n\nThe delta app.\n\nOwner: `pd`.\n' >> docs/glossary.md && python3 -c "import json; f='.jig/meta.json'; d=json.load(open(f)); d['pararepos'].append('pd'); json.dump(d, open(f,'w'), indent=2)" && plant "Delta" )
 mkdir -p .jig/ledgers && cp "$P/ledgers/BUFFER.md" .jig/ledgers/BUFFER.md
@@ -5092,8 +5093,12 @@ msg="family D: pd's commit removing its roadmap and view, re-pointing to a scope
 git rm -q .jig/roadmap.md ROADMAP.md && sed -i.bak 's|^Scope: alpha/x$|Scope: Delta alpha/nope|' .jig/specs/sx.md && rm .jig/specs/sx.md.bak && git add -A
 out=$(git commit -qm "move in" 2>&1); rc=$?
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'takes Delta alpha/nope, which meta.s .jig/roadmap.md on its trunk'" "$out"
-msg="family D: re-pointed to Delta alpha/x, the moving-in commit passes"
+msg="family D: the spec re-pointed, a note's Later: still naming pd's own No phase/v is refused: moving in re-points notes' Later: too"
 sed -i.bak 's|^Scope: Delta alpha/nope$|Scope: Delta alpha/x|' .jig/specs/sx.md && rm .jig/specs/sx.md.bak && git add -A
+out=$(git commit -qm "move in" 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'old-2026-11-01.md leaves No phase/v for later, which meta.s .jig/roadmap.md on its trunk'" "$out"
+msg="family D: re-pointed to Delta alpha/x and Delta No phase/v, the moving-in commit passes"
+sed -i.bak 's|^Later: No phase/v$|Later: Delta No phase/v|' .jig/handoffs/old-2026-11-01.md && rm .jig/handoffs/old-2026-11-01.md.bak && git add -A
 expect_pass git commit -qm "move in"
 msg="family D: moved in, a spec in pd taking Delta No phase/v commits, and pd's reading-list shows u, read from meta"
 fspec sv 'Delta No phase/v' && git add -A && git commit -qm sv
@@ -5382,6 +5387,11 @@ msg="roadmap: with a change staged, jig rig commits nothing and says the staged 
 printf 'x\n' > staged.txt && git add staged.txt; out=$($J rig 2>&1)
 expect_pass sh -c "test \"\$(git rev-parse HEAD)\" = $head && git diff --cached --name-only | grep -qx staged.txt && test ! -e .jig/roadmap.md && echo \"\$0\" | grep -q 'changes are staged here'" "$out"
 git rm -q --cached staged.txt && rm staged.txt
+msg="roadmap: when the hook refuses the seed's commit, it says so; the next run says the seed was left staged, not that ROADMAP.md is the repo's own"
+printf '#!/bin/sh\nexit 1\n' > .git/hooks/pre-commit.local && chmod +x .git/hooks/pre-commit.local
+out=$($J rig 2>&1); rm .git/hooks/pre-commit.local; out2=$($J rig 2>&1)
+expect_pass sh -c "test \"\$(git rev-parse HEAD)\" = $head && echo \"\$0\" | grep -q 'written and staged but not committed' && echo \"\$1\" | grep -q 'left staged by a refused commit' && ! echo \"\$1\" | grep -q 'is the repo.s own'" "$out" "$out2"
+git rm -q -f --cached .jig/roadmap.md ROADMAP.md && rm -f .jig/roadmap.md ROADMAP.md
 msg="roadmap: in the trunk checkout on trunk, jig rig commits the empty structure as its own commit, says so, then prints its picture"
 out=$($J rig 2>&1); rc=$?
 expect_pass sh -c "test $rc = 0 && git log -1 --format=%s | grep -qx 'roadmap: the empty structure jig init writes' && test \"\$(git show --name-only --format= HEAD | sort | tr '\\n' ' ')\" = '.jig/roadmap.md ROADMAP.md ' && echo \"\$0\" | grep -q 'committed .jig/roadmap.md and ROADMAP.md on main' && echo \"\$0\" | grep -q '^Can start now:' && ! $J roadmap | grep -q 'stale\\|missing'" "$out"
@@ -9699,9 +9709,18 @@ printf -- '- `tags`: tags on each item\n' >> .jig/roadmap.md && cspec lb && $J r
 cjob LB lb "" "printf '# lb bug\n\nBug-for: LB\nLater: No phase/tags\n\n## Out of scope\n- the colours: the theme job does it\n' > .jig/specs/lb-bug.md"
 out=$($J gate LB 2>&1); git worktree remove --force .git/jig/worktrees/gate-LB 2>/dev/null
 expect_pass sh -c "echo \"\$0\" | sed -n '/^Closes with the spec at merge:/,/^\$/p' | grep -A2 '^  .jig/specs/lb-bug.md:' | grep -q 'later  *No phase/tags: tags on each item' && echo \"\$0\" | sed -n '/^Closes with the spec at merge:/,/^\$/p' | grep -q 'out of scope  - the colours: the theme job does it'" "$out"
+gated LB; out=$($J merge LB 2>&1); rc=$?
+lbnote=$(git ls-files .jig/handoffs | grep '/LB-')
+msg="close: a Bug-for spec's Later: goes onto its job's note at merge, and rig lists it under Left for later"
+expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -qx 'left for later by .jig/specs/lb-bug.md: No phase/tags' && git show HEAD:$lbnote | sed '/^## /,\$d' | grep -qx 'Later: No phase/tags' && $J rig | sed -n '/^Left for later:/,/^\$/p' | grep -q '^  No phase/tags  left by LB: tags on each item' && $J rig --json | python3 -c \"import json,sys; assert 'No phase/tags' in [x['id'] for x in json.load(sys.stdin)['later']]\"" "$out"
 msg="close: once a new spec takes No phase/labels, Left for later no longer lists it"
 cspec lab 'No phase/labels' && git add -A && git commit -qm lab
-expect_pass sh -c "! $J rig | grep -q 'Left for later' && $J rig --json | python3 -c \"import json,sys; assert json.load(sys.stdin)['later'] == []\""
+expect_pass sh -c "! $J rig | grep -q 'No phase/labels  left' && $J rig --json | python3 -c \"import json,sys; assert [x['id'] for x in json.load(sys.stdin)['later']] == ['No phase/tags']\""
+msg="close: jig rig --close during a merge in progress commits nothing: the merge stays the user's"
+head=$(git rev-parse HEAD); side=$(git commit-tree "HEAD^{tree}" -p HEAD -m side)
+git merge -q --no-commit --no-ff "$side" >/dev/null 2>&1; out=$($J rig --close 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && test \"\$(git rev-parse HEAD)\" = $head && git rev-parse -q --verify MERGE_HEAD >/dev/null && echo \"\$0\" | grep -q 'a merge is in progress here'" "$out"
+git merge --abort
 }
 
 sec_claims() {
