@@ -8842,7 +8842,7 @@ def stage_pin_bumps(root: Path, meta: dict, prev: str, tag: str) -> list[str]:
                 files += [g for f in git("grep", "-l", "-w", "-F", i, trunk, "--", ".", f":!{HANDOFFS}",
                                          cwd=str(there)).splitlines()
                           if (g := f.split(":", 1)[1]) not in cited
-                          and (not g.startswith(f"{DIR}/") or g.startswith((f"{DIR}/specs/", f"{DIR}/ledgers/", LOG, PROCESS)))]
+                          and (not g.startswith(f"{DIR}/") or g.startswith((f"{DIR}/specs/", f"{DIR}/ledgers/", LOG, IDEAS, PROCESS)))]
             if files:
                 by = holds_now(i, now_log, prefix, tag, str(root))
                 state = f" (moved: {shown_pointer(by, here)})" if by and "/" in by else f" (now {by})" if by else " (removed)"
@@ -9085,7 +9085,7 @@ def meta_citations(root: Path, para: dict, ids: str, loc: Path | None = None,
     moves = moves_in(meta_text(LOG) or "")
     out = []
     for f, text in head_texts([p for p in small if not p.startswith(f"{DIR}/")
-                               or p.startswith((f"{DIR}/specs/", f"{DIR}/ledgers/", LOG, PROCESS))],
+                               or p.startswith((f"{DIR}/specs/", f"{DIR}/ledgers/", LOG, IDEAS, PROCESS))],
                               rev, str(root)):
         folded = text.casefold()
         if not any(t in folded for t in named) and not (one and one.search(text)):
@@ -12224,6 +12224,9 @@ def fold_open(log: str, ideas: str) -> tuple[str, str]:
             inside = bool(OPEN_HEADING.match(l.rstrip("\r")))
             if inside:
                 cuts.append(len(keep))
+                # A second ## Open's blocks follow the first's after one blank line.
+                if trimmed(moved):
+                    moved = trimmed(moved) + [""]
                 continue
         (moved if inside else keep).append(l)
     body = "\n".join(trimmed(moved))
@@ -12238,7 +12241,8 @@ def fold_open(log: str, ideas: str) -> tuple[str, str]:
         b = c
         while b < len(keep) and not keep[b].strip():
             b += 1
-        keep[a:b] = [""] if 0 < a and b < len(keep) else []
+        # One blank line between what was before and after; at the end, the final newline.
+        keep[a:b] = [""] if 0 < a and b < len(keep) else [""] if b == len(keep) and a > 0 else []
     return "\n".join(keep), ideas
 
 
@@ -12699,9 +12703,9 @@ def superseded_kept(root: Path) -> list[tuple[str, str]]:
     text = read_entries_text(root)
     prefix = log_prefix_of(text)
     entries = log_entries(text, prefix)
-    have = {e["id"] for e in entries}
-    return [(LOG, f"{s} is superseded by {e['id']}: remove it; the entry superseding it names it")
-            for e in entries for s in replaced(e, prefix) if s in have]
+    home = {e["id"]: e["file"] for e in entries}
+    return [(home[s], f"{s} is superseded by {e['id']}: remove it; the entry superseding it names it")
+            for e in entries for s in replaced(e, prefix) if s in home]
 
 
 def files_to_review(root: Path, plan: dict, template: Path | None = None,

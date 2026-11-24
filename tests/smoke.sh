@@ -6395,6 +6395,18 @@ git reset -q --soft HEAD^ && sed -i.bak "s|ideas.md § D-001|ideas.md § D-009|"
 msg="ideas meta: and is refused, naming L/.jig/ideas.md, when L's trunk has no D-009"
 out=$(git commit -qm "$E3: moved down" 2>&1); rc=$?
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \"L's .jig/ideas.md on main has no entry D-009\"" "$out"
+git reset -q --hard && git switch -q main
+# A pararepo's idea is a use like any other: a metarepo change to what it cites is named for it.
+cd "$L" && printf '\n### D-002 does L follow x?\nOpen (2026-11-06).\nTouches: none — a question for L.\n\nPer `M/.jig/decisions.md § E-002`, and E-002 bare.\n' >> .jig/ideas.md && git add -A && git commit -qm "L: D-002 cites E-002" >/dev/null
+cd "$M" && rment E-002 && ulog '### E-004 x runs, and wakes
+Accepted (owner, 2026-11-06). Supersedes E-002.
+Touches: docs/products/x.md' && emerge sup "E-004: supersedes E-002" .jig/decisions.md
+msg="ideas meta: a pararepo idea citing a superseded entry is named in the pin-bump request"
+out=$($J release 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q '^L: staged .jig/staging/pin-bump-M.md' && grep -qx -- '- E-002 (now E-004): cited in .jig/ideas.md:[0-9]*' '$L/.jig/staging/pin-bump-M.md'" "$out"
+msg="ideas meta: and L's jig sync names it, used in .jig/ideas.md"
+out=$(cd "$L" && $J sync 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -q 'E-002: used in .*\.jig/ideas.md'" "$out"
 }
 
 sec_supersede() {

@@ -84,8 +84,8 @@ a rename changes both of its paths: R3–R5, P1, P2 and P4 count each.
   jobs are open, except a `propose/` branch in a metarepo (Metarepo and pararepos, rule 1).
 - **R3** A job changes only its `owns`, its `shares`, `common`, or files new to the repo, and
   adds to `.jig/decisions.md` (Decision log), whatever its lists say. There it changes in place
-  only a line it added itself, and removes an entry only in adding the accepted one that
-  supersedes it. It may add to `.jig/ideas.md` (Decision log, Ideas) and change it in place.
+  only a line it added itself, or an open entry of a log not folded yet (still under `## Open`),
+  and removes an entry only in adding the accepted one that supersedes it. It may add to `.jig/ideas.md` (Decision log, Ideas) and change it in place.
 - **R4** Another open job's `owns` is refused even if this job also lists it.
 - **R5** The board is the hubnode's: `config.json` and `jobs.json` are edited on trunk only.
   So is the roadmap, the owner's: `.jig/roadmap.md`, and `ROADMAP.md` where trunk has a
@@ -1193,7 +1193,7 @@ yet released may be corrected in place);
 the repo is one of `meta.json`'s `pararepos`; a moved id is an entry this commit removes, not
 one an accepted entry supersedes (its successor is what moves); this repo no longer has the
 page or section; and the target is on that repo's trunk, read through `jig repos` (an id as an entry
-heading in its log, matched by number, a heading as `§` resolves). An entry that supersedes a
+heading in its log or its ideas file, matched by number, a heading as `§` resolves). An entry that supersedes a
 moved id is refused: its home is the pararepo now. It refuses a target that repo lacks, naming the
 file it read, and passes with a warning when the repo can't be reached. Released, the line is
 frozen like any change line, so the map from old id or path to new home needs no history: a
