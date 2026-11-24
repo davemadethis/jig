@@ -87,7 +87,7 @@ Jobs, for anyone:
 Records:
 
 - `python3 .jig/jig.py decision <id>` prints a decision and what it replaced.
-- `python3 .jig/jig.py roadmap` prints the [roadmap](glossary.md#roadmap)'s states. `--write` regenerates its view.
+- `python3 .jig/jig.py roadmap` prints the [roadmap](glossary.md#roadmap)'s states, each phase with its type (Prototype, Pilot or Production). `--product`, `--phase`, `--type`, `--state` and `--owner` narrow what it prints, each repeatable, and `--view` prints that part as the view's Markdown. `--write` regenerates the whole view, and takes no filter.
 - `python3 .jig/jig.py staging` lists staged files. `resolve` lands one and `drop` deletes one.
 - `python3 .jig/jig.py inbox` prints the hubnode's unread messages and marks them read.
 - `python3 .jig/jig.py release` runs the repo's release and tags it.
