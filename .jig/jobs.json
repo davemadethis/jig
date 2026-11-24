@@ -1,7 +1,7 @@
 {
   "ideas-log": {
     "spec": ".jig/specs/ideas-log.md",
-    "state": "claimed",
+    "state": "gated",
     "after": [],
     "owns": [],
     "shares": [
