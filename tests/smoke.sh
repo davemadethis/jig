@@ -6996,6 +6996,41 @@ msg="ideas labels: with the pararepo dropped from the repos file, it is named as
 python3 -c "import json, sys; f=sys.argv[1]; d=json.load(open(f)); d.pop('IL'); json.dump(d, open(f,'w'))" "$JIG_CONFIG"
 out=$($J ideas 2>&1)
 expect_pass sh -c "echo \"\$0\" | grep -qx 'E-001 Do all products teleport?' && echo \"\$0\" | grep -q '^not read: IL' && ! echo \"\$0\" | grep -q 'IL/D-001'" "$out"
+msg="ideas labels: jig ideas lists a log's open entries too while it isn't folded yet"
+cd "$IL" && python3 -c "f='.jig/decisions.md'; s=open(f).read(); open(f,'w').write(s.replace('## Unreleased\n', '## Open\n\n### D-009 still in the old log\nOpen (2026-11-01).\nTouches: docs/x.md\n(labels teleport)\n\n## Unreleased\n', 1))"
+git add -A && git -c core.hooksPath=/dev/null commit -qm "an old open entry"
+out=$($J ideas --label teleport 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -qx 'D-009 still in the old log' && echo \"\$0\" | grep -qx 'D-001 Can a wallet teleport?'" "$out"
+# A pararepo planning from its metarepo's roadmap: its ideas' labels name the metarepo's terms.
+IF2="$T/il-fam"; mkdir -p "$IF2"
+pcnew "$IF2/meta" && git add -A && git commit -qm init && $J init --meta --name meta >/dev/null && git add -A && git commit -qm meta-init && $J release --feature >/dev/null 2>&1
+printf '\n## Teleport\n\nMoving a wallet.\n' >> docs/glossary.md && git add -A && git -c core.hooksPath=/dev/null commit -qm "GLOSSARY: teleport"
+pcnew "$IF2/pa" && mkdir -p docs && printf '# X\n\nx\n' > docs/x.md && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
+$J init --para meta --location "$IF2/meta" >/dev/null 2>&1; git add -A && git commit -qm para-init
+msg="ideas labels: in a pararepo, an idea labelled with the metarepo's term commits"
+uidea '### D-001 Can it teleport?
+Open (2026-11-24).
+Touches: docs/x.md
+(labels teleport)' && git add -A; expect_pass git commit -qm "D-001"
+(cd "$IF2/meta" && printf '# Glossary\n' > docs/glossary.md && git add -A && git -c core.hooksPath=/dev/null commit -qm "GLOSSARY: drop teleport")
+msg="ideas labels: the metarepo dropping the term doesn't refuse the pararepo's next commit that leaves the label alone"
+ulog '- X: a change.' && git add -A; expect_pass git commit -qm "log only"
+msg="ideas labels: but a pararepo commit adding that label is refused, naming the metarepo's glossary"
+uidea '### D-002 Can it teleport twice?
+Open (2026-11-24).
+Touches: docs/x.md
+(labels teleport)' && git add -A; out=$(git commit -qm "D-002" 2>&1); rc=$?; undo
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \"D-002 labels teleport, which meta's docs/glossary.md has no term for\"" "$out"
+msg="ideas labels: with the metarepo unreachable, a labelled idea's commit passes, warning that its labels pass unchecked"
+python3 -c "import json, sys; f=sys.argv[1]; d=json.load(open(f)); d.pop('meta'); json.dump(d, open(f,'w'))" "$JIG_CONFIG"
+uidea '### D-002 Can it teleport twice?
+Open (2026-11-24).
+Touches: docs/x.md
+(labels teleport)' && git add -A; out=$(git commit -qm "D-002" 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q \"meta isn't reachable here (.jig repos.), so the (labels …) lines in .jig/ideas.md pass unchecked\" && ! echo \"\$0\" | grep -q 'no meta.s docs/glossary.md'" "$out"
+msg="ideas labels: and jig ideas --label says the metarepo can't be reached, not that there is no glossary"
+out=$($J ideas --label teleport 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \"meta isn't reachable here\"" "$out"
 }
 
 # A log from before the ideas file: its open questions under ## Open, folded by update.

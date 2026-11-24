@@ -172,7 +172,7 @@ Part C:
 - `plugin/templates/jig/jig.py`:
   - Part A: a new `IDEAS` path and seed; `log_problems` (M2 over both files, one id across them), the R3 log exemption, `append_globs`, merge numbering and the trunk `D-?` refusal; `cmd_decision`, `claims_of_id`, `hold_chain`/`holds_now`, `live_entries`/`touching`/`peer_logs`, `proposed_added`; `cmd_reading_list` (ideas per page); `cmd_init`; `LOG_SEED`.
   - Part B: `cmd_update` (the fold and its listing), the `## Open` refusal, staging resolve for `kind: decisions`, `cmd_merge_log`, `project_sections`, the kickoff text, `is_entry` and M3, `meta_citations`, `stage_pin_bumps`, `changes_report`, the move-line target check.
-  - Part C: the idea `(labels …)` line, read by `split_labels` and checked by `label_problems`; a new `cmd_ideas`.
+  - Part C: the idea `(labels …)` line, read by `split_labels` and checked by `label_problems`; a new `cmd_ideas`; `family_report`, which reads the metarepo's ideas as pending rulings.
   - Reused, not copied: `log_entries`, `status_parts`, `entry_touches`, `peer_logs`, `trunk_show`, `MOVE_LINE`, and roadmap-labels' `split_labels` and `label_problems`.
 - `plugin/templates/jig/RULES.md`: The rules (R3), Documentation (Product and project), Decision log (sections, Ideas, Released sections' move line, Checked, `--merge-log`, decision records), Staging, Metarepo and pararepos (a question that binds pararepos, an open question's home, M2's row), Commands (`jig ideas`).
 - `plugin/skills/stage/SKILL.md`, `plugin/skills/update/SKILL.md`, `plugin/skills/redocument/SKILL.md`, `plugin/skills/retro/SKILL.md`

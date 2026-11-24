@@ -6123,7 +6123,8 @@ def open_problems(old: str, new: str, prefix: str) -> list[str]:
 
 
 def ideas_problems(text: str, log: str, prefix: str, trunk: str = "", trunk_side: bool = False,
-                   glossary: tuple[str | None, str] | None = None) -> list[str]:
+                   glossary: tuple[str | None, str] | None = None,
+                   kept: set[tuple[str, tuple[str, ...]]] = frozenset()) -> list[str]:
     """M2 for the ideas file: each idea's heading and status line, one block per id across it
     and the log, its supersedes links, and on trunk numbered ids only. With GLOSSARY (its text
     and name), each `(labels …)` line too, by label_problems: a scope's check, word for word."""
@@ -6166,7 +6167,8 @@ def ideas_problems(text: str, log: str, prefix: str, trunk: str = "", trunk_side
                        f"--number` numbers what a merge in progress brings in")
         if glossary is not None:
             for n, labels in idea_labels(e):
-                out += [f"M2 {x}" for x in label_problems(labels, glossary[0], f"{IDEAS}:{n} {e['id']}", glossary[1])]
+                if (e["id"], tuple(labels)) not in kept:
+                    out += [f"M2 {x}" for x in label_problems(labels, glossary[0], f"{IDEAS}:{n} {e['id']}", glossary[1])]
     return out
 
 
@@ -6203,19 +6205,23 @@ def cmd_ideas(root: Path, args) -> int:
     prefix = log_prefix(trunk)
     glossary, _ = idea_glossary()
     want = None
+    fam = family()
+    if args.label and fam.reads_meta and fam.meta_loc is None:
+        die(f"--label: {fam.meta_name or 'the metarepo'} isn't reachable here (`jig repos`), so the glossary "
+            "labels name terms of can't be read")
     if args.label:
         if bad := sorted(v for v in args.label if label_problems([v], glossary, "")):
             terms = glossary_terms(glossary or "")
             die(f"--label {', '.join(bad)}: no glossary term" + (f"; known: {', '.join(terms)}" if terms else
                                                                  ": this repo's labels have no glossary"))
         want = {label_fold(v) for v in args.label}
-    read = lambda f: (root / f).read_text(errors="replace") if (root / f).is_file() else ""
-    sources = [("", idea_entries(read(IDEAS), prefix))]
+    # A log not folded yet still holds its ideas under ## Open: they are listed too.
+    pending = lambda text, p: [e for e in log_entries(text, p) if e["section"] in (IDEAS, "Open")]
+    sources = [("", pending(read_entries_text(root), prefix))]
     unread: list[str] = []
     if load_meta(trunk):
         logs, unread = peer_logs(root, trunk)
-        sources += [(f"{w}/", [e for e in log_entries(text, log_prefix_of(text)) if e["section"] == IDEAS])
-                    for w, _, text in logs if w != META_KEY]
+        sources += [(f"{w}/", pending(text, log_prefix_of(text))) for w, _, text in logs if w != META_KEY]
     shown = 0
     for repo, ideas in sources:
         for e in ideas:
@@ -6243,10 +6249,31 @@ def ideas_rules(trunk: str, staged: bool, trunk_side: bool = False) -> list[str]
     if not new:
         return [f"{IDEAS} is the repo's ideas log: it is never deleted"] if old else []
     prefix = log_prefix(trunk)
+    glossary, kept = idea_label_check(new, old, prefix, staged)
     # An entry the fold brings from the log's ## Open is as trunk had it, not new: its Touches
     # line is judged when it changes, as it would have been in the log.
-    return (ideas_problems(new, in_index(LOG, staged), prefix, trunk, trunk_side, idea_glossary(staged))
+    return (ideas_problems(new, in_index(LOG, staged), prefix, trunk, trunk_side, glossary, kept)
             + touches_problems(with_ideas(at_rev(since, LOG), old), new, prefix, trunk, staged, home=IDEAS))
+
+
+def idea_label_check(new: str, old: str, prefix: str, staged: bool
+                     ) -> tuple[tuple[str | None, str] | None, set[tuple[str, tuple[str, ...]]]]:
+    """How the hook judges the ideas' labels: the glossary, or None to pass them unchecked, and
+    the label lines it leaves alone. This repo's own glossary changes in the commits it judges,
+    so every label line is checked. The metarepo's changes elsewhere, so only the label lines
+    this commit adds or changes are (a dropped term is the metarepo's commit, not this one's),
+    and with the metarepo out of reach they pass unchecked, as the roadmap's lines do."""
+    fam = family()
+    if not fam.reads_meta:
+        return idea_glossary(staged), set()
+    labelled = [e["id"] for e in idea_entries(new, prefix) if idea_labels(e)]
+    if fam.meta_loc is None:
+        if labelled:
+            print(f"jig: warning: {fam.meta_name or 'the metarepo'} isn't reachable here (`jig repos`), so "
+                  f"the (labels …) lines in {IDEAS} pass unchecked", file=sys.stderr)
+        return None, set()
+    return (fam.glossary, fam.glossary_name), {(e["id"], tuple(ls)) for e in idea_entries(old, prefix)
+                                               for _, ls in idea_labels(e)}
 
 
 def replaced(e: dict, prefix: str) -> list[str]:
