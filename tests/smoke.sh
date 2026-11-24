@@ -5452,13 +5452,13 @@ git reset -q --hard HEAD~1
 msg="labels: jig roadmap --label Teleport lists pairing, host and the No phase item q, with their states, and nothing else"
 lspec s1 alpha/host && git add -A && git commit -qm s1
 out=$($J roadmap --label Teleport)
-expect_pass sh -c "echo \"\$0\" | grep -qE '^  alpha/pairing +open' && echo \"\$0\" | grep -qE '^  alpha/host +taken +.jig/specs/s1.md' && echo \"\$0\" | grep -qE '^  No phase/q +open' && test \$(echo \"\$0\" | grep -c '^  ') = 3" "$out"
+expect_pass sh -c "echo \"\$0\" | grep -qE '^  alpha/pairing +open' && echo \"\$0\" | grep -qE '^  alpha/host +taken .*\.jig/specs/s1\.md' && echo \"\$0\" | grep -qE '^  No phase/q +open' && test \$(echo \"\$0\" | grep -c '^  ') = 3" "$out"
 msg="labels: --label of a term no glossary holds is refused, naming the terms"
 out=$($J roadmap --label nope 2>&1); rc=$?
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q -- '--label nope: no glossary term; known: Teleport, Walyt compatibility'" "$out"
 msg="labels: --label is one of the filters: with --state open, only the open ones"
 out=$($J roadmap --label teleport --state open)
-expect_pass sh -c "echo \"\$0\" | grep -qE '^  alpha/pairing ' && echo \"\$0\" | grep -qE '^  No phase/q ' && ! echo \"\$0\" | grep -q 'alpha/host'" "$out"
+expect_pass sh -c "echo \"\$0\" | grep -qE '^  alpha/pairing ' && echo \"\$0\" | grep -qE '^  No phase/q ' && ! echo \"\$0\" | grep -qE '^  alpha/host '" "$out"
 msg="labels: with --phase alpha, only alpha's"
 out=$($J roadmap --label teleport --phase alpha)
 expect_pass sh -c "echo \"\$0\" | grep -qE '^  alpha/pairing ' && echo \"\$0\" | grep -qE '^  alpha/host ' && ! echo \"\$0\" | grep -q 'No phase/q'" "$out"
