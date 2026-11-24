@@ -3440,7 +3440,7 @@ def cmd_gate(root: Path, args) -> int:
     print(f"  (cd {scratch} && python3 {DIR}/jig.py checked --tier {step['tier']} "
           f"--effort {step['effort']} --seconds <s>)")
     print()
-    # The merge closes the job's spec and its Bug-for specs alike (close_specs).
+    # The merge closes the job's spec and its `Bug-for:` specs alike (close_specs).
     closing = []
     if job is not None:
         own = list(dict.fromkeys(x for x in [(job or {}).get("spec") or ""] + [
