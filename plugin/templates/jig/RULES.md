@@ -950,10 +950,35 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
   naming each scope: re-point the label in the same commit. A label is never a ref: it orders
   nothing, changes no state and blocks nothing, so a ref naming one is a ref to nothing.
   `jig roadmap` prints each scope's labels after its state, the view shows them in its cell,
-  and `jig roadmap --label <term>` lists only the scopes and items carrying it, across every
-  product, each with its state, owning repo and specs, headed by the term's `Owner:`: what
-  touches a feature, and which other repo's work leans on one this repo owns. A new term is the
+  and `jig roadmap --label <term>`, one of its filters (below), keeps only the scopes and items
+  carrying it, across every product, headed by the term's `Owner:`: what touches a feature,
+  and which other repo's work leans on one this repo owns. A new term is the
   metarepo hubnode's; a repo labels its own scopes freely.
+- **Types**: each phase is a *Prototype*, a *Pilot* or a *Production* phase, read from its name
+  after any product term, case folded: a Greek letter (`alpha`, `beta`, `gamma`, …) is
+  Prototype, `Pilot <letter>` is Pilot, and any other name (`Launch`) is Production. There is
+  no marker and no config. Within one product, and among the repo's own phases, types run
+  Prototype, then Pilot, then Production, in file order: on trunk, when the roadmap changes,
+  the hook refuses, by line, a phase whose type comes before the type of a phase above it in
+  the same product, and `jig roadmap` reports it; `jig update`'s dry run lists each one, to fix
+  in the same update. `jig roadmap` prints each phase's type beside
+  its state, and the view shows it in the phase line and each phase's heading
+  (`## alpha (Prototype, current)`).
+- **Filters**: `jig roadmap` takes `--product`, `--phase`, `--type`, `--state`, `--owner` and `--label`,
+  each repeatable and case folded; values of one flag are or'd, different flags and'ed.
+  Product, phase, type and owner choose phases: `--phase alpha` is every product's alpha,
+  `--phase "Widget alpha"` that one heading. `--owner` is the repo a product's `Owner:` names; a
+  metarepo's own phases and its `this repo` products are the metarepo's, and in a stand-alone
+  repo everything is the repo's; any name jig knows this repo by (`this`, its name, an alias in
+  `jig repos`) means this repo, so in a pararepo it is the products its `Owner:` names.
+  `--state` (`open`, `taken`, `done`, `blocked`, `unknown`) and `--label` (a glossary term, as
+  labels match) choose scopes within them, and a phase left with no scope isn't printed. A No phase item
+  matches product, owner, state and label; `--phase "No phase"` chooses the lists, and `--type`
+  leaves them out. A filter hides rows, never a problem: the problems print in full and the
+  exit code is unchanged. A product, phase, owner or type naming nothing jig knows is refused,
+  naming the known values, and filters that match nothing say so. `jig roadmap --view [filters]`
+  prints the view's Markdown for what they choose to the terminal, saying it is a part;
+  `--write` refuses a filter, since `ROADMAP.md` is always the whole roadmap.
 - **No phase**, the one reserved section that isn't a phase, and the one list for work with
   no phase, in no order, on the owner's word: work parked mid-build and work not started, one
   place for both. Each item reads `` - `<id>`: <what it is> ``, unindented, optionally ending
@@ -1065,7 +1090,10 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
   new one: by plumbing in the metarepo's checkout, so no checkout moves, replacing only this
   repo's sections, whole. The spec lists roadmap rows only, so `jig propose --buffer` and
   `jig release` never sweep them; commit it and `BUFFER.md` here. Either way the draft is
-  deleted.
+  deleted. On a metarepo's `propose/<repo>-…` branch the hook refuses, as `--edit` does, a
+  change to a section another repo owns, the proposing repo found by its `jig repos` name or
+  its folder's, and a roadmap change on a branch naming no pararepo; a section that is
+  trunk's as it stands, merged in, is trunk's change, never the branch's.
 - **Moving in**, once per pararepo, by hand, on the owner's yes: the metarepo's glossary names
   the product with its `Owner:` line; the pararepo proposes its phases as
   `## <Product> <phase>` and its `## No phase` items as `## <Product> No phase`, and the
@@ -1798,7 +1826,7 @@ jig next [<job>]            a job's next step, the node or role that does it, an
 jig workflow                the older command: the roles under the old step names, then the flows
 jig handoff [--spec path] [--partial]   write the note for HEAD; --partial: it doesn't finish the spec
 jig roadmap [--write]       the roadmap's states on trunk; --write regenerates ROADMAP.md
-jig roadmap --label <term>  only the scopes and items carrying that label, across every product
+jig roadmap --label <term>  a filter, with the others: only the scopes and items carrying that label, across every product
 jig roadmap --draft         the roadmap this repo plans from, to a draft outside the tree; the headings it may change
 jig roadmap --edit [<file>] check the draft and write it: trunk's checkout, or a pararepo's open roadmap proposal
 jig family                  a family's staged files, unmerged proposals, entries touching labelled work, two names

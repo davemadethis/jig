@@ -87,9 +87,9 @@ Jobs, for anyone:
 Records:
 
 - `python3 .jig/jig.py decision <id>` prints a decision and what it replaced.
-- `python3 .jig/jig.py roadmap` prints the [roadmap](glossary.md#roadmap)'s states. `--write` regenerates its view.
-  `--label <term>` prints only the scopes and items carrying that [label](glossary.md#label), across every
-  product, with the term's owner.
+- `python3 .jig/jig.py roadmap` prints the [roadmap](glossary.md#roadmap)'s states, each phase with its type (Prototype, Pilot or Production). `--product`, `--phase`, `--type`, `--state` `--owner` and `--label` narrow what it prints, each repeatable, and `--view` prints that part as the view's Markdown. `--write` regenerates the whole view, and takes no filter.
+  `--label <term>` keeps the scopes and items carrying that [label](glossary.md#label), across every product,
+  headed by the term's owner.
 - `python3 .jig/jig.py roadmap --draft` writes the roadmap this repo plans from to a draft outside the tree, and
   names the headings this repo may change. `--edit` checks the draft and writes it: on trunk's checkout, or in a
   [pararepo](glossary.md#pararepo), on its open roadmap proposal in the metarepo.
