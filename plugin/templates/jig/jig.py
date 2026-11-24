@@ -41,7 +41,7 @@ STATES = ["claimed", "building", "ready", "gated", "parked"]
 # LAYOUT row, a config default or an update STEP bumps it. Update branches on it twice: it
 # refuses to take a newer repo back to an older jig, and it folds `## Up next` only once trunk's
 # committed checker is ONE_LIST or newer (knows_one_list).
-STAMP = 13
+STAMP = 12
 # The first STAMP whose checker reads the one list, `## No phase` items naming pages included.
 ONE_LIST = 11
 BOARD_DEFAULTS = {

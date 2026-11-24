@@ -522,8 +522,8 @@ assert all(j.squeeze(l) in j.RETIRED for l in gone), gone"
   msg="update $name: hooks read trunk's .jig/jig.py and none was kept as .local; .git/jig/enabled, no .git/aidev, no old ignore line"
   expect_pass sh -c "grep -q 'git show main:.jig/jig.py' .git/hooks/pre-commit && ! ls .git/hooks/*.local && test -f .git/jig/enabled && test ! -e .git/aidev && ! grep -q worktrees .gitignore"
 
-  msg="update $name: nothing tracked is left in jig/, .aidev/, specs/ or ledgers/; the config is stamped 13, with release.sh, publish.sh, an empty decision log and its ideas file added"
-  expect_pass sh -c "test -z \"\$(git ls-files jig .aidev specs ledgers .jig/lanes.json)\" && ! grep -q payload .jig/config.json && grep -q '\"version\": 13' .jig/config.json && git ls-files --error-unmatch .jig/scripts/release.sh .jig/scripts/publish.sh .jig/decisions.md .jig/ideas.md"
+  msg="update $name: nothing tracked is left in jig/, .aidev/, specs/ or ledgers/; the config is stamped 12, with release.sh, publish.sh, an empty decision log and its ideas file added"
+  expect_pass sh -c "test -z \"\$(git ls-files jig .aidev specs ledgers .jig/lanes.json)\" && ! grep -q payload .jig/config.json && grep -q '\"version\": 12' .jig/config.json && git ls-files --error-unmatch .jig/scripts/release.sh .jig/scripts/publish.sh .jig/decisions.md .jig/ideas.md"
 
   msg="update $name: publish.sh is added from the template, TODO line included, and staged"
   expect_pass sh -c "git diff --cached --name-status | grep -q '^A.\.jig/scripts/publish.sh$' && grep -q '^# TODO: publish steps\.' .jig/scripts/publish.sh && test -x .jig/scripts/publish.sh"
@@ -750,7 +750,7 @@ for line in subprocess.check_output(['git', 'diff', '--cached', '-M', '--name-st
       expect_pass sh -c "python3 -c \"import json; b = json.load(open('.jig/config.json')); assert b['trunk'] == 'main' and 'lanes' not in b and 'seen' not in b and 'main' not in b and 'next' not in b['reserve']['section'], b\" && test ! -e .claude/claude-lane && git diff --cached -M --name-status | grep -q '^R100.*old-2026-01-01.md'";;
     dot-jig-v7)
       msg="update $gen: the one-file board splits: config.json without jobs or log, an empty jobs.json, no lanes.json"
-      expect_pass sh -c "python3 -c \"import json; c = json.load(open('.jig/config.json')); assert c['version'] == 13 and not {'lanes', 'log'} & set(c) and json.load(open('.jig/jobs.json')) == {}, c\" && test ! -e .jig/lanes.json && echo \"\$0\" | grep -q 'board: lanes.old (merged)' && echo \"\$0\" | grep -q 'board: log'" "$out";;
+      expect_pass sh -c "python3 -c \"import json; c = json.load(open('.jig/config.json')); assert c['version'] == 12 and not {'lanes', 'log'} & set(c) and json.load(open('.jig/jobs.json')) == {}, c\" && test ! -e .jig/lanes.json && echo \"\$0\" | grep -q 'board: lanes.old (merged)' && echo \"\$0\" | grep -q 'board: log'" "$out";;
   esac
 
   msg="update $gen: a second update is up to date"
@@ -800,7 +800,7 @@ msg="init: config.json holds the settings, no jobs and no log; jobs.json is empt
 expect_pass python3 -c "
 import json; c = json.load(open('.jig/config.json')); j = json.load(open('.jig/jobs.json'))
 assert sorted(c) == sorted(['version', 'name', 'trunk', 'common', 'append_files', 'reserve', 'docmap', 'not_docs', 'release', 'reference_files']), c
-assert c['version'] == 13 and j == {}, (c, j)"
+assert c['version'] == 12 and j == {}, (c, j)"
 python3 - <<'EOF'
 import json; c = json.load(open('.jig/config.json'))
 c['reserve'] = {'section': {'pattern': r'^## (\d+) ', 'files': ['docs/**']}, 'loose': {}}
@@ -5577,7 +5577,7 @@ expect_pass sh -c "! $J roadmap | grep -q stale && grep -q '\*\*p\*\*' ROADMAP.m
 git -C "$R" show 485c13e:plugin/templates/jig/jig.py > "$T/jig-485c13e.py"
 msg="migration: an older plugin's update refuses the folded repo, so it can't reinstall the old checker"
 out=$(python3 "$T/jig-485c13e.py" update --apply 2>&1); rc=$?
-expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'this jig writes 10' && grep -q '^STAMP = 13' .jig/jig.py && git diff --quiet" "$out"
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'this jig writes 10' && grep -q '^STAMP = 12' .jig/jig.py && git diff --quiet" "$out"
 
 # The one list's waits: a spec on a blocked item, and a scope waiting on a page-less item.
 pcnew "$T/rl20" && mkdir -p docs && printf '# X\n\nX is.\n' > docs/x.md && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
