@@ -10128,9 +10128,9 @@ expect_pass cfin "s = {n: i['.jig/staging/' + n]['state'] for n in ('rq9.md', 'u
 msg="close: jig rig --close resolves none of them"
 out=$($J rig --close 2>&1)
 expect_pass sh -c "! echo \"\$0\" | grep -q '^resolved' && test -f .jig/staging/rq9.md && test -f .jig/staging/us.md && test -f .jig/staging/dc.md" "$out"
-msg="close: by hand, the title-only match isn't taken for the log's entry: resolve adds the new one"
-expect_pass sh -c "$J staging resolve dc.md | grep -q '1 entry added' && test \$(grep -c 'Use SQLite' .jig/decisions.md) = 2"
-git checkout -q -- .jig/decisions.md; rm -f .jig/staging/rq9.md .jig/staging/us.md .jig/staging/dc.md
+msg="close: by hand, the title-only match isn't taken for the log's entry: resolve adds the new one, a proposal, as an idea"
+expect_pass sh -c "$J staging resolve dc.md | grep -q '1 idea added to .jig/ideas.md' && test \$(cat .jig/decisions.md .jig/ideas.md | grep -c 'Use SQLite') = 2"
+git checkout -q -- .jig/decisions.md .jig/ideas.md; rm -f .jig/staging/rq9.md .jig/staging/us.md .jig/staging/dc.md
 
 cspec ra '' "$(printf 'Source: chat ra1.md (staged as ra1.md)\nSource: chat ra2.md (staged as ra2.md)')" && git add -A && git commit -qm "spec ra" >/dev/null
 stage ra1.md this feature-request new .jig/specs/ra.md && sed -i.bak 's/^status: staged$/after: ra2.md\nstatus: staged/' .jig/staging/ra1.md && rm .jig/staging/ra1.md.bak
