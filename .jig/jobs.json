@@ -1,7 +1,7 @@
 {
   "roadmap-labels": {
     "spec": ".jig/specs/roadmap-labels.md",
-    "state": "ready",
+    "state": "gated",
     "after": [],
     "owns": [],
     "shares": [
