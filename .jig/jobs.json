@@ -55,7 +55,7 @@
   },
   "phase-types": {
     "spec": ".jig/specs/phase-types.md",
-    "state": "claimed",
+    "state": "gated",
     "after": [],
     "owns": [],
     "shares": [
