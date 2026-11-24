@@ -5115,8 +5115,11 @@ metahead=$(git -C "$FM" rev-parse HEAD); gated Y; $J merge Y >/dev/null 2>&1
 msg="family: once pb merges the job taking it, meta's roadmap shows Familiar App No phase/y done, and pb wrote nothing to meta"
 cd "$FM"; expect_pass sh -c "$J roadmap | grep -qE '^  Familiar App No phase/y +done' && test \"\$(git -C '$FM' rev-parse HEAD)\" = '$metahead'"
 # A page meta moves down to pa takes its item into pa's section in the same commit.
-cd "$FA" && printf '# W\n\nW is.\n' > docs/w.md && git add -A && git commit -qm "w arrives"
 cd "$FM" && printf '# W\n\nW is.\n' > docs/w.md && plant "meta page w"
+cd "$FA" && printf '# W\n\nW is.\n' > docs/w.md && ulog '### Added
+
+- docs/w.md: moved from meta/docs/w.md.' && git add -A && git commit -qm "w arrives"
+cd "$FM"
 sed -i.bak 's/^- `d`: a demo$/- `d`: a demo\n- `w`: the w work (touches docs\/w.md)/' .jig/roadmap.md && rm .jig/roadmap.md.bak && git add -A && git commit -qm 'GLOSSARY: Demos/w'
 git switch -q -c mvw && git rm -q docs/w.md && ulog "### Removed
 
@@ -5168,7 +5171,7 @@ mkdir -p .jig/handoffs && printf '# Handoff: old\n\nCommit: %s\nDate: 2026-11-01
 FD="$T/pd"
 ( cd "$FM" && printf '\n## Delta\n\nThe delta app.\n\nOwner: `pd`.\n' >> docs/glossary.md && python3 -c "import json; f='.jig/meta.json'; d=json.load(open(f)); d['pararepos'].append('pd'); json.dump(d, open(f,'w'), indent=2)" && plant "Delta" )
 mkdir -p .jig/ledgers && cp "$P/ledgers/BUFFER.md" .jig/ledgers/BUFFER.md
-printf '| B1 | meta/.jig/roadmap.md § Delta alpha: none yet | its phases and list, moving in | owner, 2026-11-23 | Open |\n' >> .jig/ledgers/BUFFER.md && git add -A && git commit -qm "buffer: B1"
+printf '| B1 | meta/.jig/roadmap.md § Delta alpha: none yet | its phases and list, moved in by hand | owner, 2026-11-23 | Open |\n' >> .jig/ledgers/BUFFER.md && git add -A && git commit -qm "buffer: B1"
 $J propose --buffer move-in >/dev/null 2>&1 && git add -A && git commit -qm "specs: move-in"
 fland propose/pd-move-in "GLOSSARY: Delta moves in" "s += '\n## Delta alpha\nScopes:\n- \`x\`: the x\n\n## Delta No phase\n- \`u\`: parked u (touches docs/p.md)\n- \`v\`: later v\n'"
 cd "$FD"
@@ -7206,8 +7209,12 @@ expect_pass sh -c "test $rc = 0 && ! echo \"\$0\" | grep -q 'removed' && test ! 
 msg="ideas meta: across releases that only added ideas beside it, the log's last entry E-002 reads as unchanged"
 expect_pass sh -c "! echo \"\$0\" | grep -q 'E-002'" "$out2"
 # Moved down: an idea leaves M with a move line naming L's ideas file.
-cd "$L" && printf '\n### D-001 does L wake?\nOpen (2026-11-05).\nTouches: none — a question for L.\n' >> .jig/ideas.md && git add -A && git -c core.hooksPath=/dev/null commit -qm "L: D-001"
 cd "$M" && E3=E-003
+# The receiving end first: L's idea, with its moved-from line in L's log (a move line needs it).
+cd "$L" && printf '\n### D-001 does L wake?\nOpen (2026-11-05).\nTouches: none — a question for L.\n' >> .jig/ideas.md \
+  && ulog "### Added
+- D-001: moved from M/.jig/decisions.md § $E3." && git add -A && git -c core.hooksPath=/dev/null commit -qm "L: D-001"
+cd "$M"
 python3 -c "import re,sys; f='.jig/ideas.md'; s=open(f).read(); s=re.sub(r'(?ms)^### '+sys.argv[1]+r' .*?(?=^### |\Z)', '', s); open(f,'w').write(s)" "$E3"
 ulog "### Removed
 - $E3: moved to L/.jig/ideas.md § D-001." && git switch -q -c down && git add -A
@@ -10263,8 +10270,9 @@ sec_moves() {
 MV="$T/moves"; mkdir -p "$MV"
 emerge() { b=$1 s=$2; shift 2; git switch -q -c "$b" && git add -A -- "$@" && git commit -qm "$s" && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-edit "$b"; }
 mvjson() { python3 -c "import json,sys; f=sys.argv[1]; d=json.load(open(f)); d[sys.argv[2]]=json.loads(sys.argv[3]); json.dump(d, open(f,'w'), indent=2)" "$@"; }
-stagef() {  # stagef <name> <target> <kind> <destination> <body>: a staged file in this repo
-  mkdir -p .jig/staging && printf -- '---\nstaged: true\ntarget: %s\nkind: %s\nchange: %s\ndestination: %s\nsource: owner / 2026-11-21\nstatus: staged\n---\n%b' "$2" "$3" "$([ "$3" = roadmap ] && echo update || echo new)" "$4" "$5" > ".jig/staging/$1"; }
+stagef() {  # stagef <name> <target> <kind> <destination> <body> [moved-from]: a staged file in this repo
+  mkdir -p .jig/staging && printf -- '---\nstaged: true\ntarget: %s\nkind: %s\nchange: %s\ndestination: %s\nsource: owner / 2026-11-21\nstatus: staged\n%s---\n%b' "$2" "$3" "$([ "$3" = roadmap ] && echo update || echo new)" "$4" "${6:+moved-from: $6
+}" "$5" > ".jig/staging/$1"; }
 mvlines() { ulog "### Removed
 
 - E-2: moved to ${1:-L/.jig/decisions.md § D-002}.
@@ -10312,7 +10320,7 @@ msg="moves: a strike line giving another reason doesn't let released E-002 go, a
 git switch -q -c t1 && rment E-002 && ulog '### Removed
 
 - E-002: moved to L as D-001.' && git add -A; out=$(git commit -qm "E-002: try" 2>&1); rc=$?
-expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'E-002: project scope, not a product decision' && echo \"\$0\" | grep -q 'E-002: moved to <pararepo>/.jig/decisions.md § <its id there>'" "$out"
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'E-002: project scope, not a product decision' && echo \"\$0\" | grep -q 'E-002: moved to <repo of its family>/.jig/decisions.md § <its id there>'" "$out"
 [ $rc != 0 ] || echo "$out"
 msg="moves: the strike line still lets it go"
 git reset -q --hard && rment E-002 && ulog '### Removed
@@ -10322,17 +10330,22 @@ expect_pass git commit -qm "E-002: struck"
 git reset -q --hard main && git switch -q main && git branch -qD t1
 
 # The text lands first: staged in M to L, then a job there.
-stagef mv-entries.md L decisions .jig/decisions.md '### D-?battery two\nAccepted (owner, 2026-11-02).\nTouches: none — moved\n\nThe battery is 400 mAh.\n\n### D-?mods four\nOpen (owner, 2026-11-02).\nTouches: none — moved\n\nWhich mods ship?\n'
-stagef mv-battery.md L doc docs/battery.md '# Battery\n\nThe battery.\n'
-stagef mv-walyt.md L doc docs/walyt.md '# Walyt\n\n## Mods\n\nMods snap on.\n'
-msg="moves: the three staged files forward to L"
-out=$(for f in mv-entries.md mv-battery.md mv-walyt.md; do $J staging resolve $f; done 2>&1)
+stagef mv-entries.md L decisions .jig/decisions.md '### D-?battery two\nAccepted (owner, 2026-11-02).\nTouches: none — moved\n\nThe battery is 400 mAh.\n' 'M/.jig/decisions.md § E-002'
+stagef mv-mods.md L decisions .jig/decisions.md '### D-?mods four\nOpen (owner, 2026-11-02).\nTouches: none — moved\n\nWhich mods ship?\n' 'M/.jig/decisions.md § E-004'
+stagef mv-battery.md L doc docs/battery.md '# Battery\n\nThe battery.\n' 'M/docs/products/walyt/battery.md'
+stagef mv-walyt.md L doc docs/walyt.md '# Walyt\n\n## Mods\n\nMods snap on.\n' 'M/docs/products/walyt/walyt.md § Mods'
+msg="moves: the four staged files forward to L"
+out=$(for f in mv-entries.md mv-mods.md mv-battery.md mv-walyt.md; do $J staging resolve $f; done 2>&1)
 expect_pass sh -c "test -f '$L/.jig/staging/mv-entries.md' && test -f '$L/.jig/staging/mv-walyt.md' && test ! -e .jig/staging/mv-battery.md"
 cd "$L" && git switch -q -c land
-for f in mv-entries.md mv-battery.md mv-walyt.md; do $J staging resolve $f >/dev/null 2>&1; done
+for f in mv-entries.md mv-mods.md mv-battery.md mv-walyt.md; do $J staging resolve $f >/dev/null 2>&1; done
 git add -A && git commit -qm "D-?battery, D-?mods: land from M" && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-commit land && $J merge --number >/dev/null && git commit -qm "merge land"
 msg="moves: L numbers the landed entries, accepted D-002 keeping E-002's who and date, and Open D-001, an idea"
 expect_pass sh -c "grep -qx '### D-002 two' .jig/decisions.md && grep -qx '### D-001 four' .jig/ideas.md && grep -qx 'Accepted (owner, 2026-11-02).' .jig/decisions.md && test -f docs/battery.md && grep -qx '## Mods' docs/walyt.md"
+msg="moves: L's log has a moved-from line for each, under ## Unreleased ### Added, the ids numbered with their entries"
+expect_pass sh -c "sed -n '/^## Unreleased/,/^## v/p' .jig/decisions.md | sed -n '/^### Added/,/^### [A-Z]/p' > $T/mf; grep -qx -- '- D-002: moved from M/.jig/decisions.md § E-002.' $T/mf && grep -qx -- '- D-001: moved from M/.jig/decisions.md § E-004.' $T/mf && grep -qx -- '- docs/battery.md: moved from M/docs/products/walyt/battery.md.' $T/mf && grep -qx -- '- docs/walyt.md § Mods: moved from M/docs/products/walyt/walyt.md § Mods.' $T/mf; r=\$?; rm -f $T/mf; exit \$r"
+msg="moves: jig decision D-002 in L prints where it moved from, and reading-list --claims D-002 names it"
+expect_pass sh -c "$J decision D-002 | grep -q 'D-002 moved from M/.jig/decisions.md § E-002' && $J reading-list --claims D-002 | grep -q 'D-002 moved from M/.jig/decisions.md § E-002'"
 
 cd "$M"
 # A job moving only a section leaves its page, so it moves no roadmap item.
@@ -10351,7 +10364,7 @@ moveit() {  # moveit [pointers…]: on branch mv, E-002 and E-004 out of the log
     && python3 -c "f='docs/products/walyt/walyt.md'; s=open(f).read(); open(f,'w').write(s.replace('## Mods\n\nMods snap on.\n\n',''))" \
     && mvlines "$@" && git add -A; }
 tryit() { out=$(git commit -qm "E-002, E-004: move to L" 2>&1); rc=$?; git reset -q --hard; }
-for bad in "§ D-009:L/.jig/decisions.md § D-009::::has no entry D-009" "nope.md::L/docs/nope.md:::has no docs/nope.md" "§ Nope::::L/docs/walyt.md § Nope:has no heading Nope" "X::X/.jig/decisions.md § D-001:::which isn.t one of"; do
+for bad in "§ D-009:L/.jig/decisions.md § D-009::::has no entry D-009" "nope.md::L/docs/nope.md:::has no docs/nope.md" "§ Nope::::L/docs/walyt.md § Nope:has no heading Nope" "X::X/.jig/decisions.md § D-001:::which isn.t of this repo.s family"; do
   IFS=: read -r name a b c d want <<<"$bad"
   msg="moves: a move line naming $name is refused, naming what it read"
   moveit "${a:-}" "${b:-}" "${c:-}" "${d:-}"; tryit
@@ -10434,6 +10447,14 @@ msg="moves: reading-list --claims E-002 names the move in its note"
 out=$($J reading-list --claims E-002 2>&1)
 expect_pass sh -c "echo \"\$0\" | grep -q 'E-002 moved to L/.jig/decisions.md § D-002' && ! echo \"\$0\" | grep -q 'no entry'" "$out"
 
+# A page of M cites one of L's, so L's cache points at it once its pin takes this release.
+( cd "$L" && printf '# L\n\nL is.\n' > docs/l.md && ulog '### D-005 five
+Accepted (owner, 2026-11-03).
+Touches: none — up
+
+Five.' && git add -A && git -c core.hooksPath=/dev/null commit -qm "l page, D-005" )
+printf '\nSee `L/docs/l.md` and `L/.jig/decisions.md § D-005`.\n' >> docs/products/walyt/walyt.md && ulog '- docs/products/walyt/walyt.md: cites L/docs/l.md and L/.jig/decisions.md § D-005.' \
+  && emerge cite "E-003: cite L's page" docs/products/walyt/walyt.md .jig/decisions.md >/dev/null 2>&1
 msg="moves: the release stages L's pin bump, every id and page moved, nothing removed or missing"
 out=$($J release 2>&1)
 PB="$L/.jig/staging/pin-bump-M.md"
@@ -10442,6 +10463,107 @@ cd "$L"
 msg="moves: L's jig sync lists E-002 and E-004 as moved"
 out=$($J sync 2>&1)
 expect_pass sh -c "echo \"\$0\" | grep -q 'E-002 (moved: .jig/decisions.md § D-002, this repo)' && echo \"\$0\" | grep -q 'E-004 (moved: .jig/decisions.md § D-001, this repo)'" "$out"
+# Moves in every direction, both ends recorded.
+rm -f .jig/staging/pin-bump-M.md && setjson .jig/para.json pin v0.1.1 && $J init --para >/dev/null 2>&1 && git add -A && git commit -qm "meta: M v0.1.0 → v0.1.1" >/dev/null 2>&1
+K="$MV/K"; mkdir -p "$K" && cd "$K" && git init -q -b main && git config user.email t@t && git config user.name t
+cp -r "$P/jig" .jig && cp "$P/AGENTS.md" "$P/CLAUDE.md" . && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
+$J init --para M --location "$M" --pin v0.1.1 >/dev/null && $J repos add repo "$K" --name K >/dev/null && git add -A && git commit -qm para
+( cd "$M" && mvjson .jig/meta.json pararepos '["L", "K"]' && git add -A && git -c core.hooksPath=/dev/null commit -qm "TOOL: K joins" )
+cd "$M"
+msg="moves B (both ends): M's move of E-003 to L is refused while L's trunk has D-003 but no moved-from line for it"
+( cd "$L" && ulog '### D-003 three
+Accepted (owner, 2026-11-01).
+Touches: none — moved
+
+Builds on D-002 and D-001.' && git add -A && git -c core.hooksPath=/dev/null commit -qm "D-003 planted" )
+git switch -q -c e3 && rment E-003 && ulog '### Removed
+
+- E-003: moved to L/.jig/decisions.md § D-003.' && git add -A
+out=$(git commit -qm "E-003: move to L" 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'has no moved-from line for D-003 naming this repo.s E-003'" "$out"; [ $rc != 0 ] || echo "$out"
+msg="moves B (both ends): once L's trunk has the moved-from line, the same move commits"
+( cd "$L" && ulog '### Added
+
+- D-003: moved from M/.jig/decisions.md § E-003.' && git add -A && git -c core.hooksPath=/dev/null commit -qm "D-003 moved-from" )
+out=$(git commit -qm "E-003: move to L" 2>&1); rc=$?
+expect_pass test $rc = 0; [ $rc = 0 ] || echo "$out"
+git switch -q main && git branch -q -D e3
+cd "$L"
+msg="moves B (source checked): in L, a moved-from line naming M's E-009, which M neither has nor moves to L, is refused, naming M's file"
+ulog '### Added
+
+- D-003: moved from M/.jig/decisions.md § E-009.' && git add -A; out=$(git commit -qm "D-003: from E-009" 2>&1); rc=$?; git reset -q --hard
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \"M's .jig/decisions.md on main (read .*/M/.jig/decisions.md) neither has E-009\"" "$out"; [ $rc != 0 ] || echo "$out"
+msg="moves B (both ends): in L, removing D-002's moved-from line, the receiving end of M's move line on its trunk, is refused"
+sed -i.bak '/^- D-002: moved from M\/.jig\/decisions.md § E-002\.$/d' .jig/decisions.md && rm .jig/decisions.md.bak && git add -A
+out=$(git commit -qm "drop the record" 2>&1); rc=$?; git reset -q --hard
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'is the receiving end of M.s move line on its main'" "$out"; [ $rc != 0 ] || echo "$out"
+msg="moves B (placed): in L, a moved-from line under ### Changed is refused: it goes under ## Unreleased ### Added"
+ulog '### Changed
+
+- D-001: moved from M/.jig/decisions.md § E-004.' && git add -A; out=$(git commit -qm "misplaced" 2>&1); rc=$?; git reset -q --hard
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'is under ## Unreleased ### Changed: a moved-from line goes under ## Unreleased ### Added'" "$out"; [ $rc != 0 ] || echo "$out"
+msg="moves B (up): M's job lands E-010 with its moved-from line, its hook checking L's trunk still has D-005"
+out=$(cd "$M" && ulog '### E-010 ten
+Accepted (owner, 2026-11-03).
+Touches: none — up
+
+Five.' && ulog '### Added
+
+- E-010: moved from L/.jig/decisions.md § D-005.' && emerge e10 "E-010: from L" .jig/decisions.md 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && git -C '$M' log -1 --format=%P main | grep -q ' '" "$out"; [ $rc = 0 ] || echo "$out"
+msg="moves B (up): in L, D-005 moved to M as E-010 commits once M's trunk has E-010 with its moved-from line"
+rment D-005 && ulog '### Removed
+
+- D-005: moved to M/.jig/decisions.md § E-010.' && git add -A; out=$(git commit -qm "D-005: up to M" 2>&1); rc=$?
+expect_pass test $rc = 0; [ $rc = 0 ] || echo "$out"
+msg="moves B (up): jig decision D-005 in L names the move"
+expect_pass sh -c "$J decision D-005 | grep -q 'D-005 moved to M/.jig/decisions.md § E-010'"
+msg="moves B (family): in L, a move line naming a repo outside the family is refused"
+ulog '### D-006 six
+Accepted (owner, 2026-11-03).
+Touches: none — up
+
+Six.' && git add -A && git -c core.hooksPath=/dev/null commit -qm "D-006 planted"
+rment D-006 && ulog '### Removed
+
+- D-006: moved to X/.jig/decisions.md § D-001.' && git add -A; out=$(git commit -qm "D-006: away" 2>&1); rc=$?; git reset -q --hard
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \"moves to X, which isn.t of this repo's family (K, M)\"" "$out"; [ $rc != 0 ] || echo "$out"
+msg="moves B (family): with M out of the repos file, a move line in L passes with a warning that M's family wasn't read"
+rment D-006 && ulog '### Removed
+
+- D-006: moved to K/.jig/decisions.md § D-001.' && git add -A; out=$(JIG_CONFIG="$MV/none.json" git commit -qm "D-006: away" 2>&1); rc=$?; { [ $rc = 0 ] && git reset -q --hard HEAD~1; } || git reset -q --hard
+expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q 'warning: .*M isn.t reachable here (.jig repos.), so this repo.s family wasn.t read'" "$out"; [ $rc = 0 ] || echo "$out"
+msg="moves B (family): with M out of the repos file, a move line for docs/l.md, which the commit keeps, is still refused"
+ulog '### Removed
+
+- docs/l.md: moved to K/docs/l.md.' && git add -A; out=$(JIG_CONFIG="$MV/none.json" git commit -qm "l: kept" 2>&1); rc=$?; git reset -q --hard
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'moves docs/l.md, which this repo still has'" "$out"; [ $rc != 0 ] || echo "$out"
+msg="moves B (sideways): K lands docs/l.md with its moved-from line while L's trunk still has it"
+cd "$K" && mkdir -p docs && printf '# L\n\nL is.\n' > docs/l.md && ulog '### Added
+
+- docs/l.md: moved from L/docs/l.md.' && git add -A; out=$(git commit -qm "l from L" 2>&1); rc=$?
+expect_pass test $rc = 0; [ $rc = 0 ] || echo "$out"
+msg="moves B (sideways): in L, docs/l.md moved to K/docs/l.md commits, P2 answered by a buffer row for M's pointer"
+cd "$L" && git rm -q docs/l.md && ulog '### Removed
+
+- docs/l.md: moved to K/docs/l.md.' && mkdir -p .jig/ledgers && { [ -f .jig/ledgers/BUFFER.md ] || cp "$P/ledgers/BUFFER.md" .jig/ledgers/BUFFER.md; } \
+  && printf '| B9 | M/docs/products/walyt/walyt.md § Walyt: its pointer to L/docs/l.md | docs/l.md moved to K/docs/l.md | owner, 2026-11-23 | Open |\n' >> .jig/ledgers/BUFFER.md && git add -A
+out=$(git commit -qm "l to K" 2>&1); rc=$?
+expect_pass test $rc = 0; [ $rc = 0 ] || echo "$out"
+msg="moves B (sideways): L's jig sync lists M's cached pointer to docs/l.md as moved to K/docs/l.md, not as missing"
+out=$($J sync 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -q 'docs/l.md (moved: K/docs/l.md)'" "$out"; [ "$fail" = 0 ] || echo "$out"
+msg="moves B (up): L's jig sync lists M's cached pointer to its D-005 as moved to M's E-010, matched by id"
+expect_pass sh -c "echo \"\$0\" | grep -q '.jig/decisions.md § D-005 (moved: M/.jig/decisions.md § E-010)'" "$out"
+msg="moves B (no family): a move line in a stand-alone repo is refused, saying it has no family"
+S="$MV/S"; mkdir -p "$S" && cd "$S" && git init -q -b main && git config user.email t@t && git config user.name t
+cp -r "$P/jig" .jig && cp "$P/AGENTS.md" "$P/CLAUDE.md" . && mkdir -p docs && printf '# A\n\nA is.\n' > docs/a.md && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
+git rm -q docs/a.md && ulog '### Removed
+
+- docs/a.md: moved to X/docs/a.md.' && git add -A; out=$(git commit -qm "a away" 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'this repo has no family'" "$out"; [ $rc != 0 ] || echo "$out"
+cd "$L"
 msg="moves: one live read of another repo's trunk: trunk_show, defined once, called by meta_citations and move_rules"
 expect_pass sh -c "! grep -q 'def live\\b' '$P/jig/jig.py' && test \$(grep -c '^def trunk_show(' '$P/jig/jig.py') = 1 \
   && awk '/^def meta_citations/,/^def uncovered_paths/' '$P/jig/jig.py' | grep -q 'trunk_show(' && awk '/^def move_rules/,/^    return out/' '$P/jig/jig.py' | grep -q 'trunk_show('"
@@ -11182,7 +11304,613 @@ msg="queue config: the overflow key with the owner's words commits"
 expect_pass setq '{"width": "all", "overflow": {"to": "github", "reason": "the owner: keep the standing yes"}}'
 }
 
-UNITS="rules merge_derived update board_split worktree_setup metarepo,staging pararepo release r6_takes,r6_ints merge_after_sync repos workflow init_old_board ledger_rows hardware update_per_file pararepo_commands entry_globs report_fixes sync_buffer buffer_answered pointers removals feedback slash_names homes structure meta_docs agents_lines page_contract roadmap labels family family_report roadmap_edit phase_types boundary decisions ideas ideas_fold ideas_meta ideas_labels supersede touches,touches_terms sweep staging_batches merge_log findings glossary headings check_levels role_line consolidate cheaper_rounds next svg update_roles holders rig rig_batch close versioning pin_bump moves claims inbox rigger queue"
+sec_movein() {
+export JIG_CONFIG="$T/repos.json"
+mnew() { mkdir -p "$T/$1" && cd "$T/$1" && git init -q -b main && git config user.email t@t && git config user.name t \
+  && cp -r "$P/jig" .jig && cp "$P/AGENTS.md" "$P/CLAUDE.md" .; }
+mplant() { git add -A && git -c core.hooksPath=/dev/null commit -qm "$1"; }
+mspec() { mkdir -p .jig/specs && printf '# %s\n\nSource: smoke\nScope: %s\n\n## Intent\nx\n\n## Touches\n- `src/x.py`\n' "$1" "$2" > ".jig/specs/$1.md"; }
+mpara() {  # mpara <name> <roadmap>: a pararepo of M keeping a roadmap of its own
+  mnew $1 && mkdir -p docs src && printf '# P\n\nP is.\n' > docs/p.md && printf 'x = 1\n' > src/x.py
+  git add -A && git commit -qm init && $J init >/dev/null && board "b['docmap'] = {'docs/p.md': ['src/**']}" && git add -A && git commit -qm board
+  $J init --para M --location "$MM" >/dev/null 2>&1 && git add -A && git commit -qm para-init && python3 .jig/jig.py repos add para "$T/$1" --name $1 >/dev/null
+  printf "$2" > .jig/roadmap.md && git add -A && git commit -qm own && $J roadmap --write >/dev/null && git add -A && git commit -qm view
+  ( cd "$MM" && python3 -c "import json; f='.jig/meta.json'; d=json.load(open(f)); d['pararepos'].append('$1'); json.dump(d, open(f,'w'), indent=2)" && mplant "$1 joins" ); }
+MM="$T/M"; mnew M && git add -A && git commit -qm init && $J init --meta --name M >/dev/null && git add -A && git commit -qm meta-init
+$J release $(mf) >/dev/null
+python3 -c "import json; f='.jig/meta.json'; d=json.load(open(f)); d['decision_prefix']='E-'; d['pararepos']=['L']; json.dump(d, open(f,'w'), indent=2)"
+printf '\n## Walyt\n\nThe wallet app.\n\nOwner: `L`.\n' >> docs/glossary.md && mplant "glossary"
+mnew L && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
+$J init --para M --location "$MM" >/dev/null 2>&1 && git add -A && git commit -qm para-init && python3 .jig/jig.py repos add para "$T/L" --name L >/dev/null
+python3 .jig/jig.py repos add meta "$MM" --name M >/dev/null
+mpara pd '# Roadmap\n\n## alpha\nScopes:\n- `x`: the x\n- `y`: the y (after alpha/x)\n\n## No phase\n- `u`: parked u (touches docs/p.md)\n- `v`: later v\n'
+FD="$T/pd"
+mspec sx alpha/x && mspec sy alpha/y && mspec sl alpha/x && printf 'Later: No phase/u\n' >> .jig/specs/sl.md && mkdir -p .jig/handoffs && printf '# v\n\nSpec: .jig/specs/sv.md\nScope: No phase/v\n\n## Built\nx\n' > .jig/handoffs/v-1.md
+mkdir -p .jig/ledgers && cp "$P/ledgers/BUFFER.md" .jig/ledgers/BUFFER.md
+printf '| B0 | M/docs/glossary.md § Walyt: the wallet | not ours | owner, 2026-11-23 | Open |\n' >> .jig/ledgers/BUFFER.md && mplant "takers and B0"
+msg="movein: the plan lists both steps, the first next and carrying the term Delta, the second waiting; nothing is written"
+mhead=$(git -C "$MM" rev-parse main); mbr=$(git -C "$MM" branch | wc -l)
+out=$($J move-in --product Delta --definition "The delta app." 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q '^1. product and phases proposed: next' && echo \"\$0\" | grep -q 'carries the term Delta' \
+  && echo \"\$0\" | grep -q '^2. roadmap leaves: waiting' && test -z \"\$(git status --porcelain)\" && test -z \"\$(git -C '$MM' status --porcelain)\" \
+  && test \"\$(git -C '$MM' branch | wc -l)\" = '$mbr'" "$out"
+msg="movein: without --definition while M has no Delta term, --apply is refused, naming the flag"
+out=$($J move-in --product Delta --apply 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q -- '--definition' && test -z \"\$(git status --porcelain)\"" "$out"
+msg="movein: --product Walyt is refused, naming its owner L"
+out=$($J move-in --product Walyt --apply 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \"Walyt is L's product\"" "$out"
+msg="movein: --apply makes propose/pd-move-in in M: one commit past its opening, passed by M's hook, its subject GLOSSARY:"
+out=$($J move-in --product Delta --definition "The delta app." --apply 2>&1); rc=$?
+ml=$(git -C "$MM" log --format=%s main..propose/pd-move-in)
+expect_pass sh -c "test $rc = 0 && test \"\$(echo \"\$1\" | wc -l | tr -d ' ')\" = 2 && echo \"\$1\" | head -1 | grep -q '^GLOSSARY: '" "$out" "$ml"
+[ $rc = 0 ] || echo "$out"
+mg=$(git -C "$MM" show propose/pd-move-in:docs/glossary.md); md=$(git -C "$MM" show propose/pd-move-in:.jig/decisions.md); mr=$(git -C "$MM" show propose/pd-move-in:.jig/roadmap.md)
+msg="movein: the proposal adds ## Delta, its sentence and Owner: \`pd\`. to M's glossary, with a line under ## Unreleased ### Added"
+expect_pass sh -c "echo \"\$0\" | grep -A4 '^## Delta\$' | grep -q 'The delta app.' && echo \"\$0\" | grep -qx 'Owner: \`pd\`.' \
+  && echo \"\$1\" | sed -n '/^## Unreleased/,\$p' | grep -A2 '^### Added' | grep -q '§ Delta'" "$mg" "$md"
+msg="movein: the proposal holds ## Delta alpha with y (after Delta alpha/x), and ## Delta No phase with u and v, as pd had them"
+expect_pass sh -c "echo \"\$0\" | grep -qx '## Delta alpha' && echo \"\$0\" | grep -qx -- '- \`y\`: the y (after Delta alpha/x)' \
+  && echo \"\$0\" | grep -qx '## Delta No phase' && echo \"\$0\" | grep -qx -- '- \`u\`: parked u (touches docs/p.md)' && echo \"\$0\" | grep -qx -- '- \`v\`: later v'" "$mr"
+msg="movein: M's trunk is unchanged and nothing is staged there; pd's buffer has the row, and move-in.md lists it alone, B0 left out"
+expect_pass sh -c "test \"\$(git -C '$MM' rev-parse main)\" = '$mhead' && test -z \"\$(git -C '$MM' status --porcelain)\" \
+  && grep -q '| B1 | M/.jig/roadmap.md § Delta: none yet' .jig/ledgers/BUFFER.md && sed -n '/^## Buffer rows/,/^\$/p' .jig/specs/move-in.md | grep -c '^- B' | grep -qx 1 \
+  && grep -qx -- '- B1' .jig/specs/move-in.md && ! grep -q '^| B0' .jig/specs/move-in.md && git diff --cached --name-only | grep -q move-in.md"
+git commit -qm "specs: move-in" >/dev/null 2>&1
+msg="movein (records aren't work): once step 1 is committed, jig rig lists move-in.md neither under Can start now nor under Waiting on"
+expect_pass sh -c "test -f .jig/specs/move-in.md && ! echo \"\$0\" | grep -q move-in.md" "$($J rig 2>&1 | sed -n '/^Can start now:/,/^Waiting on you:/p')"
+msg="movein: before M merges the proposal, step 2 waits on M's owner"
+expect_pass sh -c "$J move-in --product Delta | grep -q '^2. roadmap leaves: waiting on M'"
+# M takes the proposal as a job, renaming y to y2 on it; jig merge deletes the branch.
+( cd "$MM" && $J open mj --branch propose/pd-move-in --owns docs/glossary.md >/dev/null && git add -A && git commit -qm "TOOL: open mj" \
+  && cd .git/jig/worktrees/propose/pd-move-in && sed -i.bak 's/^- `y`: the y/- `y2`: the y/' .jig/roadmap.md && rm .jig/roadmap.md.bak \
+  && git add -A && git commit -qm "ROADMAP: y is y2" && $J reviewed >/dev/null && $J handoff >/dev/null 2>&1 && pcfold \
+  && git add -A && git commit -qm "TOOL: note mj" && cd "$MM" && gated mj && $J merge mj >/dev/null ) >/dev/null 2>&1
+msg="movein: M's job merges the proposal in one merge, its branch deleted, Delta No phase/u's docs/p.md read as pd's page by the merge's own glossary"
+expect_pass sh -c "cd '$MM' && git log -1 --format=%P | grep -q ' ' && ! git rev-parse -q --verify refs/heads/propose/pd-move-in && test ! -e docs/p.md \
+  && grep -qx 'Owner: \`pd\`.' docs/glossary.md && $J roadmap | grep -q '^Delta alpha '"
+msg="movein: with the branch deleted by that merge, step 2 is next"
+expect_pass sh -c "$J move-in --product Delta | grep -q '^2. roadmap leaves: next'"
+msg="movein: after the merge, --apply stages the removal and the Scope: lines, naming alpha/y and the spec that takes it"
+out=$($J move-in --product Delta --apply 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q 'alpha/y → Delta alpha/y .*sy.md' && git diff --cached --name-status | grep -q '^D	.jig/roadmap.md' \
+  && git diff --cached --name-status | grep -q '^D	ROADMAP.md' && grep -qx 'Scope: Delta alpha/x' .jig/specs/sx.md && grep -qx 'Scope: Delta No phase/v' .jig/handoffs/v-1.md \
+  && grep -qx 'Scope: alpha/y' .jig/specs/sy.md && grep -qx 'Later: Delta No phase/u' .jig/specs/sl.md" "$out"
+msg="movein: the commit is refused while sy.md takes alpha/y, which M renamed"
+out=$(git commit -qm "move in" 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'sy.md takes alpha/y'" "$out"
+msg="movein: re-pointed to Delta alpha/y2, the commit passes"
+sed -i.bak 's|^Scope: alpha/y$|Scope: Delta alpha/y2|' .jig/specs/sy.md && rm .jig/specs/sy.md.bak && git add -A
+out=$(git commit -qm "move in" 2>&1); rc=$?; expect_pass test $rc = 0; [ $rc = 0 ] || echo "$out"
+msg="movein: then jig move-in says pd has moved in, and rig in pd offers Delta alpha/…, read from M"
+expect_pass sh -c "$J move-in | grep -q 'pd has moved in' && $J rig | grep -q 'Delta alpha/'"
+msg="movein: in M, a glossary change dropping Delta's Owner: while ## Delta alpha still heads the roadmap is refused"
+out=$(cd "$MM" && git switch -q -c noowner && sed -i.bak '/^Owner: `pd`.$/d' docs/glossary.md && rm docs/glossary.md.bak && git add -A && git commit -qm "GLOSSARY: no owner" 2>&1); rc=$?
+(cd "$MM" && git reset -q --hard && git switch -q main && git branch -q -D noowner)
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '## Delta has no .Owner:. line here, though HEAD gives it one, and .jig/roadmap.md heads ## Delta alpha'" "$out"
+# The product renamed at the merge, the old term kept: step 2 reads the name M's roadmap holds the
+# phases under; the text above the first heading rides along, item-shaped lines and all.
+mpara pr '# Roadmap\n\nThe plan for rex.\n- `z`: not a scope\n\n## alpha\nScopes:\n- `r`: the r\n'
+mspec sr alpha/r && mplant "sr"
+$J move-in --product Rex --definition "The rex." --apply >/dev/null 2>&1 && git commit -qm "specs: move-in" >/dev/null 2>&1
+msg="movein: the text above pr's first heading is kept, as ## Rex alpha's note, its # title left to M's roadmap"
+expect_pass sh -c "git -C '$MM' show propose/pr-move-in:.jig/roadmap.md | grep -A2 -x '## Rex alpha' | grep -qx -- '- \`z\`: not a scope' && git -C '$MM' show propose/pr-move-in:.jig/roadmap.md | grep -A1 -x '## Rex alpha' | grep -qx 'The plan for rex.' && test \"\$(git -C '$MM' show propose/pr-move-in:.jig/roadmap.md | grep -c '^# ')\" = 1"
+( cd "$MM" && git branch -q behind main )   # cut before the merge below brings in Rex and Rover
+( cd "$MM" && git switch -q propose/pr-move-in && printf '\n## Rover\n\nThe rex, renamed.\n\nOwner: `pr`.\n' >> docs/glossary.md && sed -i.bak 's/^## Rex alpha$/## Rover alpha/' .jig/roadmap.md \
+  && rm -f .jig/*.bak && git add -A && git commit -qm "GLOSSARY: Rex is Rover" && $J reviewed >/dev/null \
+  && git switch -q main && git merge -q --no-ff --no-edit propose/pr-move-in ) >/dev/null 2>&1
+msg="movein: M keeps Rex and adds Rover at the merge; the item-shaped preamble line is no scope in M's roadmap"
+expect_pass sh -c "cd '$MM' && grep -qx '## Rex' docs/glossary.md && grep -qx '## Rover alpha' .jig/roadmap.md && ! $J roadmap | grep -q 'alpha/z'"
+msg="movein: step 2 with no --product reads Rex from its record and is refused, naming ## Rex alpha missing, Rex and Rover, and --product; nothing staged"
+out=$($J move-in --apply 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '## Rex alpha' && echo \"\$0\" | grep -q 'Rex, Rover' && echo \"\$0\" | grep -q -- '--product' && test -z \"\$(git diff --cached --name-only)\"" "$out"
+msg="movein: with --product Rover, the owner's word, step 2 says the record says Rex, stages Scope: Rover alpha/r, and the commit passes"
+out=$($J move-in --product Rover --apply 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q 'says Rex' && grep -qx 'Scope: Rover alpha/r' .jig/specs/sr.md && git commit -qm 'move in' >/dev/null 2>&1" "$out"
+msg="movein: in M, an unrelated glossary edit on a branch cut before Rex and Rover reached trunk passes: only what the commit drops counts"
+out=$(cd "$MM" && git switch -q behind && printf '\n## Foo\n\nA foo.\n' >> docs/glossary.md && ulog '- docs/glossary.md § Foo: added.' && git add -A && git commit -qm "GLOSSARY: Foo" 2>&1); rc=$?
+(cd "$MM" && git reset -q --hard && git switch -q main)
+expect_pass test $rc = 0; [ $rc = 0 ] || echo "$out"
+msg="movein: in M, on a propose/ branch, Rover's headings renamed Rocket before its glossary term are refused, naming Rocket as no product pr owns (roadmap-labels' rule)"
+out=$(cd "$MM" && git branch -q propose/pr-rename "$(git commit-tree 'main^{tree}' -p main -m 'propose: pr: nothing written yet')" && git switch -q propose/pr-rename \
+  && sed -i.bak 's/^## Rover alpha$/## Rocket alpha/' .jig/roadmap.md && rm .jig/roadmap.md.bak && git add -A && git commit -qm "ROADMAP: Rocket alpha" 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '## Rocket alpha names no product pr owns'" "$out"
+msg="movein: renamed in one commit, headings and glossary term together, read by the commit's own glossary, it passes"
+out=$(cd "$MM" && sed -i.bak 's/^## Rover$/## Rocket/' docs/glossary.md && rm docs/glossary.md.bak && ulog '- docs/glossary.md § Rocket: Rover renamed.' && git add -A && git commit -qm "GLOSSARY: Rover is Rocket" 2>&1); rc=$?
+(cd "$MM" && git reset -q --hard && git switch -q main)
+expect_pass test $rc = 0; [ $rc = 0 ] || echo "$out"
+# A pararepo whose product is a term it already heads its sections with.
+( cd "$MM" && printf '\n## Widget\n\nThe widget.\n\nOwner: `pg`.\n' >> docs/glossary.md && mplant "Widget" )
+mpara pg '# Roadmap\n\n## Widget beta\nScopes:\n- `w`: the w\n'
+mspec sw 'Widget beta/w' && mplant "sw"
+msg="movein: the plan refuses text above the first heading with no phase to keep it"
+printf '# Roadmap\n\nIntro.\n\n## No phase\n- `n`: n\n' > .jig/roadmap.md && mplant "lists only"
+out=$($J move-in --product Widget 2>&1); rc=$?; git reset -q --hard HEAD~1
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'no phase to keep it'" "$out"
+msg="movein: with M's jig older than jig move-in, step 1 is refused, saying to /jig:update M first"
+( cd "$MM" && sed -i.bak 's/def cmd_move_in(/def cmd_move_in_was(/' .jig/jig.py && rm .jig/jig.py.bak && mplant "old jig" )
+out=$($J move-in --product Widget --apply 2>&1); rc=$?
+( cd "$MM" && git -c core.hooksPath=/dev/null revert --no-edit HEAD >/dev/null )
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '/jig:update in M first' && ! git -C '$MM' rev-parse -q --verify refs/heads/propose/pg-move-in" "$out"
+$J move-in --product Widget --apply >/dev/null 2>&1 && git commit -qm "specs: move-in" >/dev/null 2>&1
+( cd "$MM" && git switch -q propose/pg-move-in && $J reviewed >/dev/null && git switch -q main ) >/dev/null 2>&1
+msg="movein: M drops Widget's Owner: through a reviewed branch merged to main, no Widget heading there yet, and it passes"
+out=$(cd "$MM" && git switch -q -c dropw && sed -i.bak '/^Owner: `pg`.$/d' docs/glossary.md && rm docs/glossary.md.bak && ulog '- docs/glossary.md § Widget: its owner dropped.' \
+  && git add -A && git commit -qm "GLOSSARY: Widget unowned" && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-edit dropw 2>&1); rc=$?
+expect_pass test $rc = 0; [ $rc = 0 ] || echo "$out"
+msg="movein: merging propose/pg-move-in into M's main is then refused, naming ## Widget and ## Widget beta, and main's tip is unchanged"
+mtip=$(git -C "$MM" rev-parse main)
+out=$(cd "$MM" && git merge -q --no-ff --no-edit propose/pg-move-in 2>&1); rc=$?; (cd "$MM" && git merge --abort 2>/dev/null; git reset -q --hard)
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '## Widget has no .Owner:. line here' && echo \"\$0\" | grep -q '## Widget beta' && test \"\$(git -C '$MM' rev-parse main)\" = '$mtip'" "$out"
+msg="movein: with that merge made hooks off, pg's step 2 is refused, naming Widget and Owner:, and nothing is staged"
+( cd "$MM" && git -c core.hooksPath=/dev/null merge -q --no-ff --no-edit propose/pg-move-in )
+out=$($J move-in --apply 2>&1); rc=$?
+( cd "$MM" && git reset -q --hard HEAD~1 )
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'give Widget to pg: ## Widget has no .Owner:. line' && test -z \"\$(git diff --cached --name-only)\"" "$out"
+( cd "$MM" && git switch -q -c restorew && printf 'Owner: `pg`.\n' >> docs/glossary.md && ulog '- docs/glossary.md § Widget: its owner back.' \
+  && git add -A && git commit -qm "GLOSSARY: Widget is pg's" && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-edit restorew ) >/dev/null 2>&1
+msg="movein: with the owner restored, the merge passes"
+out=$(cd "$MM" && git merge -q --no-ff --no-edit propose/pg-move-in 2>&1); rc=$?
+expect_pass test $rc = 0; [ $rc = 0 ] || echo "$out"
+msg="movein: pg's ## Widget beta, already its term, moves in unchanged, and step 2 runs, its Scope: line kept"
+out=$($J move-in --product Widget --apply 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && grep -qx 'Scope: Widget beta/w' .jig/specs/sw.md && git diff --cached --name-status | grep -q '^D	.jig/roadmap.md' && git commit -qm 'move in' >/dev/null 2>&1" "$out"
+# A pararepo whose product M already names, with headings under another term it owns.
+( cd "$MM" && printf '\n## Foxy\n\nThe fox app.\n\nOwner: `pf`.\n\n## Gadget\n\nThe gadget.\n\nOwner: `pf`.\n' >> docs/glossary.md && mplant "Foxy and Gadget" )
+mpara pf '# Roadmap\n\n## alpha\nScopes:\n- `a`: the a\n\n## Gadget gamma\nScopes:\n- `g`: the g (after alpha/a)\n\n## Gadget delta\nScopes:\n- `d`: the d\n'
+mspec sa alpha/a && mplant "sa"
+msg="movein: ## Up next in pf is refused, naming jig update --apply"
+printf '\n## Up next\n- `n`: n\n' >> .jig/roadmap.md && mplant "up next"
+out=$($J move-in --product Foxy --apply 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'jig update --apply'" "$out"
+git reset -q --hard HEAD~1
+msg="movein: with ## Foxy alpha already on M's trunk, --apply is refused, naming it, and no branch is made"
+( cd "$MM" && printf '\n## Foxy alpha\nScopes:\n- `q`: q\n' >> .jig/roadmap.md && mplant "Foxy alpha" )
+out=$($J move-in --product Foxy --apply 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '## Foxy alpha' && ! git -C '$MM' rev-parse -q --verify refs/heads/propose/pf-move-in && test -z \"\$(git status --porcelain)\"" "$out"
+( cd "$MM" && git -c core.hooksPath=/dev/null revert --no-edit HEAD >/dev/null )
+msg="movein: Foxy owned by pf already: no glossary change, no --definition, ## Gadget gamma kept, its ref (after Foxy alpha/a)"
+out=$($J move-in --product Foxy --apply 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && ! git -C '$MM' diff --name-only main propose/pf-move-in | grep -q glossary \
+  && git -C '$MM' show propose/pf-move-in:.jig/roadmap.md | grep -qx '## Gadget gamma' && git -C '$MM' show propose/pf-move-in:.jig/roadmap.md | grep -qx '## Foxy alpha' \
+  && git -C '$MM' show propose/pf-move-in:.jig/roadmap.md | grep -qx -- '- \`g\`: the g (after Foxy alpha/a)'" "$out"
+[ $rc = 0 ] || echo "$out"
+git commit -qm "specs: move-in" >/dev/null 2>&1
+( cd "$MM" && git switch -q propose/pf-move-in && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-edit propose/pf-move-in ) >/dev/null 2>&1
+msg="movein: step 2 in pf, with no --product and with --product Foxy, moves in as Foxy, ## alpha → ## Foxy alpha, never Gadget alpha"
+o1=$($J move-in 2>&1); o2=$($J move-in --product Foxy 2>&1)
+expect_pass sh -c "for o in \"\$0\" \"\$1\"; do echo \"\$o\" | grep -q 'as Foxy\$' && echo \"\$o\" | grep -q '## alpha → ## Foxy alpha' && ! echo \"\$o\" | grep -q 'Gadget alpha' || exit 1; done" "$o1" "$o2"
+msg="movein: --apply stages Scope: Foxy alpha/a in sa.md, and the commit passes"
+out=$($J move-in --apply 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && grep -qx 'Scope: Foxy alpha/a' .jig/specs/sa.md && git commit -qm 'move in' >/dev/null 2>&1" "$out"
+# A withdrawn proposal, then step 1 again, against a metarepo of its own that can release.
+MM2="$T/M2"; mnew M2 && git add -A && git commit -qm init && $J init --meta --name M2 >/dev/null && git add -A && git commit -qm meta-init && $J release $(mf) >/dev/null
+python3 .jig/jig.py repos add meta "$MM2" --name M2 >/dev/null
+mnew pw && mkdir -p docs && printf '# P\n\nP is.\n' > docs/p.md && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
+$J init --para M2 --location "$MM2" >/dev/null 2>&1 && git add -A && git commit -qm para-init && python3 .jig/jig.py repos add para "$T/pw" --name pw >/dev/null
+printf '# Roadmap\n\n## alpha\nScopes:\n- `x`: the x\n' > .jig/roadmap.md && git add -A && git commit -qm own && $J roadmap --write >/dev/null && git add -A && git commit -qm view
+( cd "$MM2" && python3 -c "import json; f='.jig/meta.json'; d=json.load(open(f)); d['pararepos']=['pw']; json.dump(d, open(f,'w'), indent=2)" && mplant "pw joins" )
+$J move-in --product Wex --definition "The wex." --apply >/dev/null 2>&1 && git commit -qm "specs: move-in" >/dev/null 2>&1
+msg="movein: a move-in branch reset to its opening commit reads empty in M2, and step 1 is next"
+git -C "$MM2" branch -q -f propose/pw-move-in propose/pw-move-in~1; out=$($J move-in 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -q 'propose/pw-move-in is empty in M2' && echo \"\$0\" | grep -q '^1. product and phases proposed: next'" "$out"
+msg="movein: step 1 again on that empty record with --product Wox proposes Wox under move-in.md, its row alone; BUFFER.md holds one move-in row, B1, now Wox"
+out=$($J move-in --product Wox --definition "The wox." --apply 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && grep -q '§ Wox: none yet' .jig/specs/move-in.md && sed -n '/^## Buffer rows/,/^\$/p' .jig/specs/move-in.md | grep -c '^- B' | grep -qx 1 \
+  && grep -q '| B1 | M2/.jig/roadmap.md § Wox: none yet .* | Open |' .jig/ledgers/BUFFER.md && test \"\$(grep -c 'moving in' .jig/ledgers/BUFFER.md)\" = 1" "$out"
+git commit -qm "specs: move-in as Wox" >/dev/null 2>&1
+msg="movein: deleted unmerged, the branch reads gone"
+git -C "$MM2" branch -q -D propose/pw-move-in; out=$($J move-in 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -q 'propose/pw-move-in, which .jig/specs/move-in.md records, is gone from M2 unmerged'" "$out"
+$J move-in --definition "The wox." --apply >/dev/null 2>&1 && git commit -qm "specs: move-in again" >/dev/null 2>&1
+msg="movein: jig propose --buffer leaves the move-in row out while its live proposal carries it, and says so, not that jig move-in proposes it again"
+nbr=$(git -C "$MM2" branch | wc -l); out=$($J propose --buffer 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q 'nothing to propose' && echo \"\$0\" | grep -q 'a move-in row (B1) is carried by propose/pw-move-in (.jig/specs/move-in.md)' && ! echo \"\$0\" | grep -q 'proposes it again' && ! ls .jig/specs | grep -q '^buffer-' && test \"\$(git -C '$MM2' branch | wc -l)\" = '$nbr'" "$out"
+msg="movein: the withdrawal says its move-in row goes again by jig move-in, not in the next proposal"
+out=$($J propose --withdraw propose/pw-move-in --reason r 2>&1); git add -A && git commit -qm "specs: withdraw" >/dev/null 2>&1
+expect_pass sh -c "echo \"\$0\" | grep -q 'Its move-in row (B1) goes again by .jig move-in.' && ! echo \"\$0\" | grep -q 'go again in the next proposal'" "$out"
+msg="movein: withdrawn, jig propose --buffer still leaves the move-in row out, and says it is left to jig move-in"
+out=$($J propose --buffer 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q 'nothing to propose' && echo \"\$0\" | grep -q 'a move-in row (B1) is left to .jig move-in., which proposes it again' && ! ls .jig/specs | grep -q '^buffer-' && test \"\$(git -C '$MM2' branch | wc -l)\" = '$nbr'" "$out"
+msg="movein: withdrawn, M2 keeping the old branch, step 1 makes propose/pw-move-in-2 and move-in-2.md; the withdrawn spec is untouched"
+out=$($J move-in --product Wex --definition "The wex." --apply 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && git -C '$MM2' rev-parse -q --verify refs/heads/propose/pw-move-in-2 >/dev/null && test -f .jig/specs/move-in-2.md \
+  && test -z \"\$(git diff HEAD -- .jig/specs/move-in.md)\" && grep -q 'meta: M2 withdrawn propose/pw-move-in ' .jig/specs/move-in.md && ! ls .jig/specs/ | grep -q withdrawn" "$out"
+[ $rc = 0 ] || echo "$out"
+msg="movein: the re-proposal as Wex reuses its own Open row, B1, alone in move-in-2.md"
+expect_pass sh -c "grep -qx -- '- B1' .jig/specs/move-in-2.md && test \"\$(sed -n '/^## Buffer rows/,/^\$/p' .jig/specs/move-in-2.md | grep -c '^- B')\" = 1"
+git commit -qm "specs: move-in-2" >/dev/null 2>&1
+( cd "$MM2" && git switch -q propose/pw-move-in-2 && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-edit propose/pw-move-in-2 && $J release $(mf) >/dev/null ) >/dev/null 2>&1
+msg="movein: after M2 merges and releases it, pw's sync says propose/pw-move-in-2 is released, with no 'withdrawn, but released' advice"
+out=$($J sync 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -q 'propose/pw-move-in-2 (.jig/specs/move-in-2.md): released by' && ! echo \"\$0\" | grep -q 'withdrawn, but released'" "$out"
+msg="movein: then jig move-in in pw says step 2 is next, as Wex"
+out=$($J move-in 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -q 'as Wex\$' && echo \"\$0\" | grep -q '^2. roadmap leaves: next'" "$out"
+}
+
+sec_move() {
+export JIG_CONFIG="$T/repos.json"
+gnew() { mkdir -p "$T/$1" && cd "$T/$1" && git init -q -b main && git config user.email t@t && git config user.name t \
+  && cp -r "$P/jig" .jig && cp "$P/AGENTS.md" "$P/CLAUDE.md" .; }
+gplant() { git add -A && git -c core.hooksPath=/dev/null commit -qm "$1"; }
+gland() {  # gland <file>: this repo resolves a staged file on a branch and merges it, numbering its entry
+  git switch -q -c "land-$1" && $J staging resolve "$1" >/dev/null 2>&1 && git add -A && git commit -qm "D-?x: land $1" >/dev/null 2>&1 \
+    && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-commit "land-$1" && $J merge --number >/dev/null 2>&1; git commit -qm "merge land-$1" >/dev/null 2>&1; }
+GM="$T/M"; gnew M && git add -A && git commit -qm init && $J init --meta --name M >/dev/null && git add -A && git commit -qm meta-init && $J release $(mf) >/dev/null
+python3 .jig/jig.py repos add meta "$GM" --name M >/dev/null
+python3 -c "import json; f='.jig/meta.json'; d=json.load(open(f)); d['decision_prefix']='E-'; d['pararepos']=['L', 'K', 'U']; json.dump(d, open(f,'w'), indent=2)"
+mkdir -p docs/products/walyt && printf '# Battery\n\nThe battery.\n' > docs/products/walyt/battery.md && printf '# Walyt\n\nThe walyt.\n\nSee `L/docs/l.md`.\n' > docs/products/walyt/walyt.md
+printf '\n## Walyt\n\nThe wallet app.\n\nOwner: `L`.\n\n## Kite\n\nThe kite.\n\nOwner: `K`.\n' >> docs/glossary.md
+ulog '### E-001 one
+Accepted (owner, 2026-11-01).
+Touches: docs/products/walyt/battery.md
+
+The battery is 300 mAh.'
+gplant "pages and E-001"
+ulog '### E-002 two
+Accepted (owner, 2026-11-02). Supersedes E-001.
+Touches: docs/products/walyt/battery.md
+
+The battery is 400 mAh.' && rment E-001 && gplant "E-002"
+printf '# Roadmap\n\n## alpha\nScopes:\n- `battery`: the battery (touches docs/products/walyt/battery.md)\n- `charge`: charging (touches docs/products/walyt/battery.md)\n- `later`: later work (touches docs/products/walyt/battery.md)\n\n## Walyt alpha\nScopes:\n- `pair`: pairing\n\n## Kite alpha\nScopes:\n- `k1`: k one\n' > .jig/roadmap.md
+mkdir -p .jig/specs && printf '# b\n\nSource: smoke\nScope: alpha/battery\nLater: alpha/later\n\n## Intent\nx\n' > .jig/specs/b.md && gplant "roadmap"
+for r in L K U; do
+  gnew $r && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
+  $J init --para M --location "$GM" $( [ $r = U ] && echo --contract 'docs/**') >/dev/null 2>&1 && git add -A && git commit -qm para-init && python3 .jig/jig.py repos add para "$T/$r" --name $r >/dev/null
+  git rm -q --ignore-unmatch .jig/roadmap.md ROADMAP.md && gplant "$r plans from M"
+done
+GL="$T/L"; GK="$T/K"; GU="$T/U"
+rigsec() { $J rig 2>&1 | sed -n "/^$1:/,/^\$/p"; }  # rigsec <heading>: one section of jig rig's picture
+rigquiet() {  # rigquiet <spec name>: jig rig offers it nowhere (Can start now, Waiting on), and jig rig --close closes nothing and changes nothing
+  local h r c; h=$(git rev-parse HEAD); r=$($J rig 2>&1 | sed -n '/^Can start now:/,/^Waiting on you:/p'); c=$($J rig --close 2>&1)
+  ! echo "$r" | grep -q "$1" && ! echo "$c" | grep -q "^closed.*$1" && test "$(git rev-parse HEAD)" = "$h" && test -z "$(git status --porcelain)" \
+    || { echo "rigquiet $1: $r // $c // $(git status --porcelain)" >&2; return 1; }; }
+cd "$GM"
+msg="move (down): jig move E-002 --to L lists both steps, the first next, and writes nothing"
+out=$($J move E-002 --to L 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q '^1. land it in L: next' && echo \"\$0\" | grep -q '^2. remove it here: waiting on step 1' && test -z \"\$(git status --porcelain)\"" "$out"
+msg="move (down): --apply writes move-e-002.md here and stages in L a decisions file with moved-from:, who and date kept, no Supersedes E-001"
+out=$($J move E-002 --to L --apply 2>&1); rc=$?
+SL="$GL/.jig/staging/move-e-002.md"
+expect_pass sh -c "test $rc = 0 && test -f .jig/specs/move-e-002.md && grep -qx 'moved-from: M/.jig/decisions.md § E-002' '$SL' && grep -qx 'Accepted (owner, 2026-11-02).' '$SL' && ! grep -q 'Supersedes' '$SL'" "$out"; [ $rc = 0 ] || echo "$out"
+git commit -qm "TOOL: move E-002" >/dev/null 2>&1
+msg="move (down): before L lands it, step 2 waits on L's owner"
+expect_pass sh -c "$J move E-002 --to L | grep -q '^2. remove it here: waiting on L'"
+msg="move (rig, down): before L lands it, rig in M lists the move's spec under Waiting on, naming L, and not under Can start now"
+expect_pass sh -c "echo \"\$0\" | grep 'move-e-002' | grep -q \"L's moved-from line for E-002\" && ! echo \"\$1\" | grep -q move-e-002" "$(rigsec 'Waiting on')" "$(rigsec 'Can start now')"
+( cd "$GL" && gland move-e-002.md )
+msg="move (rig, down): once L's trunk holds the numbered moved-from line, rig in M lists the move's spec under Can start now"
+expect_pass sh -c "echo \"\$0\" | grep -q move-e-002 && ! echo \"\$1\" | grep -q move-e-002" "$(rigsec 'Can start now')" "$(rigsec 'Waiting on')"
+msg="move (down): L resolved and merged it: D-001 with its moved-from line"
+expect_pass sh -c "grep -q '^### D-001 ' '$GL/.jig/decisions.md' && grep -qx -- '- D-001: moved from M/.jig/decisions.md § E-002.' '$GL/.jig/decisions.md'"
+msg="move (down): run in M's trunk checkout, step 2 is refused, naming M4"
+out=$($J move E-002 --to L --apply 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'M4' && test -z \"\$(git status --porcelain)\"" "$out"
+gjob() {  # gjob <job> <spec> <subject> <files…>: here, a job opened from SPEC runs step 2 of `jig move` ($GARGS), commits it, and hands off; jig merge merges it unless GNOMERGE is set
+  j=$1 sp=$2 sub=$3; shift 3; gw=".git/jig/worktrees/$j"
+  $J open "$j" --spec "$sp" --owns "$@" >/dev/null 2>&1 && git add -A && git commit -qm "TOOL: open $j" >/dev/null 2>&1
+  gout=$(cd "$gw" && eval "$J move $GARGS --apply" 2>&1); grc=$?
+  gcom=$(cd "$gw" && git commit -qm "$sub" 2>&1); gcrc=$?
+  ( cd "$gw" && $J reviewed >/dev/null && $J handoff >/dev/null 2>&1 && pcfold \
+    && sed -i.bak 's/ — built \/ untouched \/ departed: smoke/ — departed: moved/' .jig/handoffs/$j-*.md && rm -f .jig/handoffs/*.bak && git add -A && git commit -qm "TOOL: note $j" ) >/dev/null 2>&1
+  [ -n "${GNOMERGE:-}" ] && return 0
+  gated "$j"; mout=$($J merge "$j" 2>&1); mrc=$?; }
+msg="move (down): step 2 in M's job opened from the move's spec removes E-002 with its move line naming D-001; jig merge merges it and closes the spec, so rig doesn't offer it"
+GARGS="E-002 --to L"; gjob e2 .jig/specs/move-e-002.md "E-002: moved to L" .jig/decisions.md
+expect_pass sh -c "test $grc = 0 && test $mrc = 0 && ! grep -q '^### E-002' .jig/decisions.md && grep -qx -- '- E-002: moved to L/.jig/decisions.md § D-001.' .jig/decisions.md \
+  && test ! -e .jig/specs/move-e-002.md && ! $J rig | grep -q move-e-002" "$gout $mout"; [ $mrc = 0 ] || echo "$gout $mout"
+msg="move (rig, a finished move): after that merge, rig in M lists no move spec, and rig --close closes none and changes nothing"
+expect_pass rigquiet move-e-002
+msg="move (a page down): step 1 stages docs/battery.md in L with its moved-from line"
+out=$($J move docs/products/walyt/battery.md --to L --as docs/battery.md --apply 2>&1); rc=$?
+SB="$GL/.jig/staging/move-docs-products-walyt-battery-md.md"
+expect_pass sh -c "test $rc = 0 && grep -qx 'destination: docs/battery.md' '$SB' && grep -qx 'moved-from: M/docs/products/walyt/battery.md' '$SB'" "$out"; [ $rc = 0 ] || echo "$out"
+git commit -qm "TOOL: move battery" >/dev/null 2>&1
+( cd "$GL" && gland move-docs-products-walyt-battery-md.md )
+msg="move (a page down): step 2 in M's job removes the page with its move line, says which items follow, and leaves .jig/roadmap.md alone"
+GARGS="docs/products/walyt/battery.md --to L --as docs/battery.md"; gjob bat .jig/specs/move-docs-products-walyt-battery-md.md "DOCS: battery to L" docs/products/walyt/battery.md .jig/decisions.md
+expect_pass sh -c "test $grc = 0 && echo \"\$0\" | grep -q '.charge. → ## Walyt alpha' && echo \"\$0\" | grep -q 'alpha/battery, alpha/later stay, taken' && echo \"\$0\" | grep -q 'jig merge. moves them in this job.s merge commit'" "$gout"; [ $grc = 0 ] || echo "$gout"
+msg="move (a page down): jig merge's merge commit moves the untaken charge into ## Walyt alpha touching docs/battery.md, drops the page from battery and from later (left for later by b.md), closes the spec, and passes"
+expect_pass sh -c "test $mrc = 0 && git log -1 --format=%P | grep -q ' ' && test ! -e docs/products/walyt/battery.md && sed -n '/^## Walyt alpha/,/^## /p' .jig/roadmap.md | grep -qx -- '- .charge.: charging (touches docs/battery.md)' \
+  && ! sed -n '/^## alpha/,/^## /p' .jig/roadmap.md | grep -q charge && grep -qx -- '- .battery.: the battery' .jig/roadmap.md && grep -qx -- '- .later.: later work' .jig/roadmap.md \
+  && grep -qx -- '- docs/products/walyt/battery.md: moved to L/docs/battery.md.' .jig/decisions.md && git diff HEAD~1 HEAD --name-only | grep -qx .jig/roadmap.md \
+  && test ! -e .jig/specs/move-docs-products-walyt-battery-md.md && ! $J rig | grep -q move-docs-products" "$mout"; [ $mrc = 0 ] || echo "$mout"
+cd "$GL"
+printf '# L\n\nL is.\n' > docs/l.md 2>/dev/null || { mkdir -p docs && printf '# L\n\nL is.\n' > docs/l.md; }
+ulog '### D-002 two-up
+Accepted (owner, 2026-11-03).
+Touches: none — up
+
+Up.' && gplant "l page and D-002"
+msg="move (up): in L, jig move D-002 --to M makes propose/L-move-d-002 in M, the entry as E-? with its moved-from line, passed by M's hook"
+out=$($J move D-002 --to M --apply 2>&1); rc=$?
+mb=$(git -C "$GM" show propose/L-move-d-002:.jig/decisions.md 2>/dev/null)
+expect_pass sh -c "test $rc = 0 && echo \"\$1\" | grep -q '^### E-?two-up two-up' && echo \"\$1\" | grep -qx -- '- E-?two-up: moved from L/.jig/decisions.md § D-002.' \
+  && test \"\$(git -C '$GM' log --format=%s main..propose/L-move-d-002 | wc -l | tr -d ' ')\" = 2 && grep -qx -- '- meta: M proposal propose/L-move-d-002' .jig/specs/move-d-002.md" "$out" "$mb"; [ $rc = 0 ] || echo "$out"
+git commit -qm "specs: move D-002" >/dev/null 2>&1
+( cd "$GM" && git switch -q propose/L-move-d-002 && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-commit propose/L-move-d-002 && $J merge --number >/dev/null 2>&1; git commit -qm "merge L's D-002" >/dev/null 2>&1 )
+msg="move (up): once M's job numbers it, step 2 in L's job removes D-002 with its move line, the commit passes, and jig merge keeps the spec naming the proposal"
+GARGS="D-002 --to M"; gjob d2 .jig/specs/move-d-002.md "D-002: up to M" .jig/decisions.md
+expect_pass sh -c "test $grc = 0 && test $gcrc = 0 && test $mrc = 0 && grep -qx -- '- D-002: moved to M/.jig/decisions.md § E-003.' .jig/decisions.md \
+  && echo \"\$0\" | grep -q 'kept .jig/specs/move-d-002.md'" "$gout $gcom $mout"; [ $mrc = 0 ] || echo "$gout $gcom $mout"
+msg="move (up, withdrawn): a withdrawn up move reads step 1 next, and --apply proposes it again as move-d-003-2, the withdrawn spec untouched"
+ulog '### D-003 three-up
+Accepted (owner, 2026-11-03).
+Touches: none — up
+
+Three.' && gplant "D-003"
+$J move D-003 --to M --apply >/dev/null 2>&1 && git commit -qm "specs: move D-003" >/dev/null 2>&1
+$J propose --withdraw propose/L-move-d-003 --reason r >/dev/null 2>&1 && git add -A && git commit -qm "specs: withdraw" >/dev/null 2>&1
+o1=$($J move D-003 --to M 2>&1); out=$($J move D-003 --to M --apply 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q '^1. land it in M: next' && test -f .jig/specs/move-d-003-2.md && grep -qx -- '- meta: M proposal propose/L-move-d-003-2' .jig/specs/move-d-003-2.md \
+  && git -C '$GM' rev-parse -q --verify refs/heads/propose/L-move-d-003-2 >/dev/null && test -z \"\$(git diff HEAD -- .jig/specs/move-d-003.md)\" && grep -q 'meta: M withdrawn propose/L-move-d-003 ' .jig/specs/move-d-003.md" "$o1"; [ $rc = 0 ] || echo "$out"
+git commit -qm "specs: move D-003 again" >/dev/null 2>&1
+msg="move (up, withdrawn): once M's job numbers the re-proposal, the job opens from move-d-003-2.md unrefused, and after its merge rig offers neither spec"
+( cd "$GM" && git switch -q propose/L-move-d-003-2 && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-commit propose/L-move-d-003-2 && $J merge --number >/dev/null 2>&1; git commit -qm "merge L's D-003" >/dev/null 2>&1 )
+GARGS="D-003 --to M"; gjob d3 .jig/specs/move-d-003-2.md "D-003: up to M" .jig/decisions.md
+rs=$($J rig 2>&1 | sed -n '/^Can start now:/,/^Waiting on you:/p')
+expect_pass sh -c "test $grc = 0 && test $gcrc = 0 && test $mrc = 0 && grep -q -- '- D-003: moved to M/.jig/decisions.md § E-' .jig/decisions.md && ! echo \"\$1\" | grep -q 'move-d-003'" "$gout $gcom $mout" "$rs"; [ "$fail" = 0 ] || echo "$gout $gcom $mout $rs"
+msg="move (an idea up): L's open D-004, in its ideas file, is proposed into M's .jig/ideas.md with its moved-from line in M's log"
+printf '\n### D-004 four-up\nOpen (2026-11-03).\nTouches: none — up\n\nFour?\n' >> .jig/ideas.md && gplant "idea D-004"
+( cd "$GM" && printf '\nIdea: `L/.jig/ideas.md § D-004`.\n' >> docs/products/walyt/walyt.md && gplant "M cites L's idea" )
+out=$($J move D-004 --to M --apply 2>&1); rc=$?
+mi=$(git -C "$GM" show propose/L-move-d-004:.jig/ideas.md 2>/dev/null); ml=$(git -C "$GM" show propose/L-move-d-004:.jig/decisions.md 2>/dev/null)
+expect_pass sh -c "test $rc = 0 && echo \"\$1\" | grep -q '^### E-?four-up four-up' && echo \"\$2\" | grep -qx -- '- E-?four-up: moved from L/.jig/decisions.md § D-004.' && ! echo \"\$2\" | grep -q '^### E-?four-up' \
+  && sed -n \"/^## M's citations/,\\\$p\" .jig/specs/move-d-004.md | grep -q 'walyt.md:.*L/.jig/ideas.md § D-004'" "$out" "$mi" "$ml"; [ "$fail" = 0 ] || { echo "$out"; cat .jig/specs/move-d-004.md; }
+git commit -qm "specs: move D-004" >/dev/null 2>&1
+( cd "$GM" && git switch -q propose/L-move-d-004 && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-commit propose/L-move-d-004 && $J merge --number >/dev/null 2>&1; git commit -qm "merge L's D-004" >/dev/null 2>&1 )
+msg="move (an idea up): once M numbers it, step 2 in L's job takes D-004 out of L's ideas file with its move line, and the commit passes"
+GARGS="D-004 --to M"; gjob d4 .jig/specs/move-d-004.md "D-004: up to M" .jig/decisions.md .jig/ideas.md
+expect_pass sh -c "test $grc = 0 && test $gcrc = 0 && test $mrc = 0 && ! grep -q '^### D-004' .jig/ideas.md && grep -q -- '- D-004: moved to M/.jig/decisions.md § E-' .jig/decisions.md \
+  && grep -q '^### E-[0-9]* four-up' '$GM/.jig/ideas.md'" "$gout $gcom $mout"; [ "$fail" = 0 ] || echo "$gout $gcom $mout"
+msg="move (sideways): in L, jig move docs/l.md --to K stages it in K"
+out=$($J move docs/l.md --to K --apply 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && grep -qx 'moved-from: L/docs/l.md' '$GK/.jig/staging/move-docs-l-md.md'" "$out"; [ $rc = 0 ] || echo "$out"
+git commit -qm "specs: move l" >/dev/null 2>&1
+msg="move (rig, sideways): before K lands it, rig in L lists the move's spec under Waiting on, naming K, and not under Can start now"
+expect_pass sh -c "echo \"\$0\" | grep 'move-docs-l-md' | grep -q \"K's moved-from line for docs/l.md\" && ! echo \"\$1\" | grep -q move-docs-l-md" "$(rigsec 'Waiting on')" "$(rigsec 'Can start now')"
+( cd "$GK" && gland move-docs-l-md.md )
+msg="move (rig, sideways): once K's trunk holds the moved-from line, rig in L lists the move's spec under Can start now"
+expect_pass sh -c "echo \"\$0\" | grep -q move-docs-l-md && ! echo \"\$1\" | grep -q move-docs-l-md" "$(rigsec 'Can start now')" "$(rigsec 'Waiting on')"
+msg="move (sideways): after K lands it, step 2 in L's job removes the page with its move line and proposes M's pointer rewrite, recorded on the branch; P2 passes"
+GNOMERGE=1 GARGS="docs/l.md --to K"; gjob lj .jig/specs/move-docs-l-md.md "l to K" docs/l.md .jig/decisions.md; GNOMERGE=
+expect_pass sh -c "test $grc = 0 && test $gcrc = 0 && test ! -e .git/jig/worktrees/lj/docs/l.md && grep -qx -- '- docs/l.md: moved to K/docs/l.md.' .git/jig/worktrees/lj/.jig/decisions.md \
+  && git -C '$GM' show propose/L-move-docs-l-md-pointers:docs/products/walyt/walyt.md | grep -q 'K/docs/l.md' \
+  && git show lj:.jig/specs/move-docs-l-md.md | grep -qx -- '- meta: M pointers propose/L-move-docs-l-md-pointers'" "$gout $gcom"; [ "$fail" = 0 ] || echo "$gout $gcom"
+msg="move (sideways): jig merge keeps the spec naming the pointers branch, rig doesn't list it, and jig sync follows the branch through it"
+gated lj; mout=$($J merge lj 2>&1); mrc=$?
+expect_pass sh -c "test $mrc = 0 && echo \"\$0\" | grep -q 'kept .jig/specs/move-docs-l-md.md' && test \"$(rigquiet move-docs-l-md && echo quiet)\" = quiet \
+  && $J sync 2>&1 | grep -q 'pointers propose/L-move-docs-l-md-pointers (.jig/specs/move-docs-l-md.md):'" "$mout"; [ "$fail" = 0 ] || { echo "$mout"; $J sync 2>&1 | head -20; }
+# A pararepo keeping a roadmap of its own: up into M's own phases, sideways into K's product section;
+# and M moving a page down to it, a receiver keeping its own.
+gnew Q && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
+$J init --para M --location "$GM" >/dev/null 2>&1 && git add -A && git commit -qm para-init && python3 .jig/jig.py repos add para "$T/Q" --name Q >/dev/null
+mkdir -p docs && printf '# Q\n\nQ is.\n' > docs/q.md && printf '# Q2\n\nQ2 is.\n' > docs/q2.md
+printf '# Roadmap\n\n## alpha\nScopes:\n- `q1`: q one (touches docs/q.md)\n- `q2`: q two (touches docs/q.md)\n- `q3`: q three (touches docs/q2.md)\n' > .jig/roadmap.md
+mkdir -p .jig/specs && printf '# t\n\nSource: smoke\nScope: alpha/q2\n\n## Intent\nx\n' > .jig/specs/t.md && gplant "Q's own roadmap"
+GQ="$T/Q"
+( cd "$GM" && python3 -c "import json; f='.jig/meta.json'; d=json.load(open(f)); d['pararepos'].append('Q'); json.dump(d, open(f,'w'), indent=2)" \
+  && printf '\nSee `Q/docs/q.md`.\n' >> docs/products/walyt/walyt.md && gplant "Q joins" )
+cd "$GQ"
+msg="move (up, own roadmap): Q's step 1 proposes docs/q.md with the untaken q1 in M's own ## alpha, stages no roadmap file in M, and lists M's citation"
+out=$($J move docs/q.md --to M --apply 2>&1); rc=$?
+mr=$(git -C "$GM" show propose/Q-move-docs-q-md:.jig/roadmap.md 2>/dev/null)
+expect_pass sh -c "test $rc = 0 && echo \"\$1\" | sed -n '/^## alpha/,/^## /p' | grep -qx -- '- .q1.: q one (touches docs/q.md)' && ! echo \"\$1\" | grep -q q2 \
+  && ! ls '$GM/.jig/staging' | grep -q roadmap && grep -q \"^## M's citations\" .jig/specs/move-docs-q-md.md && grep -q 'docs/products/walyt/walyt.md:.*Q/docs/q.md' .jig/specs/move-docs-q-md.md" "$out" "$mr"; [ $rc = 0 ] || echo "$out"
+git commit -qm "specs: move q" >/dev/null 2>&1
+( cd "$GM" && git switch -q propose/Q-move-docs-q-md && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-edit propose/Q-move-docs-q-md ) >/dev/null 2>&1
+msg="move (up, own roadmap): step 2 in Q's job leaves Q's roadmap alone; jig merge takes q1 out of it, drops the page from the taken q2, and keeps the spec naming the proposal"
+GARGS="docs/q.md --to M"; gjob qj .jig/specs/move-docs-q-md.md "q up to M" docs/q.md .jig/decisions.md
+expect_pass sh -c "test $grc = 0 && test $gcrc = 0 && test $mrc = 0 && echo \"\$0\" | grep -q 'jig merge. moves them in this job.s merge commit' && test ! -e docs/q.md \
+  && ! grep -q q1 .jig/roadmap.md && grep -qx -- '- .q2.: q two' .jig/roadmap.md && echo \"\$0\" | grep -q 'kept .jig/specs/move-docs-q-md.md' && test '$(rigquiet move-docs-q-md && echo quiet)' = quiet" "$gout $gcom $mout"; [ "$fail" = 0 ] || echo "$gout $gcom $mout"
+msg="move (sideways, own roadmap): Q moves docs/q2.md to K, which plans from M; step 2 in Q's job proposes q3 under ## Kite alpha in M, jig merge takes it out of Q's roadmap and keeps the spec, and nothing is staged in K"
+$J move docs/q2.md --to K --apply >/dev/null 2>&1 && git commit -qm "specs: move q2" >/dev/null 2>&1
+( cd "$GK" && gland move-docs-q2-md.md )
+GARGS="docs/q2.md --to K"; gjob q2j .jig/specs/move-docs-q2-md.md "q2 to K" docs/q2.md .jig/decisions.md
+mr=$(git -C "$GM" show propose/Q-move-docs-q2-md-pointers:.jig/roadmap.md 2>/dev/null)
+expect_pass sh -c "test $grc = 0 && test $gcrc = 0 && test $mrc = 0 && echo \"\$1\" | sed -n '/^## Kite alpha/,/^## /p' | grep -qx -- '- .q3.: q three (touches docs/q2.md)' \
+  && ! grep -q q3 .jig/roadmap.md && ! ls '$GK/.jig/staging' | grep -q roadmap && grep -qx -- '- meta: M pointers propose/Q-move-docs-q2-md-pointers' .jig/specs/move-docs-q2-md.md \
+  && echo \"\$0\" | grep -q 'kept .jig/specs/move-docs-q2-md.md'" "$gout $gcom $mout" "$mr"; [ "$fail" = 0 ] || echo "$gout $gcom $mout"
+cd "$GM"
+printf '# QQ\n\nQQ is.\n' > docs/products/walyt/qq.md && sed -i.bak 's/^- `k1`: k one$/- `k1`: k one/' .jig/roadmap.md && rm .jig/roadmap.md.bak \
+  && python3 -c "f='.jig/roadmap.md'; s=open(f).read(); open(f,'w').write(s.replace('- \`later\`: later work', '- \`later\`: later work\n- \`qq\`: the qq (touches docs/products/walyt/qq.md)', 1))" && gplant "qq page"
+$J move docs/products/walyt/qq.md --to Q --as docs/qq.md --apply >/dev/null 2>&1 && git commit -qm "TOOL: move qq" >/dev/null 2>&1
+( cd "$GQ" && gland move-docs-products-walyt-qq-md.md )
+msg="move (down to a repo with its own roadmap): M's job stages Q's part in M's staging, unforwarded until the merge; jig merge takes qq out of M's roadmap"
+GARGS="docs/products/walyt/qq.md --to Q --as docs/qq.md"; gjob qqj .jig/specs/move-docs-products-walyt-qq-md.md "DOCS: qq to Q" docs/products/walyt/qq.md .jig/decisions.md
+RF=move-docs-products-walyt-qq-md-roadmap.md
+expect_pass sh -c "test $grc = 0 && test $mrc = 0 && echo \"\$0\" | grep -q 'once this job merges, .jig staging resolve $RF. forwards it' && grep -q 'qq' .jig/staging/$RF \
+  && ! grep -q qq .jig/roadmap.md" "$gout $mout"; [ $mrc = 0 ] || echo "$gout $mout"
+msg="move (down to a repo with its own roadmap): after the merge, jig staging resolve forwards the items to Q"
+expect_pass sh -c "$J staging resolve $RF >/dev/null 2>&1 && grep -q '^- .qq.: the qq (touches docs/qq.md)' '$GQ/.jig/staging/$RF'"
+# L plans from M: its page's items live in M's Walyt sections.
+( cd "$GM" && python3 -c "f='.jig/roadmap.md'; s=open(f).read(); open(f,'w').write(s.replace('- \`pair\`: pairing', '- \`pair\`: pairing\n- \`lu1\`: lu one (touches docs/lu.md)\n- \`ls1\`: ls one (touches docs/ls.md)\n- \`lq1\`: lq one (touches docs/lq.md)', 1))" && gplant "L's items" )
+cd "$GL" && for f in lu ls lq; do printf '# %s\n\n%s is.\n' $f $f > docs/$f.md; done && gplant "L's pages"
+msg="move (up, planning from M): L's step 1 proposal takes lu1 out of ## Walyt alpha into M's own ## alpha"
+out=$($J move docs/lu.md --to M --apply 2>&1); rc=$?
+mr=$(git -C "$GM" show propose/L-move-docs-lu-md:.jig/roadmap.md 2>/dev/null)
+expect_pass sh -c "test $rc = 0 && echo \"\$1\" | sed -n '/^## alpha/,/^## /p' | grep -qx -- '- .lu1.: lu one (touches docs/lu.md)' && ! echo \"\$1\" | sed -n '/^## Walyt alpha/,/^## /p' | grep -q lu1" "$out" "$mr"; [ $rc = 0 ] || echo "$out"
+git commit -qm "specs: move lu" >/dev/null 2>&1
+msg="move (sideways, planning from M): once K lands docs/ls.md, step 2 in L's job proposes ls1 from ## Walyt alpha to ## Kite alpha"
+$J move docs/ls.md --to K --apply >/dev/null 2>&1 && git commit -qm "specs: move ls" >/dev/null 2>&1
+( cd "$GK" && gland move-docs-ls-md.md )
+GARGS="docs/ls.md --to K"; gjob lsj .jig/specs/move-docs-ls-md.md "ls to K" docs/ls.md .jig/decisions.md
+mr=$(git -C "$GM" show propose/L-move-docs-ls-md-pointers:.jig/roadmap.md 2>/dev/null)
+expect_pass sh -c "test $grc = 0 && test $gcrc = 0 && test $mrc = 0 && echo \"\$1\" | sed -n '/^## Kite alpha/,/^## /p' | grep -qx -- '- .ls1.: ls one (touches docs/ls.md)' && ! echo \"\$1\" | sed -n '/^## Walyt alpha/,/^## /p' | grep -q ls1" "$gout $gcom $mout" "$mr"; [ "$fail" = 0 ] || echo "$gout $gcom $mout"
+msg="move (sideways to a repo keeping its own roadmap): step 2 in L's job stages lq1 for Q's roadmap in L's staging, unforwarded until the merge, and its pointers proposal takes lq1 out of M's ## Walyt alpha"
+$J move docs/lq.md --to Q --apply >/dev/null 2>&1 && git commit -qm "specs: move lq" >/dev/null 2>&1
+( cd "$GQ" && gland move-docs-lq-md.md )
+GARGS="docs/lq.md --to Q"; gjob lqj .jig/specs/move-docs-lq-md.md "lq to Q" docs/lq.md .jig/decisions.md
+mr=$(git -C "$GM" show propose/L-move-docs-lq-md-pointers:.jig/roadmap.md 2>/dev/null)
+expect_pass sh -c "test $grc = 0 && test $gcrc = 0 && test $mrc = 0 && grep -q '^- .lq1.: lq one (touches docs/lq.md)' .jig/staging/move-docs-lq-md-roadmap.md \
+  && test ! -e '$GQ/.jig/staging/move-docs-lq-md-roadmap.md' && ! echo \"\$1\" | grep -q lq1" "$gout $gcom $mout" "$mr"; [ "$fail" = 0 ] || echo "$gout $gcom $mout"
+msg="move (sideways to a repo keeping its own roadmap): after the merge, jig staging resolve in L forwards lq1 to Q"
+expect_pass sh -c "$J staging resolve move-docs-lq-md-roadmap.md >/dev/null 2>&1 && grep -q '^- .lq1.: lq one (touches docs/lq.md)' '$GQ/.jig/staging/move-docs-lq-md-roadmap.md'"
+msg="move (a landing in progress): K resolves docs/l3.md in a job worktree and commits nothing; L's plan says step 1 is done and step 2 waits on K, nothing of dropped, and --apply sends nothing"
+printf '# L3\n\nL3 is.\n' > docs/l3.md && gplant "l3 page"
+$J move docs/l3.md --to K --apply >/dev/null 2>&1 && git commit -qm "specs: move l3" >/dev/null 2>&1
+( cd "$GK" && git worktree add -q -b land-l3 "$T/Kw3" && cd "$T/Kw3" && $J staging resolve move-docs-l3-md.md ) >/dev/null 2>&1
+nk=$(ls "$GK/.jig/staging" | wc -l); o1=$($J move docs/l3.md --to K 2>&1); out=$($J move docs/l3.md --to K --apply 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q '^1. land it in K: done' && echo \"\$0\" | grep -q '^2. remove it here: waiting on K' && ! echo \"\$0\" | grep -qi dropped \
+  && echo \"\$1\" | grep -q 'Nothing to apply' && test \"\$(ls '$GK/.jig/staging' | wc -l)\" = '$nk' && test -z \"\$(git status --porcelain)\"" "$o1" "$out"; [ "$fail" = 0 ] || echo "$o1 $out"
+git -C "$GK" worktree remove --force "$T/Kw3" >/dev/null 2>&1; git -C "$GK" branch -q -D land-l3 >/dev/null 2>&1
+cd "$GM"
+printf '\n## Mods\n\nMods snap on.\n' >> docs/products/walyt/walyt.md && gplant "Mods"
+msg="move (a section down): walyt.md § Mods lands in L as a page with its moved-from line, and M's job removes the section with its move line; jig merge passes"
+$J move 'docs/products/walyt/walyt.md § Mods' --to L --as docs/mods.md --apply >/dev/null 2>&1 && git commit -qm "TOOL: move Mods" >/dev/null 2>&1
+( cd "$GL" && gland move-docs-products-walyt-walyt-md-mods.md )
+GARGS="'docs/products/walyt/walyt.md § Mods' --to L --as docs/mods.md"; gjob mods .jig/specs/move-docs-products-walyt-walyt-md-mods.md "DOCS: Mods to L" docs/products/walyt/walyt.md .jig/decisions.md
+expect_pass sh -c "test $grc = 0 && test $mrc = 0 && grep -qx -- '- docs/mods.md § Mods: moved from M/docs/products/walyt/walyt.md § Mods.' '$GL/.jig/decisions.md' \
+  && ! grep -q '^## Mods' docs/products/walyt/walyt.md && grep -qx -- '- docs/products/walyt/walyt.md § Mods: moved to L/docs/mods.md § Mods.' .jig/decisions.md" "$gout $mout"; [ $mrc = 0 ] || echo "$gout $mout"
+msg="move (dropped, on the owner's word): L drops the file step 1 sent; the plan still says step 1 is done, says the file isn't in L's staging, names deleting the spec, and --apply sends nothing"
+printf '# DD\n\nDD is.\n' > docs/products/walyt/dd.md && gplant "dd page"
+DS=.jig/specs/move-docs-products-walyt-dd-md.md
+$J move docs/products/walyt/dd.md --to L --apply >/dev/null 2>&1 && git commit -qm "TOOL: move dd" >/dev/null 2>&1
+( cd "$GL" && $J staging drop move-docs-products-walyt-dd-md.md >/dev/null 2>&1 )
+o1=$($J move docs/products/walyt/dd.md --to L 2>&1); out=$($J move docs/products/walyt/dd.md --to L --apply 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -q '^1. land it in L: done' && echo \"\$0\" | grep -q \"move-docs-products-walyt-dd-md.md isn't in L's staging\" && echo \"\$0\" | grep -q 'delete $DS' \
+  && echo \"\$1\" | grep -q 'Nothing to apply' && test ! -e '$GL/.jig/staging/move-docs-products-walyt-dd-md.md'" "$o1" "$out"; [ "$fail" = 0 ] || echo "$o1 $out"
+msg="move (dropped, on the owner's word): with the spec's deletion committed, --apply sends the file again under the same spec name"
+git rm -q "$DS" && git commit -qm "TOOL: L dropped dd" >/dev/null 2>&1
+out=$($J move docs/products/walyt/dd.md --to L --apply 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && test -f '$GL/.jig/staging/move-docs-products-walyt-dd-md.md' && test -f $DS && ! ls .jig/specs | grep -q 'move-docs-products-walyt-dd-md-2'" "$out"; [ $rc = 0 ] || echo "$out"
+git commit -qm "TOOL: move dd again" >/dev/null 2>&1
+# U's pages are all contract paths: every change to one needs P2's answer.
+cd "$GM" && printf '# U5\n\nSee `U/.jig/decisions.md § D-001` and `U/.jig/decisions.md § D-002`.\n\nSee `U/docs/s.md § A` and `U/docs/s.md § B`.\n\nPower: U/docs/p.md § Power of the cell.\n\nTrain: U/docs/p.md § Powertrain of the cart.\n\nCode: `U/docs/p.md § Powertrain`.\n\nIdea: `U/.jig/ideas.md § D-003` and `U/.jig/ideas.md § D-004`.\n' > docs/products/walyt/u5.md && gplant "M cites U"
+cd "$GU" && mkdir -p docs && for f in n b; do printf '# %s\n\n%s is.\n' $f $f > docs/$f.md; done && printf '# S\n\n## A\n\nA is.\n\n## B\n\nB is.\n' > docs/s.md && printf '# P\n\n## Power\n\nPower is.\n\n## Powertrain\n\nPowertrain is.\n' > docs/p.md
+ulog '### D-001 one
+Accepted (owner, 2026-11-03).
+Touches: none — one
+
+One.' && ulog '### D-002 two
+Accepted (owner, 2026-11-03).
+Touches: none — two
+
+Two.' && printf '\n### D-003 three\nOpen (2026-11-03).\nTouches: none — three\n\nThree?\n\n### D-004 four\nOpen (2026-11-03).\nTouches: none — four\n\nFour?\n' >> .jig/ideas.md && gplant "U's pages, D-001, D-002, ideas D-003, D-004"
+msg="move (records aren't work): a jig propose --buffer spec committed on U's trunk is listed neither under Can start now nor under Waiting on"
+printf '# b\n\nb is, changed.\n' > docs/b.md && mkdir -p .jig/ledgers && sed -n '1,/^|---/p' "$P/ledgers/BUFFER.md" > .jig/ledgers/BUFFER.md \
+  && printf '| B1 | M/docs/products/walyt/walyt.md § Walyt | b changed | owner, 2026-11-24 | Open |\n' >> .jig/ledgers/BUFFER.md
+git add -A && git commit -qm "b changes, buffered" >/dev/null 2>&1; $J propose --buffer >/dev/null 2>&1; git add -A && git commit -qm "specs: buffer" >/dev/null 2>&1
+bs=$(ls .jig/specs | grep '^buffer' | head -1)
+expect_pass sh -c "test -n '$bs' && ! echo \"\$0\" | grep -q '$bs' && ! echo \"\$1\" | grep -q '$bs'" "$(rigsec 'Can start now')" "$(rigsec 'Waiting on')"
+msg="move (sideways, nothing to propose): M names nothing of docs/n.md and holds no item for it; step 2 in U's job writes meta: none into the spec, makes no branch in M, and the commit passes"
+$J move docs/n.md --to K --apply >/dev/null 2>&1 && git commit -qm "specs: move n" >/dev/null 2>&1
+( cd "$GK" && gland move-docs-n-md.md )
+GNOMERGE=1 GARGS="docs/n.md --to K"; gjob nj .jig/specs/move-docs-n-md.md "n to K" docs/n.md .jig/decisions.md; GNOMERGE=
+expect_pass sh -c "test $grc = 0 && test $gcrc = 0 && git show nj:.jig/specs/move-docs-n-md.md | grep -qx -- '- meta: none — M names nothing of U/docs/n.md; it moved to K/docs/n.md' \
+  && ! git -C '$GM' rev-parse -q --verify refs/heads/propose/U-move-docs-n-md-pointers >/dev/null" "$gout $gcom"; [ "$fail" = 0 ] || echo "$gout $gcom"
+msg="move (sideways, nothing to propose): jig merge removes the spec in its merge commit, and rig lists no move spec"
+gated nj; mout=$($J merge nj 2>&1); mrc=$?
+expect_pass sh -c "test $mrc = 0 && test ! -e .jig/specs/move-docs-n-md.md && git diff HEAD~1 HEAD --name-status | grep -q '^D.*move-docs-n-md.md' && test '$(rigquiet move-docs-n-md && echo quiet)' = quiet" "$mout"; [ "$fail" = 0 ] || echo "$mout"
+msg="move (pointers by the thing): U moves D-002 to K; the pointers proposal names K's id for it and leaves U/.jig/decisions.md § D-001 as it was"
+$J move D-002 --to K --apply >/dev/null 2>&1 && git commit -qm "specs: move D-002" >/dev/null 2>&1
+( cd "$GK" && gland move-d-002.md ); kid=$(sed -n 's/^- \(D-[0-9]*\): moved from U\/.jig\/decisions.md § D-002.$/\1/p' "$GK/.jig/decisions.md")
+GARGS="D-002 --to K"; gjob d2k .jig/specs/move-d-002.md "D-002: to K" .jig/decisions.md
+mp=$(git -C "$GM" show propose/U-move-d-002-pointers:docs/products/walyt/u5.md 2>/dev/null)
+expect_pass sh -c "test -n '$kid' && test $grc = 0 && test $gcrc = 0 && test $mrc = 0 && echo \"\$0\" | grep -q 'See .U/.jig/decisions.md § D-001. and .K/.jig/decisions.md § $kid.\.'" "$mp"; [ "$fail" = 0 ] || echo "$kid $gout $gcom $mout $mp"
+msg="move (pointers by the thing): U moves docs/s.md § A to K; the pointers proposal rewrites only the pointer to § A"
+$J move 'docs/s.md § A' --to K --as docs/sa.md --apply >/dev/null 2>&1 && git commit -qm "specs: move A" >/dev/null 2>&1
+( cd "$GK" && gland move-docs-s-md-a.md )
+GARGS="'docs/s.md § A' --to K --as docs/sa.md"; gjob saj .jig/specs/move-docs-s-md-a.md "A to K" docs/s.md .jig/decisions.md
+mp=$(git -C "$GM" show propose/U-move-docs-s-md-a-pointers:docs/products/walyt/u5.md 2>/dev/null)
+expect_pass sh -c "test $grc = 0 && test $gcrc = 0 && test $mrc = 0 && echo \"\$0\" | grep -q 'See .K/docs/sa.md § A. and .U/docs/s.md § B.\.'" "$mp"; [ "$fail" = 0 ] || echo "$gout $gcom $mout $mp"
+msg="move (pointers by the thing): U moves docs/p.md § Power to K; the prose pointer to § Power is rewritten, and § Powertrain, in prose and in code, stays"
+$J move 'docs/p.md § Power' --to K --as docs/power.md --apply >/dev/null 2>&1 && git commit -qm "specs: move Power" >/dev/null 2>&1
+( cd "$GK" && gland move-docs-p-md-power.md )
+GARGS="'docs/p.md § Power' --to K --as docs/power.md"; gjob pwj .jig/specs/move-docs-p-md-power.md "Power to K" docs/p.md .jig/decisions.md
+mp=$(git -C "$GM" show propose/U-move-docs-p-md-power-pointers:docs/products/walyt/u5.md 2>/dev/null)
+expect_pass sh -c "test $grc = 0 && test $gcrc = 0 && test $mrc = 0 && echo \"\$0\" | grep -qx 'Power: K/docs/power.md § Power of the cell.' \
+  && echo \"\$0\" | grep -qx 'Train: U/docs/p.md § Powertrain of the cart.' && echo \"\$0\" | grep -qx 'Code: .U/docs/p.md § Powertrain..'" "$mp"; [ "$fail" = 0 ] || echo "$gout $gcom $mout $mp"
+msg="move (pointers by the thing, an idea): U moves idea D-003 to K; the pointers proposal names K's id in M's ideas-file citation, and leaves U/.jig/ideas.md § D-004 as it was"
+$J move D-003 --to K --apply >/dev/null 2>&1 && git commit -qm "specs: move D-003" >/dev/null 2>&1
+( cd "$GK" && gland move-d-003.md ); kid=$(sed -n 's/^- \(D-[0-9]*\): moved from U\/.jig\/decisions.md § D-003.$/\1/p' "$GK/.jig/decisions.md")
+GARGS="D-003 --to K"; gjob d3k .jig/specs/move-d-003.md "D-003: to K" .jig/decisions.md .jig/ideas.md
+mp=$(git -C "$GM" show propose/U-move-d-003-pointers:docs/products/walyt/u5.md 2>/dev/null)
+expect_pass sh -c "test -n '$kid' && test $grc = 0 && test $gcrc = 0 && test $mrc = 0 && grep -q '^### $kid three' '$GK/.jig/ideas.md' \
+  && echo \"\$0\" | grep -qx 'Idea: .K/.jig/ideas.md § $kid. and .U/.jig/ideas.md § D-004..'" "$mp"; [ "$fail" = 0 ] || echo "$kid $gout $gcom $mout $mp"
+cd "$GM"
+# The up move of a contract page, in a family of its own: N's history is only reviewed merges
+# and .jig/ bookkeeping, so N can release the proposal for V's pin.
+GN="$T/N"; gnew N && git add -A && git commit -qm init && $J init --meta --name N >/dev/null && git add -A && git commit -qm meta-init && $J release --feature >/dev/null
+python3 .jig/jig.py repos add meta "$GN" --name N >/dev/null
+python3 -c "import json; f='.jig/meta.json'; d=json.load(open(f)); d['pararepos']=['V']; json.dump(d, open(f,'w'), indent=2)" && gplant "N's pararepos"
+gnew V && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
+$J init --para N --location "$GN" --contract 'docs/**' >/dev/null 2>&1 && git add -A && git commit -qm para-init && python3 .jig/jig.py repos add para "$T/V" --name V >/dev/null
+git rm -q --ignore-unmatch .jig/roadmap.md ROADMAP.md && mkdir -p docs && printf '# v\n\nv is.\n' > docs/v.md && gplant "V plans from N; docs/v.md"
+msg="move (up, a contract page): V's step 1 proposes docs/v.md to N; once N merges it, step 2 on V's trunk checkout is refused, naming the job to open, and nothing is staged"
+$J move docs/v.md --to N --apply >/dev/null 2>&1 && git commit -qm "specs: move v" >/dev/null 2>&1
+( cd "$GN" && git switch -q propose/V-move-docs-v-md && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-edit propose/V-move-docs-v-md ) >/dev/null 2>&1
+out=$($J move docs/v.md --to N --apply 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \"the move's spec is a job's\" && echo \"\$0\" | grep -q 'jig open move-docs-v-md --spec .jig/specs/move-docs-v-md.md' && test -z \"\$(git status --porcelain)\"" "$out"
+msg="move (up, a contract page): in the job opened from the move's spec, step 2 stages the removal and its move line, the commit passes, and the spec is trunk's"
+GNOMERGE=1 GARGS="docs/v.md --to N"; gjob vj .jig/specs/move-docs-v-md.md "v up to N" docs/v.md .jig/decisions.md; GNOMERGE=
+expect_pass sh -c "test $grc = 0 && test $gcrc = 0 && test ! -e .git/jig/worktrees/vj/docs/v.md && grep -qx -- '- docs/v.md: moved to N/docs/v.md.' .git/jig/worktrees/vj/.jig/decisions.md \
+  && test -z \"\$(git -C .git/jig/worktrees/vj diff main -- .jig/specs/move-docs-v-md.md)\"" "$gout $gcom"; [ "$fail" = 0 ] || echo "$gout $gcom"
+msg="move (up, a contract page): the gate refuses while the pin doesn't hold the proposal, naming it and the pin"
+out=$($J gate vj 2>&1); rc=$?; git worktree remove --force .git/jig/worktrees/gate-vj 2>/dev/null
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'cites proposal propose/V-move-docs-v-md, which is not in N v0.1.0, the pin'" "$out"
+msg="move (up, a contract page): once a release of N holding the proposal is pinned, the gate passes and jig merge keeps the spec"
+rel=$(cd "$GN" && $J release --feature 2>&1); ntag=$(git -C "$GN" describe --tags --abbrev=0)
+python3 -c "import json,sys; f='.jig/para.json'; d=json.load(open(f)); d['pin']=sys.argv[1]; json.dump(d, open(f,'w'), indent=2)" "$ntag" && $J init --para N >/dev/null 2>&1 && git add -A && git commit -qm "TOOL: pin N $ntag" >/dev/null 2>&1
+gate_ok vj; grc2=$?; gated vj; mout=$($J merge vj 2>&1); mrc=$?
+expect_pass sh -c "test '$ntag' != v0.1.0 && test $grc2 = 0 && test $mrc = 0 && echo \"\$0\" | grep -q 'kept .jig/specs/move-docs-v-md.md' && test ! -e docs/v.md" "$mout"; [ "$fail" = 0 ] || echo "$ntag $rel $out $mout"
+msg="move (up, a contract page): rig then doesn't list the spec, and jig sync says the proposal is released"
+expect_pass sh -c "test '$(rigquiet move-docs-v-md && echo quiet)' = quiet && echo \"\$0\" | grep -q 'proposal propose/V-move-docs-v-md (.jig/specs/move-docs-v-md.md): released by'" "$($J sync 2>&1)"
+msg="move (an idea up, a cached pointer): after N releases an entry citing V/.jig/ideas.md § D-001 and V pins it, V moves the idea up; V's jig sync reads that pointer as moved, not missing"
+printf '\n### D-001 does v wake?\nOpen (2026-11-05).\nTouches: none — a question for V.\n' >> .jig/ideas.md && gplant "V: idea D-001"
+( cd "$GN" && git switch -q -c cite && python3 -c "
+f = '.jig/decisions.md'; s = open(f).read()
+s = s.replace('## Unreleased\n', '## Unreleased\n\n### D-001 cites\nAccepted (owner, 2026-11-05).\nTouches: none — cites V\n\nPer \`V/.jig/ideas.md § D-001\`.\n', 1)
+open(f, 'w').write(s)" && git add -A && git commit -qm "D-001: cites V's idea" && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-edit cite && $J release --feature ) >/dev/null 2>&1
+ntag=$(git -C "$GN" describe --tags --abbrev=0)
+python3 -c "import json,sys; f='.jig/para.json'; d=json.load(open(f)); d['pin']=sys.argv[1]; json.dump(d, open(f,'w'), indent=2)" "$ntag" && $J init --para N >/dev/null 2>&1 && git add -A && git commit -qm "TOOL: pin N $ntag" >/dev/null 2>&1
+$J move D-001 --to N --apply >/dev/null 2>&1 && git commit -qm "specs: move D-001" >/dev/null 2>&1
+( cd "$GN" && git switch -q propose/V-move-d-001 && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-commit propose/V-move-d-001 && $J merge --number >/dev/null 2>&1; git commit -qm "merge V's D-001" >/dev/null 2>&1 )
+GARGS="D-001 --to N"; gjob v1 .jig/specs/move-d-001.md "D-001: up to N" .jig/decisions.md .jig/ideas.md
+out=$($J sync 2>&1)
+expect_pass sh -c "test '$ntag' != v0.2.0 && test $grc = 0 && test $gcrc = 0 && test $mrc = 0 && echo \"\$0\" | grep -q '.jig/ideas.md § D-001 (moved: N/.jig/decisions.md § D-[0-9]*)' && ! echo \"\$0\" | grep -q 'ideas.md has no heading'" "$out"; [ "$fail" = 0 ] || echo "$ntag $gout $gcom $mout $out"
+cd "$GM"
+# roadmap-labels' rule on a propose/ branch, and the one exception a move's proposal has: the
+# items that follow the moved page into the receiver's section, each touching it, nothing else there.
+# A real proposal branch, propose/L-move-docs-ls-md-pointers (unmerged), which already moves ls1
+# into ## Kite alpha with its pointers line; each try commits on it and is undone.
+git switch -q propose/L-move-docs-ls-md-pointers
+gtry() {  # gtry <item line or ""> <change k1: 1|""> <pointers line's source repo, or "">: commit the edit on the branch, out and rc set
+  git reset -q --hard && python3 - "$@" <<'PY'
+import sys, re
+item, change, ptr = sys.argv[1:4]
+f = '.jig/roadmap.md'; s = open(f).read()
+k1 = re.search(r'^- `k1`: .*$', s, re.M).group(0)
+s = s.replace(k1, (k1 + ', changed' if change else k1) + ('\n' + item if item else ''), 1)
+open(f, 'w').write(s)
+if ptr:
+    sys.path.insert(0, '.jig'); import jig
+    f = '.jig/decisions.md'; log = open(f).read()
+    open(f, 'w').write(jig.log_with_line(log, 'Changed', f'- Pointers to {ptr}/docs/l.md name K/docs/l.md, where it moved.'))
+PY
+  git add -A; out=$(git commit -qm "POINTERS: guard" 2>&1); rc=$?; [ $rc = 0 ] && git reset -q --hard HEAD~1; }
+msg="move (roadmap-labels' rule): on propose/L-…, an item added to K's section touching the moved page, with the commit's pointers line, passes"
+gtry '- `g1`: g one (touches docs/l.md)' "" L
+expect_pass sh -c "test $rc = 0" "$out"; [ $rc = 0 ] || echo "$out"
+msg="move (roadmap-labels' rule): an item added to K's section that doesn't touch the moved page is refused"
+gtry '- `g2`: g two (touches docs/q2.md)' "" L
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \"## Kite alpha is K's: L changes only its own sections\"" "$out"
+msg="move (roadmap-labels' rule): a changed existing line in K's section is refused, even beside an item that follows the page"
+gtry '- `g1`: g one (touches docs/l.md)' 1 L
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \"## Kite alpha is K's: L changes only its own sections\"" "$out"
+msg="move (roadmap-labels' rule): an item touching docs/l.md, on a branch whose only move line is docs/ls.md's, is refused"
+gtry '- `g1`: g one (touches docs/l.md)' "" ""
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \"## Kite alpha is K's: L changes only its own sections\"" "$out"
+msg="move (roadmap-labels' rule): on L's branch, a move line naming U's move lends L nothing: an item touching its page in K's section is refused"
+gtry '- `g1`: g one (touches docs/l.md)' "" U
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \"## Kite alpha is K's: L changes only its own sections\"" "$out"
+git reset -q --hard && git switch -q main  # end of the propose/ branch tries
+msg="move: a repo outside the family is refused, naming the family"
+expect_pass sh -c "$J move D-001 --to X 2>&1 | grep -q \"X isn't of this repo's family\""
+}
+
+UNITS="rules merge_derived update board_split worktree_setup metarepo,staging pararepo release r6_takes,r6_ints merge_after_sync repos workflow init_old_board ledger_rows hardware update_per_file pararepo_commands entry_globs report_fixes sync_buffer buffer_answered pointers removals feedback slash_names homes structure meta_docs agents_lines page_contract roadmap labels family family_report roadmap_edit phase_types boundary decisions ideas ideas_fold ideas_meta ideas_labels supersede touches,touches_terms sweep staging_batches merge_log findings glossary headings check_levels role_line consolidate cheaper_rounds next svg update_roles holders rig rig_batch close versioning pin_bump moves move movein claims inbox rigger queue"
 
 if [ "${1:-}" = --list ]; then echo $UNITS | tr ' ,' '\n\n'; exit 0; fi
 if [ "${1:-}" = --unit ]; then        # --unit <run folder> <unit>: one unit, its output to a file

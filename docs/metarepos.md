@@ -54,20 +54,31 @@ claim describes, as often as testing needs. Every such difference is a row in
 `.jig/ledgers/BUFFER.md`: the claim at the pin, what the repo does now, who decided, and Open or
 Closed.
 
-Before its build, the pararepo's release puts every Open row into one metarepo proposal. When
+Before its build, the pararepo's release puts every Open row into one metarepo proposal, except the
+row `jig move-in` keeps for itself. When
 the metarepo releases it, the pararepo's next sync moves the pin and closes those rows in one
 commit.
 
 ## Moving claims
 
-A claim found to have only one owner moves down to that pararepo. The pararepo lands the text
-first, through [staging](glossary.md#staging) and a job of its own. Then the metarepo removes
-its copy, with a line saying where it went. Old citations keep resolving through that line. A
-claim moves down only. Going up is a proposal.
+A claim found to have only one owner moves to it: down to a pararepo, up to the metarepo, or
+sideways to another pararepo. The receiving repo lands the text first, with a line in its log
+saying where it came from. Down or sideways it arrives through [staging](glossary.md#staging) and
+a job there; up it's a proposal. Then the sending repo removes its copy, with a line saying where
+it went. The hook refuses that line until the receiver has its own. Old citations keep resolving
+through it. `python3 .jig/jig.py move <what> --to <repo>` does both steps, one per `--apply`.
+The removal runs in a job opened from the move's spec, in any repo, and that job's merge closes
+the spec. A moved page's roadmap items go with it, unless a spec took them or left them for
+later. If the receiver drops what was sent, its owner says so, and deleting the move's spec lets
+step 1 send it again.
 
 A pararepo with a [roadmap](glossary.md#roadmap) of its own can move it into the metarepo's, once, on the owner's yes.
-The metarepo's glossary names the product, and the pararepo proposes its [phases](glossary.md#phase). After that,
-the metarepo holds the one roadmap for every product it lists.
+`python3 .jig/jig.py move-in --product <Name>` does it in two steps, one per `--apply`. First it proposes the
+pararepo's [phases](glossary.md#phase) under the product's name, with the product's glossary term when the
+metarepo has none yet, on one `propose/` branch. The metarepo's hubnode decides the name and the
+phases together when it merges that branch. Then the pararepo's roadmap leaves, with every `Scope:`
+line pointed at the metarepo's ids. After that, the metarepo holds the one roadmap for every
+product it lists.
 
 ## Editing the roadmap
 

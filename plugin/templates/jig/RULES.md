@@ -63,7 +63,10 @@ shares, refusing one another open job owns.
 **Overlapping specs are answered before they open.** A spec is *waiting* when no open job names
 it, no handoff note's `Spec:` line names it, and the newest release tag doesn't hold it (any spec,
 with no tag yet), unless it carries `Bug-for: <job>` on a line of its own, outside fenced code: a bug spec
-is built in the job it names and reaches trunk only when that job merges, so it never waits. Two waiting specs overlap when their Touches sections meet, at any heading level: one path, a glob
+is built in the job it names and reaches trunk only when that job merges, so it never waits. Nor
+does a spec listing buffer rows (`jig propose --buffer`, `jig move-in`), or a move's spec whose
+proposal was withdrawn (a `- move:` line and a `meta: … withdrawn` line): each is a proposal's
+record, and no job takes it. Two waiting specs overlap when their Touches sections meet, at any heading level: one path, a glob
 covering the other's path, or the same `<page> § <term>` (a whole page meets any term on it).
 `jig consolidate` lists each group of overlapping waiting specs with the paths they share, as
 one proposed job. A group is answered one of two ways: one spec carries every input's `Source:`
@@ -827,7 +830,8 @@ overlap, with no `Kept separate` line, are one job to answer (merged, or kept ap
 that depends on another (a staged file's `after:` header, a spec's `Build after <name>` line)
 is in the same group and opens after it, with nothing to answer; one that depends on an open
 job, named or by its spec's name, or on an item not ready, waits on it, and a dependency
-cycle waits on the owner. An item that could start but overlaps any waiting spec, one that
+cycle waits on the owner. A move's spec (a `- move:` line) waits on its receiver until step 2
+is next, read by `jig move`'s own reader (Metarepo, moving claims). An item that could start but overlaps any waiting spec, one that
 waits included, is to answer first, since `jig open` refuses it. The order is
 fixed (kind, dependency, path), so the same state prints the same bytes. Its count of what
 waits on the owner's answers counts every question: each open or unjudged staged file, each
@@ -1112,7 +1116,9 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
   `propose/<repo>-<slug>` branch in the metarepo, never on its trunk, and merged there at the
   next sync the owner calls. A pararepo's merge writes nothing to the metarepo's roadmap.
   Labels, names and new products (the glossary term and its `Owner:` line) are the metarepo's
-  hubnode's.
+  hubnode's: a product a pararepo proposes with its phases (`jig move-in`) is decided with them,
+  name and definition and all, at that proposal's merge, where its hubnode may change any of
+  them first.
   **The edit command.** `jig roadmap --draft` writes the roadmap this repo plans from (the
   metarepo's trunk, live, in a pararepo, with its sections as its open roadmap proposal has
   them; trunk's own otherwise) to `<git common dir>/jig/roadmap-draft.md`, outside the tree, and
@@ -1138,15 +1144,56 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
   deleted. On a metarepo's `propose/<repo>-…` branch the hook refuses, as `--edit` does, a
   change to a section another repo owns, the proposing repo found by its `jig repos` name or
   its folder's, and a roadmap change on a branch naming no pararepo; a section that is
-  trunk's as it stands, merged in, is trunk's change, never the branch's.
-- **Moving in**, once per pararepo, by hand, on the owner's yes: the metarepo's glossary names
-  the product with its `Owner:` line; the pararepo proposes its phases as
-  `## <Product> <phase>` and its `## No phase` items as `## <Product> No phase`, and the
-  metarepo merges it; then the pararepo's next commit removes its `.jig/roadmap.md` and
-  `ROADMAP.md`, its `Scope:` lines and its specs' and notes' `Later:` lines re-pointed to the
-  metarepo's ids, which the hook checks on the metarepo's trunk. After it, the pararepo's hook refuses a `.jig/roadmap.md` while the
-  metarepo's roadmap holds a product it owns, and `jig update --sweep` writes none there: its
-  `## Undefined` entries are proposed under `## <Product> No phase`.
+  trunk's as it stands, merged in, is trunk's change, never the branch's. A section the fork has is
+  whose the fork's glossary says; a new one is whose the commit's own glossary says, so a product
+  it proposes is its own, and a rename moves a product's headings in the commit that renames
+  its term. A move's proposal
+  (`jig move`, read from the moved-from or pointers line it adds to the log) may add to the
+  receiver's sections the items that follow the moved page, each touching it, and nothing else
+  there.
+- **Moving in**, once per pararepo, on the owner's yes, by `jig move-in --product <Name>` in the
+  pararepo's trunk checkout. It runs one step per `--apply`; without it, it prints each step's
+  state (done, next, or whose yes it waits on) and what the next would write.
+  1. *Product and phases proposed.* Each `## <phase>` becomes `## <Product> <phase>`, unless its
+     leading words are already a term the metarepo's glossary says this repo owns, and
+     `## No phase` becomes `## <Product> No phase`; each ref in `(after …)` and `(needed by …)` is
+     mapped the same way, and every other line is kept as written. With no `<Product>` term on
+     the metarepo's trunk, the same proposal carries it: `## <Product>`, the sentence
+     `--definition` gives, and `` Owner: `<repo>`. ``, with its line under `## Unreleased`
+     `### Added`, so one yes decides the product and its phases. A term another repo owns, a
+     mapped heading the metarepo's roadmap already has, or a `## Up next` here is refused before
+     anything is written. `--apply` adds one `BUFFER.md` row, opens `propose/<repo>-move-in`
+     carrying that row alone, listed in `.jig/specs/move-in.md` (the next free name, `move-in-2`
+     and its branch, once a withdrawn proposal holds it), and commits the sections there in a
+     temporary worktree of the metarepo, whose hook judges the commit. That spec is step 1's
+     record, found by scanning specs as `jig sync` finds a proposal. A rerun of step 1, under
+     another `--product` too, takes the one Open move-in row there is and edits its claim, never
+     adding a second. That spec: it lists that row alone, its
+     copy of the row names the product, and its `meta:` line the branch. The row is `jig
+     move-in`'s: a release or `jig propose --buffer` never carries it. The metarepo's hubnode merges the branch in a job
+     opened on it (`jig open <job> --branch propose/<repo>-move-in`), or on its trunk on the
+     owner's yes; a job merging it from another branch is refused (R5). On the metarepo's trunk
+     the hook reads a heading's product by the commit's own glossary, as by its own roadmap, so
+     the term and the phases it owns land in one merge; it refuses a commit or a merge that
+     leaves a product's headings without the `Owner:` either side gave. The text above the
+     roadmap's first heading, its `# ` title aside, is kept as the first phase's note. A refused
+     or failed step undoes what it wrote on both sides; a run interrupted part way may leave an
+     empty `propose/` branch or its row, and a rerun recovers from either and starts the step
+     again. A withdrawn proposal's spec stays as it is.
+  2. *Its roadmap leaves*, once the metarepo's trunk has the proposal. `--apply` stages
+     `git rm` of `.jig/roadmap.md` and `ROADMAP.md` and each `Scope:` and `Later:` line in tracked
+     specs and handoff notes re-pointed by the map, under the product its row names, or the name
+     `--product` gives when the metarepo's hubnode renamed it at the merge (the owner's word:
+     nothing is guessed from the metarepo). It is refused, naming what it read, while the
+     metarepo's glossary doesn't give the product to this repo, or its roadmap holds none of the
+     mapped headings. An id the metarepo's trunk lacks (its owner changed it before merging) is
+     named with what takes it, and left for the hubnode to re-point by hand.
+     The hubnode commits it on trunk on the owner's yes, and the hook checks every `Scope:` and
+     `Later:` line it keeps against the metarepo's trunk.
+
+  After it, the pararepo's hook refuses a `.jig/roadmap.md` while the metarepo's roadmap holds
+  a product it owns, and `jig update --sweep` writes none there: its `## Undefined` entries are
+  proposed under `## <Product> No phase`.
 - **Unconfirmed waits.** A scope or phase may say what waits on it, `(needed by <ref>, …)`,
   as it says what it waits on. A cross-product `(after …)` the waited-on scope or phase doesn't
   confirm so is listed by `jig roadmap` in the metarepo and under rig's Waiting on you, for the
@@ -1245,7 +1292,8 @@ across both), and the status `Open (date).` or `Proposed (date).`, optionally en
 `Supersedes <id>.`. `Proposed` means an answer is put forward. An idea changes in place, and
 leaves in one of three ways: decided, its block moves with its id to the log's `## Unreleased`
 as `Accepted (who, date).`; dropped, removed with no line, as a rejected entry is; or, in a
-metarepo, moved down with a move line (Released sections). A question that binds others is
+repo of a family, moved down, up or sideways with a move line, as an entry moves (Released
+sections). A question that binds others is
 written as an idea when it is asked, so it can be cited before it is answered. An idea is
 labelled the way a scope is: a line of its own after its status line, `(labels <term>, …)`, each
 label a term of the glossary a scope's labels name here, checked by the same rule and refused by
@@ -1304,28 +1352,47 @@ not what it decided (M2 checks its pages); and so is removing an entry no accept
 name what it would supersede, and retires nothing until it is accepted. The one other removal is
 a struck entry, project scope rather than a decision (Documentation: Product and project): the
 commit removing it adds, under `## Unreleased` `### Removed`, a line naming its id
-(`- D-040: project scope, not a product decision.`). In a metarepo the other is a move: a claim
-handed down to the pararepo that owns it (Metarepo and pararepos, What the metarepo holds), whose
+(`- D-040: project scope, not a product decision.`). In a repo of a family (Metarepo and
+pararepos) the other is a move: a claim handed to the repo of the family that owns it, down to a
+pararepo, up to the metarepo, or sideways to another pararepo (What the metarepo holds), whose
 line is its forwarding address, a pointer to its new home: `- D-040: moved to
 app/.jig/decisions.md § D-016.`, and for a page or a section `- docs/ui.md: moved to
-app/docs/ui.md.` or `- docs/ui.md § Build: moved to app/docs/ui.md § Build.`. An idea moves down
-the same way, its target the pararepo's `.jig/ideas.md § <id>`, or its log when it lands
-decided, and the hook looks the target id up in either file there. An idea or a page needs no
+app/docs/ui.md.` or `- docs/ui.md § Build: moved to app/docs/ui.md § Build.`. An idea moves
+the same way, in any direction: its target is `<repo>/.jig/decisions.md § <id>` or
+`<repo>/.jig/ideas.md § <id>`, the hook looking the id up in either file there (`jig move`
+writes the log form); its moved-from line is in the receiver's log, as an entry's is; and it
+leaves this ideas file in the commit writing its move line (`jig move` step 2). An idea or a page needs no
 line to leave, but takes it all the same, so readers see it moved, not removed.
 These are the only two reasons a `### Removed` line lets a released entry go; any other text
 lets nothing go, and the refusal names both lines. The hook checks a move line the commit adds:
 the line is under `## Unreleased` (a move line anywhere else is refused, and nothing reads
 one there); it is the only move line for its id, page or section, in the log or the commit (a line not
 yet released may be corrected in place);
-the repo is one of `meta.json`'s `pararepos`; a moved id is an entry this commit removes, not
+the repo is of this one's family (a metarepo's `pararepos`; for a pararepo, its metarepo and the
+`pararepos` its metarepo's trunk lists), and a repo with no family is refused, saying so; a moved
+id is an entry this commit removes, not
 one an accepted entry supersedes (its successor is what moves); this repo no longer has the
 page or section; and the target is on that repo's trunk, read through `jig repos` (an id as an entry
-heading in its log or its ideas file, matched by number, a heading as `§` resolves). An entry that supersedes a
-moved id is refused: its home is the pararepo now. It refuses a target that repo lacks, naming the
-file it read, and passes with a warning when the repo can't be reached. Released, the line is
+heading in its log or its ideas file, matched by number, a heading as `§` resolves), whose log there has the
+**moved-from line** naming this repo's thing ("land it there first, with its moved-from line").
+The moved-from line is the move's record at the receiving end, under `## Unreleased` `### Added`:
+`- D-016: moved from meta/.jig/decisions.md § D-040.`, `- docs/ui.md: moved from
+meta/docs/ui.md.` or `- docs/ui.md § Build: moved from meta/docs/ui.md § Build.`, one form for ids,
+pages and sections, as the move line is. A `D-?<slug>` written there is numbered with its entry
+at the merge, an idea's as an entry's, its moved-from line in the log all the same. The hook checks a moved-from line the commit adds: it is under `## Unreleased`
+`### Added` (anywhere else it is refused, as a misplaced move line is); its repo is of the family;
+and on that repo's trunk the thing is still there (the move pending), or that repo's move line
+for it points here; neither, it is refused, naming the file it read. A commit removing or
+rewriting a moved-from line is refused while that repo's trunk has a move line pointing here: it
+is that move's record. Family members are matched by checkout, as `jig repos` finds them, so an
+alias is no stranger; a pararepo whose metarepo can't be reached reads no family, and its lines
+pass with a warning naming the metarepo. An entry that supersedes a
+moved id is refused: its home is the other repo now. It refuses a target that repo lacks, naming
+the file it read, and passes with a warning when the repo can't be reached. Released, the line is
 frozen like any change line, so the map from old id or path to new home needs no history: a
 supersedes chain that reaches a moved id ends at its pointer, and `jig decision`, `jig
-reading-list --claims`, `jig sync` and the pin-bump request name it. Before the log, a register row struck so
+reading-list --claims`, `jig sync` and the pin-bump request name it. At the receiving end, `jig
+decision <id>` prints `moved from <pointer>`, and `jig reading-list --claims` names it. Before the log, a register row struck so
 says `struck` in its Status cell, and `--merge-log` leaves it out, its number still taken. `jig decision <id>` prints an
 entry and its supersedes chain, newest last; for a removed id it reads the entry from git, with
 the commit and release it stood in, and names what holds now. `jig update` lists a superseded
@@ -1457,6 +1524,12 @@ decisions file adds its entries under its own checks. `jig rig --close` resolves
 marks built; a file resolve refuses there is left, named.
 A story, request or report whose spec is in an unanswered group of overlapping waiting specs
 (The board) isn't resolved until the group is answered.
+
+A staged decision entry, page or section that moves a claim from another repo of the family
+carries the optional `moved-from: <repo>/<path>[ § <heading or id>]` header. `resolve` writes its
+moved-from line (Decision log, Released sections) in the same change: for the one entry the file
+holds (its `D-?<slug>`, numbered with it at the merge), the page it wrote, or the section, named
+`<page> § <heading>` from the pointer. A file with the header holds one entry.
 
 A batch whose files depend on each other says so in each file's optional `after:` header: the
 staged file names it waits for (`a` reads as `a.md`). `jig staging` lists files so each comes after
@@ -1591,12 +1664,57 @@ or `## 20`, and words after the number aren't compared. Headings are compared as
 and emphasis marks dropped. The name folds case (`App/…` is `app/…`); the path and heading
 don't. A superseded or rejected decision row isn't checked.
 
-A claim found to have one owner moves down to it, released or not. The pararepo lands the text
-first, through staging (`target: <pararepo>`) and a job there: its entry keeps who and date and
-drops a `Supersedes` of the metarepo's ids, since that chain stays in the metarepo's log. The
-metarepo then removes the entry, page or section with its move line (Decision log, Released
-sections), in one commit. Frozen citations of the old id keep resolving through the line, so
-nothing released is rewritten. A claim moves down only: up is `jig propose` and the buffer.
+A claim found to have one owner moves to it, released or not, in any direction: down from the
+metarepo to a pararepo, up from a pararepo to its metarepo, or sideways between two pararepos
+of one metarepo. The receiving repo lands the text first, with its moved-from line: down or
+sideways through staging (`target: <repo>`, `moved-from: <pointer>`) and a job there, up by a
+`propose/` branch in the metarepo. Its entry keeps who and date and drops a `Supersedes` of the
+sending log's ids, since that chain stays there. The sending repo then removes the entry, page
+or section with its move line (Decision log, Released sections), in one commit, which the hook
+refuses until the receiver's trunk has the moved-from line. Frozen citations of the old id keep
+resolving through the line, so nothing released is rewritten. A metarepo pointer to a page or
+section a pararepo moved away reads `(moved: <pointer>)` in `jig sync`, the release and P2,
+never as missing. The answer is a removal's: the metarepo's rewrite as a pointers proposal
+(`jig propose --pointers`), or a `BUFFER.md` row. A pararepo bumping its pin past such a release
+reads the pointer's new home in the pin-bump request.
+
+`jig move <what> --to <repo> [--as <path>]` does both ends, one step per `--apply`; without it,
+it prints each step's state and what the next would write, read from the repos each run. `<what>`
+is an entry id, a page, or `<page> § <heading>`; `--as` is the page's path there (the same path by
+default). Step 1 writes `.jig/specs/move-<slug>.md` here, the job that removes the claim, its
+Touches the moved thing alone (the move line is a log append any job may make), and
+sends the text with its `moved-from:` pointer by the route for its direction: a file staged with
+`target: <repo>` and forwarded down or sideways (an entry as `### <their prefix>?<slug>`, who and
+date kept, a `Supersedes` of this log's ids dropped); up, a `propose/<repo>-move-<slug>` branch in
+the metarepo whose one commit, the entry or page with its moved-from line, the metarepo's hook
+judges, recorded as `meta: <meta> proposal <branch>` with the metarepo's own citations of it
+listed. Step 2 waits for the receiver's trunk to hold the moved-from line, its id numbered; it
+then removes the entry, page or section here and writes the move line, staged in the job opened
+from the move's spec, in any repo: in a trunk checkout it is refused, naming that job (in a
+metarepo, M4). `jig merge` closes the spec as it closes any job's, keeping it in a pararepo while
+it names a metarepo branch. The spec's `- move:` and `meta:` lines are the move's record, found
+by scanning specs: a withdrawn up proposal is proposed again under the next free name, and down
+or sideways, step 1 is done once its spec records the move. What the receiver does with the file
+is its owner's: the plan says whether it is still in the receiver's staging, and a drop is the
+owner's word, given by deleting the move's spec, after which step 1 sends it again. Sideways from a
+pararepo, step 2 also writes, from the metarepo's trunk once the receiver holds the thing, the
+metarepo's rewrites of its pointers to the moved thing (an entry's by its landed id, a section's
+and a page's by the landed path; every other pointer into that page or log stays) and its roadmap
+items, on `propose/<repo>-move-<slug>-pointers`, recorded as `meta: <meta> pointers <branch>`,
+which P2 accepts; with nothing to propose, the spec answers P2 with `meta: none — <meta> names
+nothing of <pointer>; it moved to <pointer>`.
+
+A moved page's roadmap items follow it. An item a spec or note takes, or a spec leaves for later
+(`Later:`), stays, the page dropped from its `(touches …)`; any other goes to the receiver's plan, in its phase of the same name, else its
+No phase list: the receiver's product section of the metarepo's roadmap, the metarepo's own
+phases when it moves up, or, for a receiver keeping a roadmap of its own, a `kind: roadmap` file
+staged in the sender's main checkout, unforwarded until the job merges, when `jig staging
+resolve` forwards it. The metarepo's roadmap changes only by its own merge or a `propose/` branch:
+a page moving up takes its items in step 1's proposal, and sideways in step 2's pointers proposal,
+whatever roadmap the sending pararepo keeps; no roadmap file is staged to it. The losing roadmap
+changes by its own route: in a pararepo planning from the metarepo, in the step's proposal;
+otherwise `jig merge` moves the items in the job's merge commit, read from the move lines the
+merge adds, as it re-points a renamed page.
 
 The metarepo's decisions are its `.jig/decisions.md` (Decision log), cited as
 `<meta>/.jig/decisions.md § D-012`. A superseded entry, and a released section's change lines,
@@ -1721,7 +1839,7 @@ describes, as often as testing needs, and commit and push each change. Every suc
 is a row in `.jig/ledgers/BUFFER.md` (the first row creates it from jig's ledger template): the
 claim at the pin, what this repo does now, who decided, and a state, `Open` or `Closed`. A change
 of mind edits the row. `jig release` in the pararepo, before its build, puts every `Open` row
-no proposal carries yet, as it stands, into one metarepo proposal (`jig propose --buffer`, also
+no proposal carries yet, as it stands, but a move-in row (`jig move-in`'s alone), into one metarepo proposal (`jig propose --buffer`, also
 run by hand): one branch, and a spec here that lists and copies the rows under `## Buffer rows`.
 A row edited after it was proposed goes again in the next one. When the metarepo releases a
 proposal, `jig sync` on the pararepo's trunk makes the pin commit itself: it moves the pin to
@@ -1735,7 +1853,8 @@ commits it alone, refusing while a merge, cherry-pick, revert or rebase is in pr
 `meta: none — <reason>` is. A proposal the metarepo will never release is withdrawn:
 `jig propose --withdraw <branch> --reason <text>` rewrites its spec's line to
 `meta: <name> withdrawn <branch> — <reason>`. Sync and gate stop waiting on it, it answers no
-change, and the rows it carried that are still `Open` go again in the next proposal. Its branch
+change, and the rows it carried that are still `Open` go again in the next proposal, a move-in
+row by `jig move-in`. Its branch
 in the metarepo is the metarepo's to delete. A proposal a release already holds can't be withdrawn: the
 pin moves instead, and sync closes its rows. One withdrawn and released anyway, sync names, with
 the `--answered` that closes its rows. Sync names a buffer proposal that carries no `Open`
@@ -1908,8 +2027,10 @@ jig family                  a family's staged files, unmerged proposals, entries
 jig gate <name>             hubnode: verify, set up the scratch checkout, print its check
 jig propose <spec> <slug>   pararepo: open a proposal branch on the metarepo
 jig propose <spec> <slug> --pointers  the same, recorded as pointer rewrites worked ahead of
-jig propose --buffer [slug]  pararepo: every Open row of the sync buffer, in one proposal
+jig propose --buffer [slug]  pararepo: every Open row of the sync buffer but a move-in row, in one proposal
 jig propose --withdraw <branch> --reason <text>  pararepo: a proposal the metarepo won't release
+jig move-in --product <Name> [--definition <text>] [--apply]  pararepo trunk: move its roadmap into the metarepo's, one step per --apply
+jig move <what> --to <repo> [--as <path>] [--apply]  an entry, page or section to another repo of the family, both ends, one step per --apply
 jig sync --answered <ids> --in <release> --reason <text>  pararepo trunk: close rows a release answered
 ```
 

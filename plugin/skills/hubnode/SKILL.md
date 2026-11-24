@@ -307,6 +307,31 @@ merges in the metarepo at the next sync the owner calls. In a metarepo, merging 
 is a roadmap change like any other: show the diff, and merge on the owner's yes. Rig there lists
 each cross-product wait no section confirms with `(needed by …)`: put it to the owner.
 
+A pararepo with a roadmap of its own moves it in by `jig move-in --product <Name>` in its trunk
+checkout, on the owner's yes, one step per `--apply`: its run with no flag says which step is
+next and whose yes it waits on. Step 1 stages a `BUFFER.md` row and `.jig/specs/move-in.md`
+here (commit them) and makes the metarepo's `propose/<repo>-move-in`, with the product's
+glossary term when the metarepo has none. Step 2, once the metarepo merged it, stages the
+roadmap's removal and the re-pointed `Scope:` lines: re-point any id it names by hand, then
+commit; if the metarepo renamed the product at the merge, pass the new name, `--product <Name>`,
+on the owner's word. In the metarepo, that branch is one roadmap change, the term with it: show
+the owner the name, the definition and the phases, change any on the branch on their word, and
+merge it in a job opened on it (`jig open <job> --branch propose/<repo>-move-in`), or on trunk.
+A job merging it from another branch is refused by R5.
+
+A claim (an entry, a page, a section) moves to the repo of the family that owns it by `jig move
+<what> --to <repo>`, on the owner's yes, one step per `--apply`. Step 1 writes
+`.jig/specs/move-<slug>.md` here (commit it) and sends the text: staged and forwarded to the
+receiver, whose hubnode resolves it in a job and merges; up, a `propose/` branch in the metarepo,
+taken by a job opened on it. Step 2, once the receiver's trunk holds it, runs in a job in any
+repo: open one from the move's spec (`jig open <job> --spec .jig/specs/move-<slug>.md`; `jig rig`
+offers the spec only once step 2 is next) and run it there. `jig merge` moves the page's roadmap
+items and closes the spec in the merge commit, or keeps it in a pararepo while it names a
+metarepo branch, which `jig sync` follows. Down or sideways, a drop of the sent file is the
+receiver's owner's word: delete the move's spec on it, and step 1 sends the file again. A roadmap
+file step 2 stages for a receiver keeping its own roadmap waits in staging: after the job merges,
+`jig staging resolve` forwards it.
+
 Work with no phase yet, parked mid-build (naming the pages it will touch) or not started, is
 an item under `## No phase` in `.jig/roadmap.md`, proposed the same way. Work a spec leaves for
 later is one too: its `Later:` id must be on trunk's roadmap before the spec commits, so put

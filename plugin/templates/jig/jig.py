@@ -21,6 +21,7 @@ import shutil
 import subprocess
 import tempfile
 import sys
+import tempfile
 import time
 import urllib.parse
 from datetime import date
@@ -138,11 +139,23 @@ WORKFLOW_IGNORED = (f"note: `workflow` in .jig/config.json is not read: `jig upd
 
 # ---------------------------------------------------------------- git helpers
 
+def cwd_env(cwd) -> dict | None:
+    """The environment for a git call in another checkout: inside a hook git exports GIT_DIR and
+    GIT_INDEX_FILE, which would point that call back at the repo the hook runs for."""
+    hooked = ("GIT_DIR", "GIT_INDEX_FILE", "GIT_WORK_TREE")
+    if cwd is None or not any(k in os.environ for k in hooked):
+        return None
+    # The hook's own repo keeps them: its index may be a commit's temporary one.
+    if Path(cwd).resolve().is_relative_to(main_root().resolve()):
+        return None
+    return {k: v for k, v in os.environ.items() if k not in hooked}
+
+
 def git(*args: str, check: bool = False, cwd: str | None = None) -> str:
     # A tracked file may be in any encoding, and git hands its bytes back as they are. jig only
     # matches ASCII ids, paths and headings here, so a byte it can't decode becomes U+FFFD
     # rather than a crash. Text jig writes back into a file is read with git_raw instead.
-    p = subprocess.run(["git", *args], capture_output=True, text=True, errors="replace", cwd=cwd)
+    p = subprocess.run(["git", *args], capture_output=True, text=True, errors="replace", cwd=cwd, env=cwd_env(cwd))
     if check and p.returncode:
         die(f"git {' '.join(args)}: {p.stderr.strip()}", 2)
     return p.stdout.strip()
@@ -160,7 +173,7 @@ def git_raw(*args: str, errors: str = "replace", cwd: str | Path | None = None) 
     """git's stdout as it is: no newline translation (text mode turns a lone CR or a CRLF into
     a line break) and nothing stripped. errors="surrogateescape" keeps bytes that aren't UTF-8,
     for text that write_raw puts back into a file unchanged."""
-    return subprocess.run(["git", *args], capture_output=True, cwd=cwd).stdout.decode(errors=errors)
+    return subprocess.run(["git", *args], capture_output=True, cwd=cwd, env=cwd_env(cwd)).stdout.decode(errors=errors)
 
 
 def read_raw(path: Path) -> str:
@@ -587,6 +600,13 @@ def check_rules(root: Path, board: Board, *, staged: bool) -> list[str]:
             out.append(f"R5 the roadmap is the owner's: {f} is edited on {trunk} only"
                        + (", or on a propose/ branch `jig propose` opened that isn't merged yet"
                           if meta is not None and f == ROADMAP else ""))
+    if meta is not None and (GLOSSARY in paths or ROADMAP in paths):
+        now = term_owners(in_index(GLOSSARY, staged))
+        if GLOSSARY in paths and (branch == trunk or proposed_branch(branch, trunk)):
+            # A product's term and the phases it owns land in one merge (`jig move-in`): its
+            # headings are read by the commit's own glossary, as by the commit's own roadmap.
+            family(main_root(), trunk).owners = now
+        out += owner_dropped(now, in_index(ROADMAP, staged))
     out += roadmap_rules(board, branch, staged, paths, guarded)
     out += boundary_rules(trunk, branch, staged, paths, meta, board.data.get("not_docs") or [])
     out += page_form_rules(root, board, trunk, staged, guarded)
@@ -1392,7 +1412,9 @@ def waiting_specs(root: Path, board: "Board") -> dict[str, str]:
             continue
         text = f.read_text(errors="replace")
         # A bug spec is built in the job it names and reaches trunk only with that job's merge.
-        if bug_for(text):
+        # A spec listing buffer rows (`jig propose --buffer`, `jig move-in`), or a move's spec
+        # whose proposal was withdrawn, is a proposal's record, not work: no job ever takes it.
+        if bug_for(text) or listed_rows(text) or (MOVE_RECORD.search(text) and WITHDRAWN.search(text)):
             continue
         out[rel] = text
     return out
@@ -2137,6 +2159,8 @@ def cmd_merge(root: Path, args) -> int:
         fam = family()
         kept = retarget_touches(text, page_moves("HEAD"),
                                 lambda h: fam.ours(product_of(h.removesuffix(" " + NO_PHASE), fam.owners)))
+        # A page the job moved to another repo takes its items there in this same commit.
+        kept = items_follow_moves(kept, fam)
         if kept != text:
             write_raw(roadmap, kept)
             git("add", "--", ROADMAP, check=True)
@@ -3130,6 +3154,8 @@ def claims_of_id(root: Path, want: str, prefix: str) -> tuple[list[str], list[tu
         notes.append(f"no entry {want} in {LOG} or {IDEAS}, or in their history: lines naming it are listed.")
     if entry and entry["file"] == IDEAS:
         notes.append(f"{entry['id']} is an idea, not decided yet: its home is {IDEAS}:{entry['line']}.")
+    if entry and (frm := moved_from_in(text).get(entry["id"])):
+        notes.append(f"{entry['id']} moved from {frm}.")
 
     def id_re(i: str) -> str:
         # D-2 and D-002 are one decision, as R6 counts it; whole ids only, D-7 is not D-70.
@@ -6416,6 +6442,10 @@ STRIKE_WHY = "project scope, not a product decision."
 # `- D-040: moved to <repo>/.jig/decisions.md § D-016.`, a page or `<page> § <heading>` in
 # place of the id. The target is a pointer, as the pararepo cites with, so one form covers all three.
 MOVE_LINE = re.compile(r"^- `?(?P<what>[^`\s][^`]*?)`?: moved to `?(?P<to>[\w.-]+/[^`]+?)`?\.?$")
+# The receiving end of a move: `- D-016: moved from <repo>/.jig/decisions.md § E-085.` under
+# ## Unreleased ### Added, a page or `<page> § <heading>` in place of the id. It mirrors the move
+# line, one form for all three, and is frozen once released as any change line is.
+MOVED_FROM = re.compile(r"^- `?(?P<what>[^`\s][^`]*?)`?: moved from `?(?P<frm>[\w.-]+/[^`]+?)`?\.?$")
 
 
 def move_key(what: str) -> str:
@@ -6465,6 +6495,92 @@ def moves_in(text: str) -> Moves:
     return out
 
 
+def moved_from_lines(text: str) -> list[tuple[str, str, str, re.Match]]:
+    """(section, group, line, match) for each moved-from line in log TEXT under a ### Added group."""
+    out, section, group = [], "", ""
+    for line in text.splitlines():
+        if line.startswith("## "):
+            section, group = line[3:].strip(), ""
+        elif line.startswith("### "):
+            group = line[4:].strip()
+        elif group == "Added" and (m := MOVED_FROM.match(line.rstrip())):
+            out.append((section, group, line.rstrip(), m))
+    return out
+
+
+def moved_from_in(text: str) -> Moves:
+    """Every moved-from line in log TEXT under ## Unreleased or a release, as {id, path or path §
+    heading here: the pointer it came from}, read as moves_in reads move lines."""
+    out = Moves()
+    for section, _, _, m in moved_from_lines(text):
+        if move_held(section):
+            out[move_key(m.group("what"))] = m.group("frm").strip()
+    return out
+
+
+def is_here(repo: str) -> bool:
+    """Whether a repo name in a pointer is this repo, by any name `jig repos` knows it by."""
+    p = repo_path(repo)
+    return p is not None and p.resolve() == main_root().resolve()
+
+
+def thing_of(what: str) -> tuple[str, str | None]:
+    """A moved thing as (path, section): an id is its log's section, a page its path alone."""
+    path, _, section = what.partition(" § ")
+    if not section and re.fullmatch(r"[A-Za-z][\w]*-(?:\d+|\?[a-z0-9-]+)", path.strip()):
+        return LOG, path.strip()
+    return path.strip(), section.strip() or None
+
+
+def thing_key(t: tuple[str, str | None]) -> str:
+    """How a (path, section) thing is compared: an id by its number (E-2 is E-002), a section by
+    its plain heading, a page by its path."""
+    path, section = t
+    if path == LOG and section:
+        return f"{LOG} § {move_key(section)}"
+    return move_key(f"{path} § {section}") if section else path
+
+
+def same_thing(a: tuple[str, str | None], b: tuple[str, str | None]) -> bool:
+    return thing_key(a) == thing_key(b)
+
+
+def family_names(trunk: str, meta: dict | None) -> tuple[set[str], str]:
+    """The repos a claim of this one may move to or come from, and the metarepo that couldn't
+    be reached to read them ("" when none): a metarepo's pararepos; for a pararepo, its
+    metarepo and the metarepo's other pararepos, read on the metarepo's trunk; nothing for a
+    repo with no family."""
+    if meta is not None:
+        return set(meta.get("pararepos") or []), ""
+    para = load_para(trunk)
+    if para is None:
+        return set(), ""
+    out = {para.get("meta", "")} - {""}
+    loc = meta_checkout(main_root(), para)
+    if loc is None:
+        return out, para.get("meta", "")
+    try:
+        paras = json.loads(trunk_show(loc, META) or "{}").get("pararepos") or []
+    except ValueError:
+        paras = []
+    return out | {n for n in paras if not is_here(n)}, ""
+
+
+def maybe_family(repo: str, names: set[str], unread: str) -> bool:
+    """Whether a misplaced move record names a repo that is, or may be, of the family: with the
+    metarepo unread, any repo `jig repos` knows may be one, and the misplacement is refused all the same."""
+    return in_family(repo, names) or (bool(unread) and repo_path(repo) is not None)
+
+
+def in_family(repo: str, names: set[str]) -> bool:
+    """Whether REPO is one of NAMES: by name, or by folder, as `Family` reads its members, so an
+    alias or a checkout's own name is no stranger."""
+    if name_in(repo, names):
+        return True
+    p = repo_path(repo)
+    return p is not None and any((q := repo_path(n)) is not None and q.resolve() == p.resolve() for n in names)
+
+
 def pointer_parts(ptr: str) -> tuple[str, str, str | None]:
     """A move's pointer as (repo, path, section or None)."""
     repo, _, rest = ptr.partition("/")
@@ -6482,6 +6598,9 @@ def moved_to(moves: dict[str, str], path: str, section: str | None) -> str | Non
     """Where a citation of PATH (§ SECTION) went: the section's own move, or its page's, the
     cited heading carried over when the page's pointer names none."""
     if section and (ptr := moves.get(move_key(f"{path} § {section}"))):
+        return ptr
+    # A log's section is an entry: its move line names it by its id alone (D-5 is D-005).
+    if path in (LOG, IDEAS) and section and (ptr := moves.get(section)):
         return ptr
     if ptr := moves.get(path):
         return ptr if not section or " § " in ptr else f"{ptr} § {plain(section)}"
@@ -6506,11 +6625,13 @@ def trunk_show(loc: Path, path: str) -> str | None:
 
 
 def move_rules(trunk: str, staged: bool, meta: dict | None) -> list[str]:
-    """Each move line the change adds names one of the metarepo's pararepos, a thing this repo
-    no longer has, and a target on that pararepo's trunk. Where the pararepo can't be reached
-    the line passes with a warning: the check is a courtesy to the reader, not the move's record."""
+    """Each move line the change adds names a repo of this one's family (down, up or sideways),
+    a thing this repo no longer has, and a target on that repo's trunk whose moved-from line
+    names this repo's thing: both ends say where the claim went. Each moved-from line it adds
+    names a family repo whose trunk still has the thing, the move pending, or moves it here.
+    Where the other repo can't be reached the line passes with a warning."""
     new, old = in_index(LOG, staged), at_rev(since_trunk(trunk), LOG)
-    paras = set((meta or {}).get("pararepos") or [])
+    paras, unread = family_names(trunk, meta)
     prefix = log_prefix(trunk)
     out = []
     # A move line anywhere else is read by nothing and checked by nothing: only one place holds
@@ -6521,7 +6642,7 @@ def move_rules(trunk: str, staged: bool, meta: dict | None) -> list[str]:
             f"under ## Unreleased ### Removed"
             for sec, grp, line, m in log_move_lines(new, False) if (sec, grp, line) not in was
             and (grp == "Removed" and not move_held(sec)
-                 or grp != "Removed" and name_in(pointer_parts(m.group("to"))[0], paras))]
+                 or grp != "Removed" and maybe_family(pointer_parts(m.group("to"))[0], paras, unread))]
     # One address per moved thing: a second line would leave readers to pick between two homes.
     # A line this change rewrites in place is no longer the log's, so a corrected target passes.
     kept = set(new.splitlines())
@@ -6540,7 +6661,8 @@ def move_rules(trunk: str, staged: bool, meta: dict | None) -> list[str]:
     added = [(line, m) for line in sorted(removed_lines(new) - removed_lines(old)) if (m := MOVE_LINE.match(line))]
     for _, m in added:
         seen[move_key(m.group("what"))] += 1
-    # An idea moves down as an entry does: it leaves the ideas file in the commit writing its line.
+    # An idea moves as an entry does, in any direction: it leaves the ideas file in the commit
+    # writing its line.
     since = since_trunk(trunk)
     old_all = with_ideas(old, at_rev(since, IDEAS))
     new_ideas = {id_number(e["id"], prefix) for e in idea_entries(in_index(IDEAS, staged), prefix)}
@@ -6573,10 +6695,15 @@ def move_rules(trunk: str, staged: bool, meta: dict | None) -> list[str]:
                        f"a moved entry leaves in the commit that writes its line")
             continue
         repo, path, section = pointer_parts(ptr)
-        if not name_in(repo, paras):
-            listed = f" ({', '.join(sorted(paras))})" if paras else ""
-            out.append(f"{LOG}: `{line}` moves to {repo}, which isn't one of {META}'s pararepos"
-                       f"{listed}: a claim moves down to a pararepo of this metarepo only")
+        # The family unread, membership can't be judged; what this commit itself holds still is.
+        unknown = bool(unread) and not in_family(repo, paras)
+        if not unknown and not paras:
+            out.append(f"{LOG}: `{line}` moves to {repo}, but this repo has no family (no {META} with "
+                       f"pararepos, no {PARA}): a claim moves only between a metarepo and its pararepos")
+            continue
+        if not unknown and not in_family(repo, paras):
+            out.append(f"{LOG}: `{line}` moves to {repo}, which isn't of this repo's family "
+                       f"({', '.join(sorted(paras))}): a claim moves within its family only")
             continue
         wpath, _, wsec = what.partition(" § ")
         if num is None and (body := in_index(wpath.strip(), staged)):
@@ -6586,6 +6713,10 @@ def move_rules(trunk: str, staged: bool, meta: dict | None) -> list[str]:
             elif pointer_gap(wpath.strip(), wsec, True, body)[0] == RESOLVES:
                 out.append(f"{LOG}: `{line}` moves {what}, which {wpath.strip()} still has: remove "
                            f"the section in the same commit, or drop the line")
+        if unknown:
+            print(f"jig: warning: `{line}`: {unread} isn't reachable here (`jig repos`), so this repo's "
+                  f"family wasn't read and {repo} wasn't checked", file=sys.stderr)
+            continue
         loc = repo_path(repo)
         if not loc or not loc.is_dir():
             print(f"jig: warning: `{line}`: {repo} isn't in `jig repos` here, so its target "
@@ -6596,15 +6727,109 @@ def move_rules(trunk: str, staged: bool, meta: dict | None) -> list[str]:
         if body is None:
             out.append(f"{LOG}: `{line}`: {repo}'s {t} has no {path} (read {loc}/{path} on {t}): "
                        f"land it there first")
-        elif section and path in (LOG, IDEAS):
-            # An id names an entry or an idea there: one decided since keeps it in the other file.
-            both = entries_at(t, str(loc))
-            if move_key(section) not in {move_key(e["id"]) for e in log_entries(both, log_prefix_of(both))}:
-                out.append(f"{LOG}: `{line}`: {repo}'s {path} on {t} has no entry {section}: "
-                           f"land it there first")
-        elif section and pointer_gap(path, section, True, body)[0] != RESOLVES:
+        # An id names an entry or an idea there: one decided since keeps it in the other file.
+        elif section and path in (LOG, IDEAS) and move_key(section) not in entry_keys(entries_at(t, str(loc))):
+            out.append(f"{LOG}: `{line}`: {repo}'s {path} on {t} has no entry {section}: "
+                       f"land it there first")
+        elif section and path not in (LOG, IDEAS) and pointer_gap(path, section, True, body)[0] != RESOLVES:
             out.append(f"{LOG}: `{line}`: {repo}'s {path} on {t} has no heading {section}: "
                        f"land it there first")
+        else:
+            there = section if path in (LOG, IDEAS) and section else (f"{path} § {section}" if section else path)
+            frm = moved_from_in(trunk_show(loc, LOG) or "").get(there)
+            if not frm or not is_here(pointer_parts(frm)[0]) or \
+                    not same_thing(pointer_parts(frm)[1:], thing_of(what)):
+                out.append(f"{LOG}: `{line}`: {repo}'s {LOG} on {t} has no moved-from line for {there} naming "
+                           f"this repo's {what} (read {loc}/{LOG}): land it there first, with its moved-from line")
+    out += moved_from_rules(new, old, paras, unread)
+    return out
+
+
+def entry_keys(text: str) -> set[str]:
+    """The ids TEXT's entries have, as move_key compares them."""
+    return {move_key(e["id"]) for e in log_entries(text, log_prefix_of(text))}
+
+
+def moved_from_rules(new: str, old: str, paras: set[str], unread: str = "") -> list[str]:
+    """Both ends of a move stay tied from the receiving side. A moved-from line the change adds
+    goes under ## Unreleased ### Added, names a repo of the family whose trunk still has the thing
+    (the move pending) or moves it here, and one that can't be reached passes with a warning.
+    One the change removes or rewrites while that repo's trunk moves the thing here stays: the
+    move line there would point at a home with no record of it."""
+    out = []
+    was = {line for _, _, line, _ in moved_from_lines(old)}
+    now = {line for _, _, line, _ in moved_from_lines(new)}
+    # A moved-from line anywhere else is read by nothing and checked by nothing, as a move line.
+    placed = {(sec, grp, line) for sec, grp, line, _ in any_moved_from(old)}
+    out += [f"{LOG}: `{line}` is under ## {sec}{f' ### {grp}' if grp else ''}: a moved-from line goes "
+            "under ## Unreleased ### Added"
+            for sec, grp, line, _m in any_moved_from(new)
+            if (sec, grp, line) not in placed and (grp == "Added" and not move_held(sec)
+                                                   or grp != "Added" and maybe_family(pointer_parts(_m.group("frm"))[0], paras, unread))]
+
+    def source(m: re.Match) -> tuple[str, Path | None, str, str, str | None]:
+        repo, path, section = pointer_parts(m.group("frm"))
+        loc = repo_path(repo)
+        return repo, (loc if loc and loc.is_dir() else None), path, \
+            (section if path == LOG and section else (f"{path} § {section}" if section else path)), section
+
+    def points_here(loc: Path, key: str, what: str) -> bool:
+        ptr = moves_in(trunk_show(loc, LOG) or "").get(key)
+        return bool(ptr) and is_here(pointer_parts(ptr)[0]) and same_thing(pointer_parts(ptr)[1:], thing_of(what))
+    for sec, _, line, m in moved_from_lines(old):
+        if line in now or not move_held(sec):
+            continue
+        repo, loc, path, key, _ = source(m)
+        if loc is None:
+            print(f"jig: warning: `{line}` leaves the log, and {repo} isn't in `jig repos` here, so "
+                  "whether its move line still points here wasn't checked", file=sys.stderr)
+        elif points_here(loc, key, m.group("what")):
+            out.append(f"{LOG}: `{line}` is the receiving end of {repo}'s move line on its "
+                       f"{Board.trunk_name(loc)} (read {loc}/{LOG}): it stays as written")
+    for sec, _, line, m in moved_from_lines(new):
+        if line in was or not move_held(sec):
+            continue
+        repo, loc, path, key, section = source(m)
+        if unread and not in_family(repo, paras):
+            print(f"jig: warning: `{line}`: {unread} isn't reachable here (`jig repos`), so this repo's "
+                  f"family wasn't read and {repo} wasn't checked", file=sys.stderr)
+            continue
+        if not in_family(repo, paras):
+            out.append(f"{LOG}: `{line}` names {repo}, which isn't of this repo's family"
+                       + (f" ({', '.join(sorted(paras))})" if paras else " (it has none)")
+                       + ": a claim comes only from a repo of its family")
+            continue
+        if loc is None:
+            print(f"jig: warning: `{line}`: {repo} isn't in `jig repos` here, so its source wasn't "
+                  "checked", file=sys.stderr)
+            continue
+        t = Board.trunk_name(loc)
+        their_log = trunk_show(loc, LOG) or ""
+        body = their_log if path == LOG else trunk_show(loc, path)
+        if path == LOG and section:
+            # The thing may be an idea there, in the ideas file beside the log.
+            both = with_ideas(their_log, trunk_show(loc, IDEAS) or "")
+            pending = move_key(section) in {move_key(e["id"]) for e in log_entries(both, log_prefix_of(both))}
+        elif section:
+            pending = body is not None and pointer_gap(path, section, True, body)[0] == RESOLVES
+        else:
+            pending = body is not None
+        if not pending and not points_here(loc, key, m.group("what")):
+            out.append(f"{LOG}: `{line}`: {repo}'s {path} on {t} (read {loc}/{path}) neither has "
+                       f"{section or path} nor moves it here: name what it moved, as its move line does")
+    return out
+
+
+def any_moved_from(text: str) -> list[tuple[str, str, str, re.Match]]:
+    """(section, group, line, match) for each moved-from-shaped line in log TEXT, wherever it sits."""
+    out, section, group = [], "", ""
+    for line in text.splitlines():
+        if line.startswith("## "):
+            section, group = line[3:].strip(), ""
+        elif line.startswith("### "):
+            group = line[4:].strip()
+        elif m := MOVED_FROM.match(line.rstrip()):
+            out.append((section, group, line.rstrip(), m))
     return out
 
 
@@ -6641,7 +6866,7 @@ def frozen_problems(old: str, new: str, trunk: str, only: set[str] | None = None
             f"supersedes it: an entry is removed only by the commit adding the accepted one "
             f"that says `Supersedes {e['id']}.`, or by the commit adding under ## Unreleased "
             f"### Removed one of two lines: the strike, `- {e['id']}: {STRIKE_WHY}`, or the move, "
-            f"`- {e['id']}: moved to <pararepo>/{LOG} § <its id there>.`: add it in the same commit" for e in bare if e["section"] not in ("Unreleased", "")]
+            f"`- {e['id']}: moved to <repo of its family>/{LOG} § <its id there>.`: add it in the same commit" for e in bare if e["section"] not in ("Unreleased", "")]
     prefix = log_prefix_of(new)
     have = {id_number(e["id"], prefix) for e in log_entries(new, prefix)}
     out += [f"{LOG}: the ### Removed line for {prefix}{n:03d} strikes an entry the log still has: "
@@ -6796,7 +7021,7 @@ def removed_entry(want: str, prefix: str, rev: str = "HEAD",
     if "?" in want:
         return None
     # First parent, merges diffed against it: a job's D-?slug is numbered only in its merge.
-    # The ideas file too: an idea dropped or moved down left from there, and one decided moved
+    # The ideas file too: an idea dropped or moved away left from there, and one decided moved
     # its block into the log, where this finds it first.
     for c in git("log", "-m", "--first-parent", "-E", f"-G{history_re(want)}", "--format=%H", rev,
                  "--", LOG, IDEAS, cwd=cwd).splitlines():
@@ -6904,6 +7129,8 @@ def cmd_decision(root: Path, args) -> int:
     print(by_id[want]["block"])
     if by_id[want]["section"] == IDEAS:
         print(f"\n{want} is an idea in {IDEAS}: not decided yet.")
+    if frm := moved_from_in(path.read_text() if path.exists() else "").get(want):
+        print(f"\n{want} moved from {frm}.")
     if len(chain) > 1:
         print("\nChain, oldest first:")
         for i in chain:
@@ -7651,8 +7878,9 @@ def cmd_release(root: Path, args) -> int:
             die(f"nothing to release: no entry file changed since {last}", 2)
     version = next_version(last, args, meta)
     tag = f"v{version}"
-    # A pararepo's release settles its sync buffer: every Open row goes to the metarepo in one
-    # proposal, made before the build so a release never ships with drift nobody proposed.
+    # A pararepo's release settles its sync buffer: every Open row but a move-in row, `jig
+    # move-in`'s, goes to the metarepo in one proposal, made before the build so a release never
+    # ships with drift nobody proposed.
     proposed = None
     if para and unproposed(root)[1]:
         proposed = buffer_proposal(root, para, loc, f"buffer-{tag}")
@@ -8425,7 +8653,8 @@ def para_rules(root: Path, board: "Board", para: dict, staged: bool) -> list[str
     # what a contract change is.
     # The cache lives in the primary checkout: it is ignored, so a job's worktree has none.
     # Worse than at the base counts: a file lost is still news when its heading was already missing.
-    broken = [f"{f} points to {gap}" for f, path, section, code in pointers(root, main_root())
+    moves = moves_in(in_index(LOG, staged))
+    broken = [f"{f} points to {moved_gap(gap, path, section, moves)}" for f, path, section, code in pointers(root, main_root())
               if any(d == path or d.startswith(f"{path}/") for d in diffed)
               for level, gap in [pointer_gap(path, section, code, body_now(path, staged))]
               if level > pointer_gap(path, section, code, body_at(base(trunk), path))[0]]
@@ -9325,6 +9554,10 @@ def meta_citations(root: Path, para: dict, ids: str, loc: Path | None = None,
         for n, line in enumerate(text.splitlines(), 1):
             if closed_row(f, line) or buffer_copy(copies, line) or n - 1 in frozen:
                 continue
+            # A move's two records, its move line and its moved-from line, say where a claim went
+            # and came from: history, frozen once released, never a citation to rewrite.
+            if f == LOG and (MOVE_LINE.match(line.rstrip()) or MOVED_FROM.match(line.rstrip())):
+                continue
             for m in POINTER.finditer(line) if any(t in line.casefold() for t in named) else ():
                 if not name_in(m.group("name"), {name}):
                     continue
@@ -9532,12 +9765,22 @@ def pointer_gap(path: str, section: str | None, code: bool, body: str | None) ->
     return NO_HEADING, f"{path} § {shown_section(want, code)}, which {path} has no heading for"
 
 
+def moved_gap(gap: str, path: str, section: str | None, moves: dict[str, str]) -> str:
+    """A pointer's gap as a report says it: one this repo's move line sends elsewhere reads
+    `(moved: <pointer>)`, never as missing."""
+    ptr = moved_to(moves, path, section)
+    return f"{path}{f' § {section}' if section else ''} (moved: {ptr})" if ptr else gap
+
+
 def dangling(root: Path) -> list[tuple[str, str, str | None, bool, int, str]]:
     """Each cached pointer that misses this repo's HEAD, as (cache file, path, section, code,
-    level, gap), one per line a report prints: pointers into a missing file read the same."""
+    level, gap), one per line a report prints: pointers into a missing file read the same. A
+    page or section this repo moved away reads where it went."""
     seen, out = set(), []
+    moves = moves_in(body_at("HEAD", LOG) or "")
     for f, path, section, code in pointers(root):
         level, gap = pointer_gap(path, section, code, body_at("HEAD", path))
+        gap = moved_gap(gap, path, section, moves) if level else gap
         if level and (f, gap) not in seen:
             seen.add((f, gap))
             out.append((f, path, section, code, level, gap))
@@ -9656,6 +9899,9 @@ def pointer_cleanup(root: Path) -> list[str]:
     olds = dict(LAYOUT)
     for f, path, section, code, level, gap in dangling(root):
         line = f"{f} points to {gap}: "
+        # Moved by this repo's move line, the pointer still dangles in the metarepo: the same
+        # answer as any removal, a pointers proposal or a row, with where it went named.
+        moved = "; the metarepo's rewrite is a pointers proposal (`jig propose --pointers`)" if "(moved: " in gap else ""
         found = removal(path, section, code, level)
         if found is None:
             out.append(line + "this repo never had it, so the metarepo's pointer is what's wrong; "
@@ -9680,7 +9926,7 @@ def pointer_cleanup(root: Path) -> list[str]:
         where = f"{path} § {shown}" if shown else path
         missed = f"the metarepo's rewrite in {pinned[0]} missed it; " if pinned else ""
         out.append(line + f"this repo {what}; " + missed
-                   + buffer_offer(root, f"{f}: the pointer to {where}", path, f"{now}, {commit}", shown))
+                   + buffer_offer(root, f"{f}: the pointer to {where}", path, f"{now}, {commit}", shown) + moved)
     return out
 
 
@@ -9767,12 +10013,14 @@ def cmd_propose(root: Path, args) -> int:
     if args.buffer:
         slug = args.slug or args.spec or f"buffer-{date.today().isoformat()}"
         made = buffer_proposal(root, para, loc, slug)
+        moving = move_in_left(root, para["meta"])
         if made is None:
-            print(f"nothing to propose: {BUFFER} has no Open row that a proposal doesn't already carry as it stands.")
+            print(f"nothing to propose: {BUFFER} has no Open row that a proposal doesn't already carry as it stands"
+                  + (f"; {moving}." if moving else "."))
             return 0
         spec, branch = made
-        print(f"made {branch} in {para['meta']} for every Open row of {BUFFER}, listed in "
-              f"{spec.relative_to(root)}. Commit that spec.")
+        print(f"made {branch} in {para['meta']} for every Open row of {BUFFER} but a move-in row, listed in "
+              f"{spec.relative_to(root)}. Commit that spec." + (f" {moving[0].upper()}{moving[1:]}." if moving else ""))
         print(f"Write the change there on that branch (git -C {loc} worktree add <dir> {branch}); "
               f"the rows close when `jig sync` takes the release that holds it.")
         return 0
@@ -9821,10 +10069,15 @@ def withdraw_proposal(root: Path, para: dict, loc: Path, branch: str, reason: st
         line = re.sub(r"meta: \S+ proposal \S+", lambda _: f"meta: {name} withdrawn {branch} — {reason}",
                       m.group(0), count=1)
         spec.write_text(text[:m.start()] + line + text[m.end():])
-        rows = [i for i in listed_rows(text) if i in {r[0] for r in buffer_rows(
-            (root / BUFFER).read_text() if (root / BUFFER).exists() else "") if r[-1] == "Open"}]
+        open_rows = {r[0]: r for r in buffer_rows((root / BUFFER).read_text() if (root / BUFFER).exists() else "")
+                     if r[-1] == "Open"}
+        rows = [i for i in listed_rows(text) if i in open_rows]
+        # A move-in row is `jig move-in`'s alone: no release or buffer proposal carries it.
+        moving = [i for i in rows if open_rows[i][2:3] == [MOVE_IN_NOW]]
+        rest = [i for i in rows if i not in moving]
         print(f"withdrew {branch} in {spec.relative_to(root)}. Commit that spec."
-              + (f" Its Open rows ({', '.join(rows)}) go again in the next proposal." if rows else ""))
+              + (f" Its Open rows ({', '.join(rest)}) go again in the next proposal." if rest else "")
+              + (f" Its move-in row ({', '.join(moving)}) goes again by `jig move-in`." if moving else ""))
     print(f"The branch stays in {name}; its owner deletes it there: git -C {loc} branch -D {branch}")
     return 0
 
@@ -9843,22 +10096,27 @@ def open_proposal(para: dict, loc: Path, slug: str) -> str:
     return branch
 
 
-def unproposed(root: Path) -> tuple[list[str], list[str]]:
+def unproposed(root: Path, moving_in: bool = False) -> tuple[list[str], list[str]]:
     """The buffer's table header and its Open rows not yet proposed as they stand. A row a
-    proposal already carries unchanged waits for that one; an edited row goes again."""
+    proposal already carries unchanged waits for that one; an edited row goes again. A move-in
+    row (`jig move-in`'s) is that command's alone: only MOVING_IN lists it, so a release or
+    `jig propose --buffer` never carries one into a proposal step 2 would take for its own."""
     text = (root / BUFFER).read_text() if (root / BUFFER).exists() else ""
     lines = [l for l in text.splitlines() if l.lstrip().startswith("|")]
     sent = proposed_rows([s.read_text() for s in sorted((root / DIR / "specs").glob("*.md"))])
     return ([l for l in lines if not buffer_rows(l)],
             [l for l in lines if buffer_rows(l) and buffer_rows(l)[0][-1] == "Open"
-             and tuple(buffer_rows(l)[0]) not in sent])
+             and tuple(buffer_rows(l)[0]) not in sent
+             and (moving_in or (buffer_rows(l)[0][2:3] or [""])[0] != MOVE_IN_NOW)])
 
 
-def buffer_proposal(root: Path, para: dict, loc: Path, slug: str) -> tuple[Path, str] | None:
+def buffer_proposal(root: Path, para: dict, loc: Path, slug: str,
+                    only: set[str] | None = None) -> tuple[Path, str] | None:
     """Every Open row of the buffer not yet proposed, in one proposal: a metarepo branch, and a
     spec here that lists the rows by id, which is the record of what went. None when no row
-    is left to propose."""
-    head, open_ = unproposed(root)
+    is left to propose. ONLY: just those rows, as `jig move-in` proposes its own."""
+    head, open_ = unproposed(root, moving_in=only is not None)
+    open_ = [l for l in open_ if only is None or buffer_rows(l)[0][0] in only]
     if not open_:
         return None
     spec = root / DIR / "specs" / f"{slug}.md"
@@ -9924,6 +10182,10 @@ def read_staged(path: Path) -> tuple[dict, str, list[str]]:
         bad.append(f"destination {head['destination']!r}: a roadmap change lands in {ROADMAP} only")
     if head.get("kind") == "pin-bump" and (head.get("destination") != PARA or head.get("change") != "update"):
         bad.append(f"a pin bump is `change: update` to {PARA} only")
+    if head.get("moved-from") and not re.fullmatch(r"[\w.-]+/\S.*", head["moved-from"]):
+        bad.append(f"moved-from {head['moved-from']!r} is not a pointer, <repo>/<path>[ § <heading or id>]")
+    if head.get("moved-from") and head.get("kind") not in ("decisions", "doc"):
+        bad.append("moved-from: only a decision entry, a page or a section moves between repos")
     if head.get("kind") == "pin-bump" and not head.get("release"):
         bad.append("no release: a pin bump names the release it moves the pin to")
     if head.get("kind") == "roadmap" and head.get("change") == "new":
@@ -10210,6 +10472,18 @@ def cmd_staging(root: Path, args) -> int:
         print(f"resolved {path.name}: {msg}")
         return 0
 
+    came = head.get("moved-from", "")
+
+    def moved_here(text: str, what: str) -> str:
+        """The log TEXT with the moved-from line for WHAT, landed from `moved-from:`, in this job."""
+        line = f"- {what}: moved from {came}."
+        return text if line in text.splitlines() else log_with_line(text or LOG_SEED, "Added", line)
+
+    def landed_as(where: str) -> str:
+        """What the moved-from line names for a page landed at WHERE: the section, when one moved."""
+        section = pointer_parts(came)[2]
+        return f"{where} § {section}" if section else where
+
     def inside(rel: str) -> Path:
         """A destination stays inside the repo: no absolute path, no climbing out with .."""
         out = (root / rel).resolve()
@@ -10317,6 +10591,9 @@ def cmd_staging(root: Path, args) -> int:
         if not landed(dest):
             die(f"needs judgment: edit {dest} with this file's content, keeping `{mark}` in it "
                 "as provenance, then resolve again", 1)
+        if came:
+            inside(LOG).write_text(moved_here(inside(LOG).read_text() if inside(LOG).exists() else "", landed_as(dest)))
+            return done(f"{dest} carries it; its moved-from line is in {LOG}")
         return done(f"{dest} carries it")
     if kind == "decisions":
         log = inside(dest)
@@ -10342,6 +10619,9 @@ def cmd_staging(root: Path, args) -> int:
         dupes = [e["id"] for e in entries if decision_id(e["id"]) in have]
         if dupes:
             die(f"{', '.join(dupes)} already in {dest} or its ideas file: stage it as `change: update`", 1)
+        if came and len(entries) != 1:
+            die(f"{path.name} moves one claim (`moved-from: {came}`) but holds {len(entries)} entries: "
+                "stage one entry per moved claim", 1)
         for e in decided:
             if not re.search(r"^## Unreleased[ \t]*$", text, re.M):
                 text = text.rstrip("\n") + "\n\n## Unreleased\n"
@@ -10349,16 +10629,21 @@ def cmd_staging(root: Path, args) -> int:
                           count=1, flags=re.M)
         for e in ideas:
             ideas_text = ideas_text.rstrip("\n") + f"\n\n{e['block']}\n"
+        if came:
+            # Numbered with its entry or idea at the merge: number_placeholders renames the id
+            # everywhere. Its moved-from line is the log's either way.
+            text = moved_here(text, entries[0]["id"])
         log.parent.mkdir(parents=True, exist_ok=True)
         said = []
-        if decided:
+        if decided or came:
             log.write_text(text)
+        if decided:
             said.append(f"{len(decided)} entr{'ies' if len(decided) > 1 else 'y'} added to {dest}")
         if ideas:
             ideas_file.write_text(ideas_text)
             idea_at = str(Path(dest).with_name(Path(IDEAS).name))
             said.append(f"{len(ideas)} idea{'s' if len(ideas) > 1 else ''} added to {idea_at}")
-        return done(", ".join(said))
+        return done(", ".join(said) + (", with its moved-from line" if came else ""))
     out = inside(dest)
     if out.exists():
         die(f"{dest} exists: stage it as `change: update`, or pick another path", 1)
@@ -10371,6 +10656,9 @@ def cmd_staging(root: Path, args) -> int:
         out.write_text(text)
     else:
         out.write_text(body.rstrip("\n") + f"\n\n---\n{mark}\n")
+    if came:
+        inside(LOG).write_text(moved_here(inside(LOG).read_text() if inside(LOG).exists() else "", landed_as(dest)))
+        filled += f", with its moved-from line in {LOG}"
     return done(f"written to {dest}{filled}")
 
 
@@ -12963,13 +13251,58 @@ def others_holding(dropped: set[str], fam: "Family") -> list[str]:
     return out
 
 
-def proposal_section_refusals(branch: str, fork: str, text: str, fam: "Family", meta: dict) -> list[str]:
+# A move's own lines in the metarepo's log, added by its proposal: the page landing here with its
+# moved-from line (up), or the pointers to it renamed (sideways).
+MOVE_LANDS = re.compile(r"^- (?P<as>.+?): moved from (?P<src>[\w.-]+)/.+?\.\s*$", re.M)
+MOVE_POINTERS = re.compile(r"^- Pointers to (?P<src>[\w.-]+)/.+? name (?P<to>[\w.-]+)/(?P<as>.+?), where it moved\.\s*$", re.M)
+
+
+def move_follows(fork_log: str, log: str, names: set[str]) -> list[tuple[str, str]]:
+    """(receiver, page) for each move a proposal from the repo called NAMES carries, read from the
+    lines its LOG adds to FORK_LOG: up, the metarepo itself ("") receives; sideways, the named one."""
+    old = set(fork_log.splitlines())
+    added = "\n".join(l for l in log.splitlines() if l not in old)
+    out = [("", m.group("as").partition(" § ")[0].strip()) for m in MOVE_LANDS.finditer(added)
+           if m.group("src") in names]
+    out += [(m.group("to"), m.group("as").partition(" § ")[0].strip()) for m in MOVE_POINTERS.finditer(added)
+            if m.group("src") in names]
+    return out
+
+
+def only_items_for(old: str, new: str, pages: list[str]) -> bool:
+    """Whether section text NEW differs from OLD only by added items, each touching one of PAGES:
+    the items that follow a moved page into its receiver's section."""
+    left = Counter(l for l in old.splitlines() if l.strip())
+    added = []
+    for l in (l for l in new.splitlines() if l.strip()):
+        if left[l] > 0:
+            left[l] -= 1
+        else:
+            added.append(l)
+    if any(n > 0 for n in left.values()):
+        return False
+    # A section new to the roadmap brings its own heading with the items.
+    added = [l for l in added if not re.match(r"##\s", l)]
+    for l in added:
+        t = TOUCHES_ANY.search(l)
+        if not SCOPE_LINE.fullmatch(l) or not t or not any(
+                same_page(p.strip().strip("`"), page) for p in t.group(1).split(",") for page in pages):
+            return False
+    return bool(added)
+
+
+def proposal_section_refusals(branch: str, fork: str, text: str, fam: "Family", meta: dict,
+                              logs: tuple[str, str] | None = None,
+                              fork_owners: dict[str, str] | None = None) -> list[str]:
     """section_refusals for a metarepo's `propose/<repo>-<slug>` branch changing the roadmap
     from FORK (trunk's, where the branch left it) to TEXT: the proposing repo changes only the
     products it owns. `jig propose` names the branch for the pararepo's folder, so the repo is
     found by its `jig repos` name or its folder's, the longest that the branch starts with; a
     branch naming no pararepo is refused, never passed unjudged. FORK is the commit being made's
-    merge base with trunk, so trunk's own changes merged in are in it, never the branch's."""
+    merge base with trunk, so trunk's own changes merged in are in it, never the branch's. A
+    section FORK has is whose FORK_OWNERS (its glossary) says, so a product renamed in the same
+    commit loses its old headings as its own and a term taken over doesn't bring its sections;
+    a new section is whose the commit's own glossary (FAM's owners) says."""
     def called(r: str) -> set[str]:
         loc = repo_path(r)
         return {r} | ({loc.name} if loc is not None else set())
@@ -12978,9 +13311,24 @@ def proposal_section_refusals(branch: str, fork: str, text: str, fam: "Family", 
         return [f"{branch} names no pararepo of this metarepo (its `pararepos`, by name or folder): "
                 "a roadmap change reaches it by `jig roadmap --edit` in the pararepo that owns the sections"]
     repo = max(names, key=lambda x: len(x[0]))[1]
-    owns = lambda h: bool(h) and fam.owners.get(heading_product(h, fam.owners)) == repo
-    owner = lambda h: (lambda o: "this repo" if o in ("", THIS_REPO) else o)(
-        fam.owners.get(heading_product(h, fam.owners), ""))
+    # Only the proposing repo's own moves: another pararepo's move line lends it nothing.
+    moves = move_follows(*logs, called(repo)) if logs else []
+    old_s = {h: t for h, _, t in roadmap_sections(fork)}
+    new_s = {h: t for h, _, t in roadmap_sections(text)}
+
+    def whose(h: str) -> str:
+        owners = fork_owners if fork_owners is not None and h in old_s else fam.owners
+        return owners.get(heading_product(h, owners), "")
+
+    def follows(h: str) -> bool:
+        # A move's proposal carries the moved page's items into its receiver's section, and
+        # nothing else there: the owner's Part C route for items, where no other edit passes.
+        owner = whose(h) if h else None
+        pages = [p for to, p in moves or [] if owner is not None and
+                 (owner in ("", THIS_REPO) if not to else name_in(owner, {to}))]
+        return bool(pages) and only_items_for(old_s.get(h, ""), new_s.get(h, ""), pages)
+    owns = lambda h: bool(h) and whose(h) == repo or follows(h)
+    owner = lambda h: (lambda o: "this repo" if o in ("", THIS_REPO) else o)(whose(h))
     return section_refusals(fork, text, owns, owner, repo, True)
 
 
@@ -13017,8 +13365,13 @@ def roadmap_rules(board: "Board", branch: str, staged: bool, paths: list[str],
         # trunk's tip, so a resolution keeping the branch's old copy of another repo's section
         # reads as the change it is.
         fork = git("merge-base", trunk, "HEAD", *merging_commits())
+        # The branch's own glossary says whose a heading is: a product it proposes is its own.
+        if own := in_index(GLOSSARY, staged):
+            fam.owners = term_owners(own)
+        logs = (at_rev(fork, LOG) if fork else at_rev(trunk, LOG), in_index(LOG, staged))
         problems = proposal_section_refusals(branch, at_rev(fork, ROADMAP) if fork else old, text, fam,
-                                             load_meta(trunk))
+                                             load_meta(trunk), logs,
+                                             term_owners(at_rev(fork, GLOSSARY) or "") if fork else None)
         parsed = parse_roadmap(text, problems)
         problems += ref_problems(parsed, parse_no_phase(text, problems))
         problems += type_problems(parsed, fam.owners)
@@ -16293,8 +16646,9 @@ def cmd_sweep(root: Path, apply: bool) -> int:
                     + (f"{fam.meta_name}'s holds none of its products" if fam.meta_loc is not None
                        else f"{fam.meta_name or 'its metarepo'} can't be reached here (`jig repos`)")
                     + f": propose the product to {fam.meta_name or 'the metarepo'} first, a glossary term "
-                    "with an `Owner:` line naming this repo, then `jig move-in`; then sweep again. "
-                    "Nothing is written here")
+                    f"with an `Owner:` line naming this repo, by a {BUFFER} row and `jig propose` "
+                    "(`jig move-in --product <Name> --definition <text>` proposes it with the phases of a "
+                    "roadmap this repo keeps); then sweep again. Nothing is written here")
     if not apply and homeless:
         print(f"\nDry run: nothing changed. {homeless_why}.")
         return 0
@@ -16668,6 +17022,9 @@ def rig_items(root: Path, board: "Board") -> list[dict]:
         items.append({"kind": "spec", "id": Path(path).stem, "path": path, "content": text,
                       "touches": touches_spans(text), "after": built_after(text),
                       "kept": sorted(kept_separate(text)), "scopes": spec_scopes(text)})
+        # A move's spec is its step 2's job, which can't start until the receiver's trunk holds it.
+        if wait := move_wait(root, path, text):
+            items[-1]["blocked"] = [wait]
     # A staged file a spec in flight carries, by its exact mark as `resolve` finds it, is that
     # spec's work: it waits on it, or on the job building it, and is never offered again. In
     # flight is a waiting spec, an open job's, or one whose only notes are partial. Only what
@@ -17197,6 +17554,1102 @@ def cmd_rig(root: Path, args) -> int:
     return 0
 
 
+# -------------------------------------------------------------------- moving
+
+# A pararepo's roadmap moves into its metarepo's as one proposal: its spec's name, and its
+# branch's, start so; a re-proposal after a withdrawal takes the next free one (move-in-2).
+MOVE_IN = "move-in"
+# The buffer row step 1 writes, whose claim names the product: step 2 reads it back.
+MOVE_IN_NOW = "its phases and list, moving in"
+BUFFER_SEED = ("# BUFFER\n\n| Id | Metarepo claim (`<meta>/<path> § section`, at the pin) | This repo now "
+               "(source, commit) | Decided (who, date) | State |\n|---|---|---|---|---|\n")
+
+
+def owner_dropped(now: dict[str, str], road: str) -> list[str]:
+    """A metarepo commit, or merge, that leaves headings of ROAD, its own roadmap, under a product
+    whose `Owner:` one of its sides gave and its own glossary NOW doesn't: read by the commit's
+    own glossary, those sections would turn the metarepo's own. Each side is judged, HEAD and
+    every commit a merge brings in, so only what this commit or merge drops counts: a branch
+    behind trunk, or a rename made over two commits, is not refused for trunk's terms."""
+    out = []
+    heads = roadmap_headings(road)
+    sides = [("HEAD", "HEAD")] + [(c, f"the merged {git('name-rev', '--name-only', '--always', c) or c[:12]}")
+                                  for c in merging_commits()]
+    for rev, side in sides:
+        for term in sorted(term_owners(at_rev(rev, GLOSSARY))):
+            using = [h for h in heads if product_of(list_base(h), {term: ""}) and not product_of(list_base(h), now)]
+            if term not in now and using:
+                out.append(f"{GLOSSARY}: ## {term} has no `Owner:` line here, though {side} gives it one, and "
+                           f"{ROADMAP} heads {', '.join(f'## {h}' for h in using)} with it: keep its owner, "
+                           "or re-head those sections in this commit")
+    return out
+
+
+def log_with_line(text: str, group: str, line: str) -> str:
+    """TEXT, a decision log, with LINE under ## Unreleased ### GROUP, the group made when it has none."""
+    m = re.search(r"^## Unreleased[ \t]*\n", text, re.M)
+    if not m:
+        text = text.rstrip("\n") + "\n\n## Unreleased\n"
+        m = re.search(r"^## Unreleased[ \t]*\n", text, re.M)
+    end = (re.compile(r"^## ", re.M).search(text, m.end()) or re.compile(r"\Z").search(text)).start()
+    g = re.compile(rf"^### {re.escape(group)}[ \t]*\n\n?", re.M).search(text, m.end(), end)
+    if g:
+        return text[:g.end()] + f"{line}\n" + text[g.end():]
+    head = text[:m.end()].rstrip("\n") + "\n\n"
+    rest = text[m.end():].lstrip("\n")
+    return head + f"### {group}\n\n{line}\n" + ("\n" + rest if rest else "")
+
+
+def proposal_commit(loc: Path, branch: str, files: dict[str, str | None], subject: str) -> tuple[bool, str]:
+    """Write FILES (None removes one) on BRANCH of the repo at LOC and commit them, in a temporary
+    worktree of it removed after: that repo's own hook judges the commit as it is made, and its
+    trunk checkout is never touched. (passed, the hook's output)."""
+    tmp = Path(tempfile.mkdtemp(prefix="jig-proposal-"))
+    wt = tmp / "w"
+    env = {k: v for k, v in os.environ.items() if k not in ("GIT_DIR", "GIT_INDEX_FILE", "GIT_WORK_TREE")}
+
+    def run(*args: str, cwd: Path) -> subprocess.CompletedProcess:
+        return subprocess.run(["git", *args], cwd=str(cwd), env=env, capture_output=True, text=True)
+    try:
+        # Hooks off for the checkout alone: a post-checkout setup.sh would run for a commit's
+        # sake. The commit below runs that repo's hooks as any commit there does.
+        made = run("-c", "core.hooksPath=/dev/null", "worktree", "add", "-q", str(wt), branch, cwd=loc)
+        if made.returncode:
+            return False, made.stderr
+        for path, text in files.items():
+            if text is None:
+                run("rm", "-q", "--ignore-unmatch", "--", path, cwd=wt)
+                continue
+            (wt / path).parent.mkdir(parents=True, exist_ok=True)
+            (wt / path).write_text(text)
+            run("add", "--", path, cwd=wt)
+        done = run("commit", "-q", "-m", subject, cwd=wt)
+        return done.returncode == 0, (done.stdout + done.stderr).strip()
+    finally:
+        run("worktree", "remove", "--force", str(wt), cwd=loc)
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def drop_proposal(loc: Path, branch: str) -> None:
+    """Undo a proposal branch this command just opened, its commit refused: nothing was proposed."""
+    git("branch", "-D", branch, cwd=str(loc))
+
+
+def name_in_family(loc: Path) -> str:
+    """This repo's name as the metarepo at LOC lists it in `pararepos`, which its glossary's
+    `Owner:` lines name; the checkout's folder name when it lists none that resolves here."""
+    here = main_root().resolve()
+    try:
+        paras = json.loads(trunk_show(loc, META) or "{}").get("pararepos") or []
+    except ValueError:
+        paras = []
+    return next((n for n in paras if (p := repo_path(n)) is not None and p.resolve() == here),
+                main_root().name)
+
+
+def roadmap_headings(text: str) -> list[str]:
+    """Every `## ` heading of a roadmap outside fenced code, phases and lists alike, in order."""
+    out, fence = [], False
+    for line in text.splitlines():
+        if line.lstrip().startswith("```"):
+            fence = not fence
+        elif not fence and (m := re.match(r"##\s+(.+?)\s*$", line)):
+            out.append(m.group(1))
+    return out
+
+
+def list_base(heading: str) -> str:
+    """A heading without the ` No phase` a product's list adds; `No phase` itself as it is."""
+    return heading[:-len(NO_PHASE)].rstrip() if is_list_heading(heading) and \
+        heading.strip().lower() != NO_PHASE.lower() else heading
+
+
+def move_in_map(text: str, product: str, owned: set[str]) -> dict[str, str]:
+    """Each heading of a pararepo's roadmap to its heading in the metarepo's: under PRODUCT,
+    unless its leading words are already a term OWNED (the glossary's for this repo)."""
+    owners = {t: "me" for t in owned | {product}}
+    out = {}
+    for h in roadmap_headings(text):
+        out[h] = h if h.strip().lower() != NO_PHASE.lower() and product_of(list_base(h), owners) else f"{product} {h}"
+    return out
+
+
+def map_ref(ref: str, hmap: dict[str, str]) -> str:
+    """A `<phase>`, `<phase>/<scope>` or `<list>/<id>` ref with its heading mapped."""
+    if ref in hmap:
+        return hmap[ref]
+    head, sep, rest = ref.rpartition("/")
+    return f"{hmap[head]}/{rest}" if sep and head in hmap else ref
+
+
+def mapped_sections(text: str, hmap: dict[str, str]) -> str:
+    """The roadmap's sections, from its first heading, with each heading and each ref in an
+    `(after …)` or `(needed by …)` mapped; every other line as it was."""
+    waits = re.compile(r"\((after|needed by)(\s+)([^()]*)\)")
+
+    def refs(m: re.Match) -> str:
+        parts = [re.sub(r"[^`\s,][^`,]*[^`\s,]|[^`\s,]", lambda r: map_ref(r.group(0), hmap), p, count=1)
+                 for p in m.group(3).split(",")]
+        return f"({m.group(1)}{m.group(2)}{','.join(parts)})"
+    out, before, fence, started = [], [], False, False
+    for line in text.splitlines():
+        if line.lstrip().startswith("```"):
+            fence = not fence
+        elif not fence and (m := re.match(r"(##\s+)(.+?)(\s*)$", line)):
+            started = True
+            line = f"{m.group(1)}{hmap.get(m.group(2), m.group(2))}{m.group(3)}"
+        elif not fence:
+            line = waits.sub(refs, line)
+        (out if started else before).append(line)
+    # The text above the first heading is kept too. Its `# ` title is the file's, and the
+    # metarepo's roadmap has its own; the rest becomes the first phase's note, the one place
+    # prose sits in a roadmap without reading as a scope or an item.
+    while before and (not before[0].strip() or re.match(r"#\s", before[0])):
+        before.pop(0)
+    if "".join(before).strip():
+        at = next((i for i, l in enumerate(out) if (m := re.match(r"##\s+(.+?)\s*$", l)) and not is_list_heading(m.group(1))), None)
+        if at is None:
+            die(f"{ROADMAP} has text above its first heading and no phase to keep it as a note: move it "
+                "into a section first", 2)
+        out[at + 1:at + 1] = [l for l in "\n".join(before).strip("\n").splitlines()] + [""]
+    return "\n".join(out).strip("\n") + "\n"
+
+
+def move_in_takers(snap_files: list[str], read) -> dict[str, list[str]]:
+    """{roadmap id: [spec or note naming it]} over SNAP_FILES, read by READ: its `Scope:` line
+    takes the id, its `Later:` line leaves it for later, and both name the roadmap moving in."""
+    out: dict[str, list[str]] = {}
+    for f in snap_files:
+        if takes_scopes(f):
+            text = read(f)
+            for s in dict.fromkeys(scopes_in(f, text) + laters_in(f, text)):
+                out.setdefault(s, []).append(f)
+    return out
+
+
+def move_in_left(root: Path, meta: str) -> str:
+    """What `jig propose --buffer` says of the Open move-in rows it leaves out, "" for none: a
+    live move-in proposal carries one already; with none, `jig move-in` proposes it again."""
+    rows = [r[0] for r in buffer_rows((root / BUFFER).read_text() if (root / BUFFER).exists() else "")
+            if r[-1] == "Open" and r[2:3] == [MOVE_IN_NOW]]
+    if not rows:
+        return ""
+    live = [r for r in move_in_records(root, meta) if r["live"]]
+    if live:
+        return (f"a move-in row ({', '.join(rows)}) is carried by {live[0]['branch']} "
+                f"({live[0]['spec'].relative_to(root)}): `jig move-in` says where it stands")
+    return f"a move-in row ({', '.join(rows)}) is left to `jig move-in`, which proposes it again"
+
+
+def move_in_records(root: Path, meta: str) -> list[dict]:
+    """Step 1's records here, found by scanning specs as `jig sync` finds a proposal: each spec
+    whose `## Buffer rows` lists a row its own table reads as `<meta>/.jig/roadmap.md §
+    <Product>: none yet`, moving in, with the `meta:` line naming its branch, live or withdrawn.
+    The product is read from the spec's own copy of the row: `jig sync` may close BUFFER.md's."""
+    claim = re.compile(rf"{re.escape(meta)}/{re.escape(ROADMAP)} § (.+): none yet")
+    out = []
+    for spec in sorted((root / SPECS).glob("*.md")):
+        text = spec.read_text(errors="replace")
+        listed = listed_rows(text)
+        # Step 1 lists its row alone: a spec carrying more is some other proposal's.
+        rows = [r for r in buffer_rows(text) if len(listed) == 1 and r[0] == listed[0] and len(r) > 2
+                and r[2] == MOVE_IN_NOW and claim.fullmatch(r[1])]
+        branch, live = spec_proposal(text, meta)
+        if rows and branch:
+            out.append({"spec": spec, "product": claim.fullmatch(rows[0][1]).group(1).strip(),
+                        "branch": branch, "live": live})
+    return out
+
+
+def cmd_move_in(root: Path, args) -> int:
+    """A pararepo's roadmap into its metarepo's, one step per --apply: its product and phases
+    proposed on one `propose/` branch, then, once merged there, its roadmap removed here. What
+    step 1 decided, step 2 reads from step 1's record; the metarepo is asked only what it
+    decides: whether it merged the proposal."""
+    trunk = Board.trunk_name(root)
+    para = load_para(trunk)
+    if para is None:
+        die(f"not a pararepo (no {PARA} on {trunk}): only a pararepo moves its roadmap into a metarepo's", 2)
+    me_root = main_root()
+    if root.resolve() != me_root.resolve() or git("branch", "--show-current") != trunk:
+        die(f"run it in the {trunk} checkout ({me_root}): its writes there are the hubnode's to commit", 2)
+    loc = meta_checkout(root, para)
+    own = at_rev(trunk, ROADMAP)
+    if not own:
+        if loc is not None and (has := [p for p in family(root, trunk).products_in() if family(root, trunk).ours(p)]):
+            print(f"{name_in_family(loc)} has moved in: it plans from {para['meta']}'s roadmap ({', '.join(has)}).")
+            return 0
+        die(f"{ROADMAP} isn't on {trunk}: there is no roadmap here to move in", 2)
+    if loc is None:
+        die(f"can't reach {para['meta']}: run `jig repos add meta` in its checkout, then again", 2)
+    if any(h.strip().lower() == UP_NEXT.lower() for h in roadmap_headings(own)):
+        die(f"{ROADMAP} still has ## {UP_NEXT}: `jig update --apply` folds it into ## {NO_PHASE} first", 2)
+    me, meta_name = name_in_family(loc), para["meta"]
+    meta_trunk = Board.trunk_name(loc)
+
+    def branch_there(b: str) -> bool:
+        return bool(git("rev-parse", "-q", "--verify", f"refs/heads/{b}", cwd=str(loc)))
+    recs = move_in_records(root, meta_name)
+    # The metarepo took it, withdrawn here or not: step 1 is done.
+    took = [r for r in recs if proposal_in(loc, r["branch"], meta_trunk)]
+    if len(took) > 1:
+        die(f"{meta_name}'s {meta_trunk} holds more than one move-in proposal: "
+            + ", ".join(f"{r['branch']} ({r['spec'].relative_to(root)})" for r in took) + ": its hubnode says which stands", 2)
+    live = [r for r in recs if r["live"] and not took]
+    waiting = [r for r in live if branch_there(r["branch"]) and not proposal_empty(loc, r["branch"], meta_trunk)]
+    rec, state = (took[0], "merged") if took else (waiting[0], "waiting") if waiting else \
+        (live[0], "empty" if branch_there(live[0]["branch"]) else "gone") if live else (None, "new")
+    proposed = state in ("merged", "waiting")
+    # A re-proposal after a withdrawal takes the next free name, the withdrawn spec left as it is;
+    # a run stopped before its commit proposes again under its own record's name.
+    spec = rec["spec"] if rec else free_name(root / SPECS, Path(f"{MOVE_IN}.md"))
+    branch = rec["branch"] if rec else f"propose/{me_root.name}-{spec.stem}"
+    glossary = (git("show", f"{branch}:{GLOSSARY}", cwd=str(loc)) if state == "waiting"
+                else trunk_show(loc, GLOSSARY)) or ""
+    owners = term_owners(glossary)
+    mine = {t for t, o in owners.items() if o != THIS_REPO and (p := repo_path(o)) is not None
+            and p.resolve() == me_root.resolve()}
+    want = (args.product or "").strip()
+    if proposed:
+        # Step 1's row names the product. The metarepo's hubnode may rename it at the merge: that
+        # reaches here by the owner's word, --product, never by guessing from the metarepo.
+        product = want or rec["product"]
+        carries = False
+    else:
+        product = want or (rec["product"] if rec else "")
+        if not product:
+            die("usage: jig move-in --product <Name> [--definition <text>] [--apply]", 2)
+        owner = next((o for t, o in owners.items() if t.casefold() == product.casefold()), None)
+        named = any(term_text(n).casefold() == product.casefold() for n, _ in page_sections(glossary)[1:])
+        if owner == THIS_REPO:
+            die(f"{product} is {meta_name}'s own term (its glossary's `Owner: this repo.`): name another product", 2)
+        if owner is not None and not (repo_path(owner) is not None and repo_path(owner).resolve() == me_root.resolve()):
+            die(f"{product} is {owner}'s product in {meta_name}'s {GLOSSARY}: name this repo's own", 2)
+        if owner is None and named:
+            die(f"{meta_name}'s {GLOSSARY} has ## {product} with no `Owner:` line: its hubnode names the owner first", 2)
+        carries = owner is None
+    hmap = move_in_map(own, product, mine)
+    if not proposed:
+        mapped_sections(own, hmap)   # refuses text above the first heading with no phase to keep it
+    sid_map = {s: map_ref(s, hmap) for s in roadmap_scopes(own)}
+    meta_road = trunk_show(loc, ROADMAP) or ""
+    taken = [h for h in hmap.values() if h in roadmap_headings(meta_road)]
+    staged_out = not in_index(ROADMAP, True)
+    if state == "merged" and not staged_out:
+        # Before step 2 is next: the product must still be this repo's there, and its phases there.
+        owner = next((o for t, o in owners.items() if t.casefold() == product.casefold()), None)
+        if owner is None or owner == THIS_REPO or not ((p := repo_path(owner)) is not None and p.resolve() == me_root.resolve()):
+            named = any(term_text(n).casefold() == product.casefold() for n, _ in page_sections(glossary)[1:])
+            what = ("has no such term" if not named else "has no `Owner:` line for it" if owner is None
+                    else f"gives it `Owner:` {owner}")
+            die(f"{meta_name}'s {GLOSSARY} on its {meta_trunk} doesn't give {product} to {me}: ## {product} {what}. "
+                f"Its hubnode restores the owner; if it renamed the product, `--product <Name>`", 2)
+        if not taken:
+            die(f"{meta_name}'s {ROADMAP} on its {meta_trunk} holds none of "
+                f"{', '.join(f'## {h}' for h in hmap.values())}; its {GLOSSARY} gives {me} "
+                f"{', '.join(sorted(mine)) or 'no term'}: if its hubnode renamed the product, `--product <Name>`", 2)
+    print(f"jig move-in: {me}'s roadmap into {meta_name}'s, as {product}")
+    if proposed and want and want != rec["product"]:
+        print(f"  the record ({rec['spec'].relative_to(root)}) says {rec['product']}; {product} is the owner's word "
+              f"that {meta_name}'s hubnode renamed it")
+    for old, new in hmap.items():
+        if old != new:
+            print(f"  ## {old} → ## {new}")
+    # Step 1.
+    if proposed:
+        print(f"1. product and phases proposed: done, {branch} in {meta_name} ({spec.relative_to(root)})")
+    else:
+        print("1. product and phases proposed: next")
+        if state == "empty":
+            print(f"   {branch} is empty in {meta_name}: a run stopped before its commit; step 1 proposes it again")
+        elif state == "gone":
+            print(f"   {branch}, which {spec.relative_to(root)} records, is gone from {meta_name} unmerged: "
+                  "step 1 proposes it again")
+        if carries:
+            print(f"   carries the term {product}: ## {product} in {meta_name}'s {GLOSSARY}, "
+                  f"`Owner: \\`{me}\\`.`, with its line under ## Unreleased ### Added")
+            if not args.definition:
+                print(f"   needs --definition \"<one sentence>\": {meta_name} has no {product} term yet")
+        else:
+            print(f"   the term {product} is {me}'s already in {meta_name}'s {GLOSSARY}: no glossary change")
+        print(f"   would write: a {BUFFER} row and {spec.relative_to(root)} here, and {branch} in "
+              f"{meta_name} with {', '.join(f'## {h}' for h in hmap.values())} appended to its {ROADMAP}")
+    # Step 2.
+    missing = sorted(s for s, n in sid_map.items() if n not in roadmap_scopes(meta_road))
+    takers = move_in_takers(git("-c", "core.quotePath=false", "ls-files", "--", SPECS, HANDOFFS).splitlines(),
+                            lambda f: in_index(f, True))
+    if staged_out:
+        print(f"2. roadmap leaves: staged, waiting on the owner's yes; the hubnode commits it on {trunk}")
+    elif not proposed:
+        print("2. roadmap leaves: waiting on step 1")
+    elif state == "waiting":
+        print(f"2. roadmap leaves: waiting on {meta_name}'s owner: its hubnode merges {branch} in a job "
+              f"opened on it (`jig open <job> --branch {branch}`), or on {meta_trunk}")
+    else:
+        print("2. roadmap leaves: next")
+        for s in missing:
+            print(f"   {s} → {sid_map[s]} isn't on {meta_name}'s {meta_trunk}"
+                  + (f": re-point {', '.join(takers[s])} by hand" if takers.get(s) else ""))
+        print(f"   would write: git rm {ROADMAP} {ROADMAP_VIEW}, and each Scope: line re-pointed by the map")
+    if not args.apply:
+        return 0
+    if not proposed:
+        if taken:
+            die(f"{meta_name}'s {ROADMAP} already has {', '.join(f'## {h}' for h in taken)}: "
+                "a heading both have is no move; rename the phase here first", 2)
+        if carries and not (args.definition or "").strip():
+            die(f"{meta_name} has no {product} term: give its definition, --definition \"<one sentence>\"", 2)
+        if not (trunk_show(loc, f"{DIR}/jig.py") or "").count("def cmd_move_in("):
+            # `cmd_move_in` stands for what the metarepo's hook must do here: read a commit's
+            # product headings by that commit's own glossary, which came in the same change.
+            # Older, its hook reads trunk's glossary alone, so the term and the phases it owns
+            # could never merge together there. jig's version stamp doesn't say which it has.
+            die(f"{meta_name}'s jig on its {meta_trunk} predates `jig move-in`: run /jig:update in {meta_name} first", 2)
+        if branch_there(branch) and not proposal_empty(loc, branch, meta_trunk):
+            die(f"{branch} already exists in {meta_name}, with a change on it: its hubnode decides it first", 2)
+        if branch_there(branch):
+            drop_proposal(loc, branch)   # opened by a run stopped before its commit: nothing on it
+        return move_in_propose(root, para, loc, product, me, own, hmap, carries,
+                               (args.definition or "").strip(), spec)
+    if state != "merged" or staged_out:
+        print("Nothing to apply: the next step waits on a yes.")
+        return 0
+    git("rm", "-q", "--", ROADMAP, *([ROADMAP_VIEW] if at_rev(trunk, ROADMAP_VIEW) else []), check=True)
+    known = roadmap_scopes(meta_road)
+    for f in sorted({f for fs in takers.values() for f in fs}):
+        path = root / f
+        text = was = path.read_text()
+        # A note's header holds its Scope: and Later: lines; a line in its prose is no record.
+        head_end = len(note_head(text)) if f.startswith(HANDOFFS) else len(text)
+        for key in ("Scope:", "Later:"):
+            m = re.compile(rf"^{key}[ \t]*(.*)$", re.M).search(text, 0, head_end)
+            if not m:
+                continue
+            new = ", ".join(sid_map[s] if sid_map.get(s) in known else s
+                            for s in (x.strip().strip("`") for x in m.group(1).split(",") if x.strip()))
+            if new != m.group(1).strip():
+                text = text[:m.start(1)] + new + text[m.end(1):]
+                head_end += len(new) - len(m.group(1))
+        if text != was:
+            path.write_text(text)
+            git("add", "--", f, check=True)
+    left = sorted({f for s in missing for f in takers.get(s, [])})
+    print(f"staged: {ROADMAP} and {ROADMAP_VIEW} removed, Scope: and Later: lines re-pointed. The hubnode commits it "
+          f"on {trunk} on the owner's yes" + (f"; first re-point {', '.join(left)} by hand: the hook "
+                                               "refuses the commit while they name an id that isn't there" if left else "") + ".")
+    return 0
+
+
+def move_in_propose(root: Path, para: dict, loc: Path, product: str, me: str, own: str,
+                    hmap: dict[str, str], carries: bool, definition: str, spec: Path) -> int:
+    """Step 1: the buffer row here, and the proposal there carrying it under SPEC's name, its one
+    commit judged by the metarepo's hook. Refused or stopped, what it wrote is undone on both
+    sides; an interrupt may still leave an empty branch or the row, which a rerun recovers from."""
+    ledger = root / BUFFER
+    before = ledger.read_text() if ledger.exists() else None
+    text = before or BUFFER_SEED
+    claim = f"{para['meta']}/{ROADMAP} § {product}: none yet"
+    # A run stopped part way, or a withdrawn proposal, left its row Open: it is this one, never a
+    # second. Step 1 runs only while no proposal carries a move-in row live, so any Open one is
+    # this repo's; under another product, the row is edited, as a change of mind edits any row.
+    moving = [r for r in buffer_rows(text) if r[-1] == "Open" and r[2:3] == [MOVE_IN_NOW]
+              and re.fullmatch(rf"{re.escape(para['meta'])}/{re.escape(ROADMAP)} § .+: none yet", r[1])]
+    again = next((r for r in moving if r[1] == claim), moving[0] if moving else None)
+    nums = [int(r[0][1:]) for r in buffer_rows(text) if re.fullmatch(r"B\d+", r[0])]
+    rid = again[0] if again else f"B{max(nums, default=0) + 1}"
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    if again is None:
+        ledger.write_text(text.rstrip("\n") + "\n" + f"| {rid} | {claim} | {MOVE_IN_NOW} | "
+                          f"owner, {date.today().isoformat()} | Open |\n")
+    elif again[1] != claim:
+        ledger.write_text("".join(l.replace(again[1], claim, 1) if buffer_rows(l) and buffer_rows(l)[0][0] == rid
+                                  else l for l in text.splitlines(keepends=True)))
+    slug = spec.stem
+    branch = f"propose/{main_root().name}-{slug}"
+    # Only a live record's spec is ever here: one whose run stopped before its commit.
+    was = spec.read_text() if spec.exists() else None
+
+    def undo() -> None:
+        # The branch is this proposal's own name, so an empty one is this run's, whenever it stopped.
+        if proposal_empty(loc, branch, Board.trunk_name(loc)):
+            drop_proposal(loc, branch)
+        if was is None:
+            spec.unlink(missing_ok=True)
+        else:
+            spec.write_text(was)
+        if before is None:
+            ledger.unlink(missing_ok=True)
+        else:
+            ledger.write_text(before)
+    try:
+        spec.unlink(missing_ok=True)
+        made = buffer_proposal(root, para, loc, slug, only={rid})
+        if made is None:
+            undo()
+            die(f"{rid} in {BUFFER} is already proposed as it stands: `jig propose --withdraw` its proposal first", 2)
+        spec, branch = made
+        meta_road = trunk_show(loc, ROADMAP) or "# Roadmap\n"
+        files: dict[str, str | None] = {ROADMAP: meta_road.rstrip("\n") + "\n\n" + mapped_sections(own, hmap)}
+        if carries:
+            files[GLOSSARY] = ((trunk_show(loc, GLOSSARY) or "# Glossary\n").rstrip("\n")
+                               + f"\n\n## {product}\n\n{definition}\n\nOwner: `{me}`.\n")
+            files[LOG] = log_with_line(trunk_show(loc, LOG) or LOG_SEED, "Added",
+                                       f"- {GLOSSARY} § {product}: {me}'s product, its plan moving in.")
+        subject = f"{'GLOSSARY' if carries else 'ROADMAP'}: {product} moves in from {me}"
+        ok, out = proposal_commit(loc, branch, files, subject)
+    except BaseException:
+        undo()
+        raise
+    if not ok:
+        undo()
+        die(f"{para['meta']}'s hook refused the proposal's commit, so nothing was proposed:\n{out}", 1)
+    git("add", "--", str(ledger), str(spec), check=True)
+    print(f"made {branch} in {para['meta']}: {', '.join(f'## {h}' for h in hmap.values())}"
+          + (f", and the term {product}" if carries else "") + f", one commit its hook passed.")
+    print(f"staged here: {rid} in {BUFFER}, and {spec.relative_to(root)} listing it. The hubnode commits them "
+          f"on the owner's yes; {para['meta']}'s hubnode merges {branch} in a job opened on it "
+          f"(`jig open <job> --branch {branch}`), or on its trunk, deciding the name, the definition and the phases there.")
+    return 0
+
+
+def move_slug(text: str) -> str:
+    """A name for a branch, a spec or a placeholder id: lower case, words joined by `-`."""
+    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-") or "moved"
+
+
+def heading_span(text: str, heading: str) -> tuple[int, int] | None:
+    """The lines [start, end) of the section under HEADING in a page, its sub-sections with it:
+    to the next heading of its level or above. Headings compare as read, marks dropped."""
+    lines, fence, at = text.splitlines(), False, None
+    for n, line in enumerate(lines):
+        if line.lstrip().startswith("```"):
+            fence = not fence
+            continue
+        m = None if fence else re.match(r"(#{1,6})\s+(.+?)\s*$", line)
+        if not m:
+            continue
+        if at is not None and len(m.group(1)) <= at[1]:
+            return at[0], n
+        if at is None and plain(m.group(2)) == plain(heading):
+            at = (n, len(m.group(1)))
+    return (at[0], len(lines)) if at else None
+
+
+def follow_items(road: str, page: str, to_page: str, taken: set[str],
+                 place: "Callable[[str], str]", keep=lambda heading: True,
+                 kept: list[str] | None = None) -> tuple[str, list[tuple[str, str]]]:
+    """ROAD with the items and scopes touching PAGE handled as a moved page's are: one a spec or
+    note takes (TAKEN) stays, the page dropped from its `(touches …)`; any other leaves, its touch
+    re-pointed to TO_PAGE, listed as (the heading PLACE gives it in the receiving plan, line)."""
+    out, moved, heading, fence = [], [], "", False
+    for line in road.splitlines(keepends=True):
+        body = line.rstrip("\n")
+        if body.lstrip().startswith("```"):
+            fence = not fence
+        if not fence and (m := re.match(r"##\s+(.+?)\s*$", body)):
+            heading = m.group(1)
+        t = None if fence else TOUCHES_ANY.search(body)
+        s = SCOPE_LINE.fullmatch(body) if t else None
+        pages = [p.strip().strip("`") for p in t.group(1).split(",") if p.strip()] if t else []
+        if not s or not keep(heading) or not any(same_page(p, page) for p in pages):
+            out.append(line)
+            continue
+        if f"{heading}/{s.group(1)}" in taken:
+            if kept is not None:
+                kept.append(f"{heading}/{s.group(1)}")
+            rest = [p for p in pages if not same_page(p, page)]
+            body = body[:t.start()].rstrip() + (f" (touches {', '.join(rest)})" if rest else "") + body[t.end():]
+            out.append(body + "\n")
+            continue
+        new = ", ".join(to_page if same_page(p, page) else p for p in pages)
+        moved.append((place(heading), body[:t.start()] + f"(touches {new})" + body[t.end():]))
+    return "".join(out), moved
+
+
+def add_items(road: str, items: list[tuple[str, str]]) -> str:
+    """ROAD with each (heading, line) appended to its section: a list's end, or a phase's
+    scopes; a list heading it lacks is made at the end."""
+    lines = road.rstrip("\n").splitlines() if road.strip() else ["# Roadmap"]
+    for heading, item in items:
+        at = next((i for i, l in enumerate(lines) if re.fullmatch(rf"##\s+{re.escape(heading)}\s*", l)), None)
+        if at is None:
+            lines += ["", f"## {heading}", item]
+            continue
+        end = next((i for i in range(at + 1, len(lines)) if lines[i].startswith("## ")), len(lines))
+        while end > at + 1 and not lines[end - 1].strip():
+            end -= 1
+        lines.insert(end, item)
+    return "\n".join(lines) + "\n"
+
+
+def roadmap_takers(fam: "Family") -> set[str]:
+    """Every scope or item id a spec or note takes, or a spec leaves for later on its `Later:`
+    line, in this repo and the family planning with it: each such item stays where it is."""
+    snaps = [Snapshot(Board.trunk_name(main_root()))] + [sn for _, sn in fam.others]
+    out = {sid for sn in snaps for sid in scope_takers(sn)[0]}
+    for sn in snaps:
+        out |= {i for f in sn.ls(SPECS) if is_spec(f) for i in spec_laters(sn.show(f))}
+    return out
+
+
+def phase_part(heading: str, owners: dict[str, str]) -> str:
+    """A roadmap heading without its product: `Prod alpha` is `alpha`, `Prod No phase` is No phase."""
+    if is_list_heading(heading):
+        return NO_PHASE
+    p = product_of(heading, owners)
+    return heading[len(p):].strip() if p else heading
+
+
+def move_target_heading(phase: str, product: str, there: list[str]) -> str:
+    """Where an item from phase PHASE (or the No phase list) lands in a plan with headings
+    THERE: under PRODUCT ("" for the metarepo's own sections) in the phase of the same name,
+    else its No phase list."""
+    want = f"{product} {phase}".strip()
+    return want if want in there or phase == NO_PHASE else f"{product} {NO_PHASE}".strip()
+
+
+def items_follow_moves(road: str, fam: "Family") -> str:
+    """`jig merge`: for each page the merge moves to another repo of the family (a move line it
+    adds, the page gone from the index), ROAD with that page's items handled as `jig move` step 2
+    said: one a spec or note takes stays, the page dropped from its `(touches …)`; any other goes
+    to the receiver's section of this roadmap when it plans from it, in its phase of the same
+    name or its No phase list, and otherwise leaves (the receiver's own plan got it by its route)."""
+    new, old = moves_in(in_index(LOG, True)), moves_in(at_rev("HEAD", LOG))
+    taken = None
+    for key, ptr in new.items():
+        repo, to_page, to_section = pointer_parts(ptr)
+        if key in old or " § " in key or to_section or is_here(repo) or in_index(key, True) \
+                or not key.endswith(".md"):
+            continue
+        taken = roadmap_takers(fam) if taken is None else taken
+        product = fam.section_of(repo) if fam.kind == "meta" else ""
+        heads = roadmap_headings(road)
+        road, moved = follow_items(road, key, to_page, taken,
+                                   lambda h: move_target_heading(phase_part(h, fam.owners), product, heads),
+                                   lambda h: fam.ours(product_of(list_base(h), fam.owners)))
+        if product:
+            road = add_items(road, moved)
+    return road
+
+
+def receiver_plan(fam: "Family", to: str, loc: Path, meta_loc: Path | None) -> tuple[str, str]:
+    """Where the receiver plans: ("meta", "") for the metarepo's own phases (a move up),
+    ("meta", <product>) for its product section of the metarepo's roadmap, ("own", "") for a
+    roadmap of its own."""
+    if meta_loc is not None and loc.resolve() == meta_loc.resolve():
+        return "meta", ""
+    if trunk_show(loc, ROADMAP):
+        return "own", ""
+    # A pararepo keeping a roadmap of its own is a family of one: the products are the metarepo's.
+    owners = fam.owners if fam.kind != "own" or meta_loc is None else term_owners(trunk_show(meta_loc, GLOSSARY) or "")
+    product = next((t for t, o in owners.items() if o != THIS_REPO and (p := repo_path(o)) is not None
+                    and p.resolve() == loc.resolve()), "")
+    return ("meta", product) if product else ("own", "")
+
+
+def plan_items(fam: "Family", to: str, loc: Path, meta_loc: Path | None, path: str, as_: str) -> dict:
+    """Where a moved page's roadmap items go, decided by where each side plans. LOSING is
+    "mine" (this repo's roadmap), "meta" (this pararepo's sections of the metarepo's), or "";
+    LOST its text with the items handled; MOVED the (heading, line) pairs for the receiver's
+    plan, RECEIVER and PRODUCT as receiver_plan says; KEPT the taken ids that only lose the page."""
+    mine_text = in_index(ROADMAP, True)
+    meta_text = (trunk_show(meta_loc, ROADMAP) or "") if meta_loc is not None else ""
+    if mine_text:
+        losing, road, keep = "mine", mine_text, lambda h: fam.ours(product_of(list_base(h), fam.owners))
+    elif fam.reads_meta and meta_text:
+        ours = {p for p in fam.products_in() if fam.ours(p)}
+        losing, road, keep = "meta", meta_text, lambda h: product_of(list_base(h), fam.owners) in ours
+    else:
+        return {"losing": "", "lost": "", "moved": [], "receiver": "", "product": "", "kept": []}
+    receiver, product = receiver_plan(fam, to, loc, meta_loc)
+    # The headings the items land among: the metarepo's roadmap (this repo's own, in a
+    # metarepo), or the receiver's own.
+    there = roadmap_headings((mine_text if fam.kind == "meta" else meta_text) if receiver == "meta"
+                             else trunk_show(loc, ROADMAP) or "")
+    taken = roadmap_takers(fam)
+    kept: list[str] = []
+    lost, moved = follow_items(road, path, as_, taken,
+                               lambda h: move_target_heading(phase_part(h, fam.owners), product, there), keep, kept)
+    return {"losing": losing, "lost": lost, "moved": moved, "receiver": receiver, "product": product,
+            "kept": kept, "road": road}
+
+
+def meta_road_after(plan: dict, meta_text: str) -> str | None:
+    """The metarepo's roadmap once a pararepo's page moved: its sections losing the items, the
+    receiver's gaining them; None when it doesn't change. Written only by a `propose/` commit."""
+    text = plan["lost"] if plan["losing"] == "meta" else meta_text
+    if plan["receiver"] == "meta" and plan["moved"]:
+        text = add_items(text, plan["moved"])
+    return text if text != meta_text else None
+
+
+def spec_proposal(text: str, meta: str) -> tuple[str | None, bool]:
+    """The proposal branch a spec's `meta:` line names for META, and whether it is live: a
+    withdrawn line names the branch too, never live. (None, False) when it names none."""
+    live = next((m.group("branch") for m in PROPOSAL.finditer(text) if m.group("meta") == meta), None)
+    gone = next((m.group("branch") for m in WITHDRAWN.finditer(text) if m.group("meta") == meta), None)
+    return (live or gone), bool(live)
+
+
+# A move spec's record: what moves, to which repo, and as what there.
+MOVE_RECORD = re.compile(r"^- move: (?P<what>.+?) → (?P<to>[\w.-]+)/(?P<there>.+?)\s*$", re.M)
+
+
+def move_records(root: Path, what: str, to: str, meta: str) -> list[dict]:
+    """The specs here recording a move of WHAT to TO, found by scanning specs as `jig sync`
+    finds a proposal; each with its proposal branch (up), live or withdrawn."""
+    out = []
+    for spec in sorted((root / SPECS).glob("*.md")):
+        text = spec.read_text(errors="replace")
+        for m in MOVE_RECORD.finditer(text):
+            if m.group("what").strip() == what and in_family(m.group("to"), {to}):
+                branch, live = spec_proposal(text, meta) if meta else (None, True)
+                out.append({"spec": spec, "branch": branch, "live": live, "there": m.group("there")})
+    return out
+
+
+def branch_there(loc: Path, branch: str) -> bool:
+    return bool(git("rev-parse", "-q", "--verify", f"refs/heads/{branch}", cwd=str(loc)))
+
+
+def move_state(root: Path, what: str, to: str) -> dict:
+    """A move's state, read from its record here and the receiver's trunk, with no state file:
+    `jig move` prints and applies it, and `jig rig` waits on it. STEP2 is "done" (the move line
+    is in the log), "next", "waiting" (on step 1) or "receiver" (on the receiver's trunk); ERROR,
+    when set, says why the move can't be read."""
+    trunk = Board.trunk_name(root)
+    meta, para = load_meta(trunk), load_para(trunk)
+    paras, unread = family_names(trunk, meta)
+    if unread:
+        return {"error": f"can't reach {unread}: this repo's family can't be read until `jig repos` finds it"}
+    if not paras:
+        return {"error": f"this repo has no family (no {META} with pararepos, no {PARA}): a claim moves "
+                         "only between a metarepo and its pararepos"}
+    if not in_family(to, paras):
+        return {"error": f"{to} isn't of this repo's family ({', '.join(sorted(paras))})"}
+    loc = repo_path(to)
+    if loc is None or not loc.is_dir():
+        return {"error": f"can't reach {to}: run `jig repos add` in its checkout, then again"}
+    meta_loc = root if meta is not None else meta_checkout(root, para) if para else None
+    up = para is not None and is_here_as(loc, meta_loc)
+    me = meta.get("name") if meta is not None else name_in_family(meta_loc) if meta_loc else main_root().name
+    path, section = thing_of(what)
+    meta_name = para["meta"] if up else ""
+    recs = move_records(root, what, to, meta_name)
+    rec, state = None, "new"
+    if up:
+        mtrunk = Board.trunk_name(meta_loc)
+        took = [r for r in recs if r["branch"] and proposal_in(meta_loc, r["branch"], mtrunk)]
+        live = [r for r in recs if r["live"] and r["branch"] and not took]
+        waiting = [r for r in live if branch_there(meta_loc, r["branch"])
+                   and not proposal_empty(meta_loc, r["branch"], mtrunk)]
+        rec, state = (took[0], "done") if took else (waiting[0], "done") if waiting else \
+            (live[0], "empty" if branch_there(meta_loc, live[0]["branch"]) else "gone") if live else (None, "new")
+    elif recs:
+        # Down or sideways, the spec carrying the move's record is step 1 done: what the receiver
+        # does with the file is its owner's, and a drop is that owner's word, never read here.
+        rec, state = recs[0], "done"
+    mine_ptr = f"{me}/{LOG} § {section}" if path == LOG else f"{me}/{path}" + (f" § {section}" if section else "")
+    there_log = trunk_show(loc, LOG) or ""
+    # The receiver's record of this thing: its moved-from line naming us, read on its trunk.
+    landed = next((w for w, frm in moved_from_in(there_log).items()
+                   if is_here(pointer_parts(frm)[0]) and same_thing(pointer_parts(frm)[1:], (path, section))), None)
+    landed_as = next((m.group("what") for _, _, _, m in moved_from_lines(there_log)
+                      if move_key(m.group("what")) == landed), None) if landed else None
+    gone = bool(moves_in(in_index(LOG, True)).get(what))
+    if gone:
+        state = "done"      # its move line is the record once the spec has closed
+    # A re-proposal after a withdrawal takes the next free name; the withdrawn spec stays.
+    spec = rec["spec"] if rec else free_name(root / SPECS, Path(f"move-{move_slug(what)}.md"))
+    step2 = "done" if gone else "waiting" if state != "done" else \
+        "receiver" if not landed_as or "?" in landed_as else "next"
+    return {"trunk": trunk, "meta": meta, "para": para, "loc": loc, "meta_loc": meta_loc, "up": up,
+            "me": me, "path": path, "section": section, "rec": rec, "state": state, "spec": spec,
+            "mine_ptr": mine_ptr, "landed_as": landed_as, "step2": step2, "meta_name": meta_name}
+
+
+def move_wait(root: Path, spec: str, text: str) -> str:
+    """What SPEC, carrying a move's record, waits on before its job can start (step 2 next), by
+    `jig move`'s own reader; "" when nothing, or when SPEC isn't the move's live record."""
+    m = MOVE_RECORD.search(text)
+    if not m:
+        return ""
+    what, to = m.group("what").strip(), m.group("to")
+    st = move_state(root, what, to)
+    if "error" in st:
+        return f"{to} being reached ({st['error']})"
+    if st["rec"] is None or st["rec"]["spec"].resolve() != (root / spec).resolve():
+        return ""
+    numbered = ", its id numbered" if st["path"] == LOG else ""
+    return f"{to}'s moved-from line for {what}{numbered}" if st["step2"] in ("waiting", "receiver") else ""
+
+
+def cmd_move(root: Path, args) -> int:
+    """A claim of this repo (an entry, a page, a section) moves to another repo of its family,
+    one step per --apply: step 1 lands it there with its moved-from line, by the route that
+    crosses repos in that direction, and writes the move's spec; step 2, once the receiver's trunk
+    holds it, removes it here with its move line, in the job opened from that spec, whose merge
+    closes it. Read from the repos and the spec's record each run, with no state file."""
+    what, to = args.what.strip(), args.to
+    st = move_state(root, what, to)
+    if "error" in st:
+        die(st["error"], 2)
+    trunk, meta, para, loc, meta_loc, up, me = (st[k] for k in ("trunk", "meta", "para", "loc", "meta_loc", "up", "me"))
+    path, section, rec, state, spec, mine_ptr = (st[k] for k in ("path", "section", "rec", "state", "spec", "mine_ptr"))
+    landed_as, step2, meta_name = st["landed_as"], st["step2"], st["meta_name"]
+    # An id names an entry in the log or an idea in the ideas file beside it.
+    entry = next((e for e in log_entries(in_index(LOG, True), log_prefix(trunk)) + idea_entries(in_index(IDEAS, True), log_prefix(trunk))
+                  if move_key(e["id"]) == move_key(section or "")), None) if path == LOG else None
+    as_ = (args.as_ or path) if path != LOG else LOG
+    their_meta = load_meta_at(loc)
+    their_prefix = their_meta["decision_prefix"] if their_meta else META_DEFAULTS["decision_prefix"]
+    rel = spec.relative_to(root)
+    direction = "down" if meta is not None else "up" if up else "sideways"
+    print(f"jig move: {what} from {me} to {to} ({direction})")
+    if state == "done":
+        print(f"1. land it in {to}: done ({rel})")
+        if not up and step2 == "receiver":
+            name = f"{spec.stem}.md"
+            if (loc / STAGING / name).exists():
+                print(f"   {to}'s staging holds {name}: it waits on {to}'s owner")
+            else:
+                print(f"   {name} isn't in {to}'s staging: a job there may be landing it. If {to}'s owner "
+                      f"turned it down, delete {rel} on that word, and run step 1 again")
+    else:
+        print(f"1. land it in {to}: next")
+        if state == "empty":
+            print(f"   {rec['branch']} is empty in {meta_name}: a run stopped before its commit; step 1 proposes it again")
+        elif state == "gone":
+            print(f"   {rec['branch']}, which {rel} records, is gone from {meta_name} unmerged: "
+                  "step 1 proposes it again")
+        print(f"   would write: {rel} here, and "
+              + (f"propose/{main_root().name}-{spec.stem} in {to}" if up else f"a staged file for {to}, forwarded")
+              + f", with `moved-from: {mine_ptr}`")
+    lists = f"--shares {LOG}" + ("" if path == LOG else f" {path}" if section else f" --owns {path}")
+    job = f"`jig open move-{move_slug(what)} --spec {rel} {lists}`"
+    if step2 == "done":
+        print("2. remove it here: done (its move line is in the log)")
+    elif step2 == "waiting":
+        print("2. remove it here: waiting on step 1")
+    elif step2 == "receiver":
+        print(f"2. remove it here: waiting on {to}'s owner: its trunk needs the moved-from line naming "
+              f"{mine_ptr}" + (", its id numbered" if landed_as else ""))
+    else:
+        print(f"2. remove it here: next — {to} holds it as {landed_as}; in the job opened from {rel} ({job})")
+    if not args.apply:
+        return 0
+    if state != "done":
+        if up and rec is not None and branch_there(meta_loc, rec["branch"]) \
+                and proposal_empty(meta_loc, rec["branch"], Board.trunk_name(meta_loc)):
+            drop_proposal(meta_loc, rec["branch"])
+        return move_step1(root, me, to, loc, meta, para, meta_loc, up, what, path, section,
+                          entry, as_, their_prefix, spec, mine_ptr)
+    if step2 != "next":
+        print("Nothing to apply: the next step waits on a yes.")
+        return 0
+    if is_main_worktree(root) and git("branch", "--show-current") == trunk:
+        why = "in a metarepo the removal is a job's (M4)" if meta is not None else "the move's spec is a job's"
+        die(f"{why}: open one from it ({job}) and run `jig move` --apply in its worktree", 2)
+    return move_step2(root, me, to, loc, meta, para, meta_loc, up, what, path, section, as_, spec, landed_as)
+
+
+def load_meta_at(loc: Path) -> dict | None:
+    raw = trunk_show(loc, META)
+    try:
+        return {**META_DEFAULTS, **json.loads(raw)} if raw else None
+    except ValueError:
+        return None
+
+
+def is_here_as(loc: Path, other: Path | None) -> bool:
+    return other is not None and loc.resolve() == other.resolve()
+
+
+def move_step1(root, me, to, loc, meta, para, meta_loc, up, what, path, section, entry,
+               as_, their_prefix, spec, mine_ptr) -> int:
+    """Land the text in the receiver with its moved-from line: staged and forwarded down or
+    sideways, a `propose/` branch up, whose commit also carries the page's roadmap items into the
+    metarepo's own phases. The spec here is the job that removes it in step 2."""
+    was = spec.read_text() if spec.exists() else None
+    if path == LOG:
+        if entry is None:
+            die(f"no entry {section} in {LOG}", 2)
+        lines = entry["block"].splitlines()
+        title = entry["title"]
+        their_id = f"{their_prefix}?{move_slug(title)[:30].strip('-') or 'moved'}"
+        # Its supersedes chain stays in this log: the receiver's copy names none of its ids.
+        lines[0] = f"### {their_id} {title}"
+        body = [re.sub(r"\s*Supersedes [^.]*\.", "", l) if i == 1 else l for i, l in enumerate(lines)]
+        body = [f"Touches: none — moved from {me}" if l.startswith("Touches:") else l for l in body]
+        text, kind, dest, change, there = "\n".join(body) + "\n", "decisions", LOG, "new", their_id
+    else:
+        page = in_index(path, True)
+        if not page:
+            die(f"{path} isn't tracked here", 2)
+        if section:
+            span = heading_span(page, section)
+            if span is None:
+                die(f"{path} has no heading {section}", 2)
+            text = "\n".join(page.splitlines()[span[0]:span[1]]).rstrip() + "\n"
+        else:
+            text = page
+        kind, dest = "doc", as_
+        change = "update" if section and trunk_show(loc, as_) else "new"
+        there = f"{as_} § {section}" if section else as_
+    note = (f"# Move {what} to {to}\n\nSource: `jig move {what} --to {to}`\n\n## Intent\n"
+            f"{what} moves from {me} to {to}, as {there} there. Step 1 lands it there with its "
+            f"moved-from line; step 2, once {to}'s trunk holds it, removes it here with its move line.\n\n"
+            # The thing itself: its move line is an append to the log any job may make, so two
+            # moves meet only when they move one thing.
+            f"## Touches\n- `{path}" + (f" § {section}" if section else "") + "`\n"
+            + "\n## Decisions\n" + f"- move: {what} → {to}/{there}\n")
+    if up:
+        meta_name = para["meta"]
+        # An id is cited in the log or the ideas file beside it.
+        cites = [f"{me}/{LOG} § {section}", f"{me}/{IDEAS} § {section}"] if path == LOG else [f"{me}/{path}"]
+        citations = git("grep", "-n", "-F", *[a for c in cites for a in ("-e", c)], Board.trunk_name(loc), "--",
+                        "*.md", cwd=str(loc)).splitlines()
+        branch = open_proposal(para, loc, spec.stem)
+        try:
+            there_log = trunk_show(loc, LOG) or LOG_SEED
+            files: dict[str, str | None] = {}
+            their_ideas = trunk_show(loc, IDEAS)
+            if path == LOG and not entry["status"].startswith("Accepted") and \
+                    (their_ideas is not None or not re.search(r"^## Open[ \t]*$", there_log, re.M)):
+                # An open question is an idea there, at the end of its ideas file.
+                files[IDEAS] = (their_ideas or IDEAS_SEED).rstrip("\n") + f"\n\n{text}"
+            elif path == LOG:
+                acc = entry["status"].startswith("Accepted")
+                # A log not folded yet keeps its ideas under ## Open.
+                sec_h = "## Unreleased" if acc else "## Open"
+                if not re.search(rf"^{sec_h}[ \t]*$", there_log, re.M):
+                    there_log = there_log.rstrip("\n") + f"\n\n{sec_h}\n"
+                there_log = re.sub(rf"^{sec_h}[ \t]*\n", lambda m: f"{m.group(0)}\n{text}\n", there_log, count=1, flags=re.M)
+            else:
+                files[as_] = text if not section else (trunk_show(loc, as_) or "").rstrip("\n") + "\n\n" + text
+            files[LOG] = log_with_line(there_log, "Added", f"- {there}: moved from {mine_ptr}.")
+            if path != LOG and not section:
+                # The page's items join the metarepo's own phases in this proposal, whatever
+                # roadmap this repo keeps: the metarepo's roadmap changes only by `propose/`.
+                plan = plan_items(family(), to, loc, meta_loc, path, as_)
+                if plan["losing"] and (road := meta_road_after(plan, trunk_show(loc, ROADMAP) or "")) is not None:
+                    files[ROADMAP] = road
+            ok, out = proposal_commit(loc, branch, files, f"{there if path == LOG else 'MOVE'}: "
+                                      f"{what} moves up from {me}")
+        except BaseException:
+            drop_proposal(loc, branch)
+            raise
+        if not ok:
+            drop_proposal(loc, branch)
+            die(f"{meta_name}'s hook refused the proposal's commit, so nothing was proposed:\n{out}", 1)
+        note += f"- meta: {meta_name} proposal {branch}\n"
+        if citations:
+            note += (f"\n## {meta_name}'s citations\nIts hubnode points these at the landed text in the "
+                     "job that takes the proposal:\n" + "".join(f"- {c}\n" for c in citations))
+        spec.parent.mkdir(parents=True, exist_ok=True)
+        spec.write_text(note)
+        git("add", "--", str(spec), check=True)
+        print(f"made {branch} in {meta_name}, one commit its hook passed; staged {spec.relative_to(root)}. "
+              f"It waits on {meta_name}'s owner: a job opened on that branch takes it and numbers it.")
+        return 0
+    staged = root / STAGING / f"{spec.stem}.md"
+    staged.parent.mkdir(parents=True, exist_ok=True)
+    head = {"staged": "true", "target": to, "kind": kind, "change": change, "destination": dest,
+            "source": f"jig move from {me} / {date.today().isoformat()}", "status": "staged",
+            "moved-from": mine_ptr}
+    staged.write_text("---\n" + "".join(f"{k}: {v}\n" for k, v in head.items()) + "---\n" + text)
+    spec.parent.mkdir(parents=True, exist_ok=True)
+    spec.write_text(note)
+    git("add", "--", str(spec), check=True)
+    forward(root, staged, head)
+    print(f"staged {spec.relative_to(root)} here. It waits on {to}'s owner: a job there resolves "
+          f"{staged.name} and merges it.")
+    return 0
+
+
+def move_step2(root, me, to, loc, meta, para, meta_loc, up, what, path, section, as_,
+               spec, landed_as) -> int:
+    """In the job opened from the move's spec, in any repo: remove the claim with its move line
+    naming the receiver's id or path, staged in this worktree; a moved page's items follow by
+    each plan's own route; sideways, propose the metarepo's pointer rewrites, or answer P2 with
+    `meta: none` when there are none. `jig merge` closes the spec, or keeps it while it names a
+    metarepo branch, as it does any job's."""
+    there = f"{to}/{LOG} § {landed_as}" if path == LOG else f"{to}/{landed_as}"
+    logf = root / LOG
+    text = logf.read_text() if logf.exists() else LOG_SEED
+    if path == LOG:
+        prefix = log_prefix(Board.trunk_name(root))
+        e = next((x for x in log_entries(text, prefix) if move_key(x["id"]) == move_key(section)), None)
+        if e is not None:
+            lines = text.splitlines(keepends=True)
+            end = e["end"] if e["end"] is not None else len(lines)
+            text = "".join(lines[:e["start"]] + lines[end:])
+        else:
+            # An idea leaves the ideas file in the commit that writes its move line.
+            idf = root / IDEAS
+            ideas = idf.read_text() if idf.exists() else ""
+            e = next((x for x in log_entries(with_ideas("", ideas), prefix) if move_key(x["id"]) == move_key(section)), None)
+            if e is None:
+                die(f"no entry {section} in {LOG} or {IDEAS}", 2)
+            idf.write_text(ideas.replace(e["block"], "", 1).rstrip("\n") + "\n")
+            git("add", "--", IDEAS, check=True)
+    elif section:
+        page = (root / path).read_text()
+        span = heading_span(page, section)
+        if span is None:
+            die(f"{path} has no heading {section}", 2)
+        pl = page.splitlines(keepends=True)
+        (root / path).write_text("".join(pl[:span[0]] + pl[span[1]:]))
+        git("add", "--", path, check=True)
+    else:
+        git("rm", "-q", "--", path, check=True)
+    logf.write_text(log_with_line(text, "Removed", f"- {what}: moved to {there}."))
+    git("add", "--", LOG, check=True)
+    notes = [f"staged: {what} removed, with `- {what}: moved to {there}.`"]
+    plan = plan_items(family(), to, loc, meta_loc, path, as_) if path != LOG and not section else None
+    if plan and plan["losing"]:
+        notes += move_items_here(me, to, plan, spec)
+    branch = spec_proposal(spec.read_text(errors="replace"), para["meta"])[0] if up else None
+    if not meta and not up and meta_loc is not None:
+        # Sideways: built from the metarepo's trunk now the receiver holds the thing, so the
+        # metarepo can't merge a pointer to a page that isn't there yet.
+        road = meta_road_after(plan, trunk_show(meta_loc, ROADMAP) or "") if plan and plan["losing"] else None
+        lines, branch = move_pointers(root, me, to, para, meta_loc, path, section, landed_as, spec, road)
+        notes += lines
+        if not branch:
+            # P2's answer for a contract page with nothing to propose, on the job's branch.
+            ptr = f"{me}/{path}" + (f" § {section}" if section else "")
+            spec.write_text(spec.read_text().rstrip("\n")
+                            + f"\n- meta: none — {para['meta']} names nothing of {ptr}; it moved to {there}\n")
+            git("add", "--", str(spec), check=True)
+            notes.append(f"{spec.relative_to(root)} answers P2: `meta: none`, {para['meta']} naming nothing of {ptr}")
+    print("\n".join(notes))
+    print(f"Commit it in this job; the hook checks the move line against {to}'s moved-from line. "
+          + (f"`jig merge` keeps {spec.relative_to(root)}, which names {branch}, for `jig sync` to follow"
+             if branch and not meta else f"`jig merge` closes {spec.relative_to(root)}") + ".")
+    return 0
+
+
+def move_items_here(me, to, plan, spec) -> list[str]:
+    """Step 2's part of the items, in the job: this repo's own roadmap loses them by `jig merge`
+    in the job's merge commit; a receiver keeping a roadmap of its own gets its part staged in
+    the main checkout, unforwarded until that merge. The metarepo's roadmap, when this pararepo
+    plans from it, changes by a `propose/` branch."""
+    out = []
+    moved = [f"`{SCOPE_LINE.fullmatch(l).group(1)}` → ## {h}" for h, l in plan["moved"]]
+    if plan["kept"]:
+        moved.append(f"{', '.join(plan['kept'])} stay, taken, losing the page from their (touches …)")
+    if plan["receiver"] == "own" and plan["moved"]:
+        name = f"{spec.stem}-roadmap.md"
+        body = (f"Items follow a page moved here from {me}:\n\n"
+                + "".join(f"## {h}\n{l}\n\n" for h, l in plan["moved"]))
+        # The job may never merge: the hubnode forwards it after the merge, by staging resolve.
+        stage_roadmap(main_root(), to, name, body, forward_it=False)
+        out.append(f"staged {STAGING}/{name} for {to}, the page's items for its roadmap: once this job "
+                   f"merges, `jig staging resolve {name}` forwards it")
+    if plan["losing"] == "mine" and (plan["lost"] != plan["road"] or plan["moved"]):
+        out.append("roadmap items touching the page: " + "; ".join(moved)
+                   + ": `jig merge` moves them in this job's merge commit")
+    return out
+
+
+def stage_roadmap(root: Path, target: str, name: str, body: str, forward_it: bool) -> None:
+    f = root / STAGING / name
+    f.parent.mkdir(parents=True, exist_ok=True)
+    head = {"staged": "true", "target": target, "kind": "roadmap", "change": "update",
+            "destination": ROADMAP, "source": f"jig move / {date.today().isoformat()}", "status": "staged"}
+    f.write_text("---\n" + "".join(f"{k}: {v}\n" for k, v in head.items()) + "---\n" + body)
+    if forward_it:
+        forward(root, f, head)
+
+
+ENTRY_ID = re.compile(r"[A-Za-z][\w]*-(?:\d+|\?[a-z0-9-]+)")
+
+
+def pointers_moved(body: str, me: str, path: str, section: str | None, to: str, landed: str,
+                   heads: list[str] = ()) -> str:
+    """BODY with only its pointers to the moved thing naming where it landed (TO/LANDED, the
+    receiver's id or path): an entry's `<me>/<log> § <id>` by the landed id, a section's
+    `<me>/<path> § <s>` and a page's `<me>/<path>`, with its § part, by the landed path. Every
+    other pointer into that page or log stays. An id is cited in the log or the ideas file beside
+    it, and keeps the file it was cited by. In prose, where a section runs on with the line, the
+    cited heading is the longest of the page's HEADS that begins it, a whole word or more."""
+    new_path = LOG if path == LOG else pointer_parts(f"{to}/{landed}")[1]
+    cited_in = (LOG, IDEAS) if path == LOG else (path,)
+    out = []
+    for line in body.splitlines(keepends=True):
+        edits = []
+        for m in POINTER.finditer(line):
+            name, p = m.group("name"), m.group("path").rstrip(".")
+            if p not in cited_in or not (name_in(name, {me}) or is_here(name)):
+                continue
+            rest = m.group("rest")
+            code = m.start() > 0 and line[m.start() - 1] == "`" and not m.group("shut")
+            cited = (rest.split("`")[0].strip() if code else rest) if rest else None
+            if path == LOG:
+                ident = ENTRY_ID.match(cited or "")
+                if not ident or not same_thing((LOG, ident.group(0)), (LOG, section)):
+                    continue
+                at = m.start("rest")
+                edits.append((at, at + len(ident.group(0)), landed))
+            elif section:
+                if code or not cited:
+                    hit = bool(cited) and same_thing((path, cited), (path, section))
+                else:
+                    begins = [h for h in heads if h and re.match(rf"{re.escape(h)}(?!\w)", plain(cited))]
+                    hit = bool(begins) and max(begins, key=len) == plain(section)
+                if not hit:
+                    continue
+            edits.append((m.start("name"), m.start("path") + len(p), f"{to}/{p if path == LOG else new_path}"))
+        for a, b, rep in sorted(edits, reverse=True):
+            line = line[:a] + rep + line[b:]
+        out.append(line)
+    return "".join(out)
+
+
+def move_pointers(root, me, to, para, meta_loc, path, section, landed, spec, road) -> tuple[list[str], str | None]:
+    """Sideways: the metarepo's pointers to the moved thing rewritten to where it landed, and its
+    roadmap's items for the page moved when either side plans there, on a `propose/` branch this
+    command writes, recorded here as `meta: <meta> pointers <branch>`, which P2 accepts."""
+    mt = Board.trunk_name(meta_loc)
+    old = f"{me}/{path}" + (f" § {section}" if section else "")
+    new = f"{to}/{landed}" if path != LOG else f"{to}/{LOG} § {landed}"
+    files: dict[str, str | None] = {}
+    # The page as it was before this step removed the section: HEAD, in the job.
+    heads = [plain(h) for h in HEADING.findall(at_rev("HEAD", path) or "")] if section else []
+    files_for = [f"{me}/{LOG}", f"{me}/{IDEAS}"] if path == LOG else [f"{me}/{path}"]
+    for f in git("grep", "-l", "-F", *[a for c in files_for for a in ("-e", c)], mt, "--", "*.md",
+                 cwd=str(meta_loc)).splitlines():
+        f = f.split(":", 1)[1] if ":" in f else f
+        if f == LOG:
+            continue    # a log's lines are history, frozen once released
+        body = trunk_show(meta_loc, f) or ""
+        if (moved := pointers_moved(body, me, path, section, to, landed, heads)) != body:
+            files[f] = moved
+    if road is not None:
+        files[ROADMAP] = road
+    if not files:
+        return [f"{para['meta']} has no pointer to {old} and no roadmap item for it: no proposal"], None
+    files[LOG] = log_with_line(trunk_show(meta_loc, LOG) or LOG_SEED, "Changed",
+                               f"- Pointers to {old} name {new}, where it moved.")
+    branch = open_proposal(para, meta_loc, f"{spec.stem}-pointers")
+    try:
+        ok, out = proposal_commit(meta_loc, branch, files, f"POINTERS: {old} is {new}")
+    except BaseException:
+        drop_proposal(meta_loc, branch)
+        raise
+    if not ok:
+        drop_proposal(meta_loc, branch)
+        die(f"{para['meta']}'s hook refused the pointers commit, so nothing was proposed:\n{out}", 1)
+    text = spec.read_text()
+    spec.write_text(text.rstrip("\n") + f"\n- meta: {para['meta']} pointers {branch}\n")
+    git("add", "--", str(spec), check=True)
+    return [f"made {branch} in {para['meta']}: its pointers to {old} name {new}"
+            + (", and its roadmap's items for the page follow" if road is not None else "")
+            + f"; recorded in {spec.relative_to(root)}"], branch
+
+
+
 # ----------------------------------------------------------------------- main
 
 def main(argv: list[str] | None = None) -> int:
@@ -17329,11 +18782,20 @@ def main(argv: list[str] | None = None) -> int:
     pp = sub.add_parser("propose", help="pararepo: open a proposal branch on the metarepo for a spec")
     pp.add_argument("spec", nargs="?")
     pp.add_argument("slug", nargs="?")
-    pp.add_argument("--buffer", action="store_true", help="every Open row of the sync buffer, in one proposal")
+    pp.add_argument("--buffer", action="store_true", help="every Open row of the sync buffer but a move-in row, `jig move-in`'s, in one proposal")
     pp.add_argument("--withdraw", metavar="BRANCH", help="mark a proposal the metarepo won't release as withdrawn")
     pp.add_argument("--reason", help="why it is withdrawn, recorded in its spec")
     pp.add_argument("--pointers", action="store_true",
                     help="record it as pointer rewrites worked ahead of, not a proposal to wait for")
+    mv_ = sub.add_parser("move", help="move a claim (an entry, a page, a section) to another repo of the family, one step per --apply")
+    mv_.add_argument("what", help="an entry id, a page, or '<page> § <heading>'")
+    mv_.add_argument("--to", required=True, help="the repo of the family that will own it")
+    mv_.add_argument("--as", dest="as_", help="the page's path there (default: the same path)")
+    mv_.add_argument("--apply", action="store_true", help="do the next step")
+    mi = sub.add_parser("move-in", help="pararepo: move its roadmap into the metarepo's, one step per --apply")
+    mi.add_argument("--product", help="the product its phases go under in the metarepo's roadmap")
+    mi.add_argument("--definition", help="the product's glossary sentence, when the metarepo has no such term yet")
+    mi.add_argument("--apply", action="store_true", help="do the next step")
     st = sub.add_parser("staging", help="list staged files, resolve or drop one, or check headers")
     st.add_argument("action", nargs="?", choices=["resolve", "drop", "check"])
     st.add_argument("file", nargs="*")
@@ -17389,7 +18851,7 @@ def main(argv: list[str] | None = None) -> int:
         "workflow": cmd_workflow, "roles": cmd_roles, "flows": cmd_flows, "next": cmd_next,
         "survey": cmd_survey, "reading-list": cmd_reading_list, "update": cmd_update, "repos": cmd_repos, "staging": cmd_staging,
         "release": cmd_release, "propose": cmd_propose, "roadmap": cmd_roadmap, "family": cmd_family,
-        "rig": cmd_rig, "inbox": cmd_inbox,
+        "rig": cmd_rig, "inbox": cmd_inbox, "move-in": cmd_move_in, "move": cmd_move,
     }[args.cmd]
     return fn(root, args)
 

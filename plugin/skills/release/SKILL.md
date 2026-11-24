@@ -74,8 +74,8 @@ checkout), when the pin in `.jig/para.json` isn't one of its releases (set a rel
 commit), a tracked `.jig/meta-cache/` (P3), or a malformed `BUFFER.md` row (P2). A newer
 metarepo release is reported, not refused.
 
-Before the build, the release puts every `Open` row of `.jig/ledgers/BUFFER.md` into one
-metarepo proposal: a `propose/<repo>-buffer-vX.Y.Z` branch there, and a spec here listing the
+Before the build, the release puts every `Open` row of `.jig/ledgers/BUFFER.md`, but a move-in
+row (`jig move-in`'s), into one metarepo proposal: a `propose/<repo>-buffer-vX.Y.Z` branch there, and a spec here listing the
 rows, committed with the release. With no open row it just releases. After the release,
 the change is written on that branch by the metarepo's own process; `jig sync` on trunk closes the
 rows once the metarepo releases it.
