@@ -236,7 +236,8 @@ Smoke, `movein` section, in its throwaway repos (`JIG_CONFIG`, `XDG_CONFIG_HOME`
 - [ ] (the move-in row stays move-in's) In `pw`, step 1 rerun with `--product Wox` on an empty
   record proposes Wox under `move-in.md`, its row listed alone, and `BUFFER.md` holds one move-in
   row, B1, which now reads Wox. Then, before and after the withdrawal, `jig propose --buffer`
-  says nothing to propose: no `buffer-*` spec and no new branch in M2. After the withdrawal it
+  says nothing to propose: no `buffer-*` spec and no new branch in M2. Before the withdrawal it
+  names the live proposal carrying the row, never that `jig move-in` proposes it again. After it
   says a move-in row is left to `jig move-in`, and the withdrawal itself said B1 goes again by
   `jig move-in`, not in the next proposal. The re-proposal as Wex reuses its row, B1, alone in
   `move-in-2.md`.
@@ -269,6 +270,8 @@ Smoke, `movein` section, in its throwaway repos (`JIG_CONFIG`, `XDG_CONFIG_HOME`
   the sync buffer ("every `Open` row" but a move-in row, and a withdrawn one's); Commands
   (`jig propose --buffer`).
 - `docs/metarepos.md`: the release's buffer proposal, a move-in row left out.
+- `plugin/templates/ledgers/BUFFER.md` and `plugin/skills/release/SKILL.md`: "every Open row"
+  but a move-in row.
 - `plugin/skills/hubnode/SKILL.md`: the move-in line.
 - `.jig/specs/moving-in-command.md`: Part A steps 1 and 2, the sentences in Change 4.
 - `tests/smoke.sh`: `sec_movein`, with the cases above and pf's and pr's fixtures as changed;

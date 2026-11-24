@@ -1063,7 +1063,9 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
      carrying that row alone, listed in `.jig/specs/move-in.md` (the next free name, `move-in-2`
      and its branch, once a withdrawn proposal holds it), and commits the sections there in a
      temporary worktree of the metarepo, whose hook judges the commit. That spec is step 1's
-     record, found by scanning specs as `jig sync` finds a proposal: it lists that row alone, its
+     record, found by scanning specs as `jig sync` finds a proposal. A rerun of step 1, under
+     another `--product` too, takes the one Open move-in row there is and edits its claim, never
+     adding a second. That spec: it lists that row alone, its
      copy of the row names the product, and its `meta:` line the branch. The row is `jig
      move-in`'s: a release or `jig propose --buffer` never carries it. The metarepo's hubnode merges the branch in a job
      opened on it (`jig open <job> --branch propose/<repo>-move-in`), or on its trunk on the

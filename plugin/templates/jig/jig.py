@@ -7272,8 +7272,9 @@ def cmd_release(root: Path, args) -> int:
             die(f"nothing to release: no entry file changed since {last}", 2)
     version = next_version(last, args, meta)
     tag = f"v{version}"
-    # A pararepo's release settles its sync buffer: every Open row goes to the metarepo in one
-    # proposal, made before the build so a release never ships with drift nobody proposed.
+    # A pararepo's release settles its sync buffer: every Open row but a move-in row, `jig
+    # move-in`'s, goes to the metarepo in one proposal, made before the build so a release never
+    # ships with drift nobody proposed.
     proposed = None
     if para and unproposed(root)[1]:
         proposed = buffer_proposal(root, para, loc, f"buffer-{tag}")
@@ -9371,15 +9372,14 @@ def cmd_propose(root: Path, args) -> int:
     if args.buffer:
         slug = args.slug or args.spec or f"buffer-{date.today().isoformat()}"
         made = buffer_proposal(root, para, loc, slug)
+        moving = move_in_left(root, para["meta"])
         if made is None:
             print(f"nothing to propose: {BUFFER} has no Open row that a proposal doesn't already carry as it stands"
-                  + ("; a move-in row is left to `jig move-in`, which proposes it again." if any(
-                      r[-1] == "Open" and r[2:3] == [MOVE_IN_NOW] for r in buffer_rows(
-                          (root / BUFFER).read_text() if (root / BUFFER).exists() else "")) else "."))
+                  + (f"; {moving}." if moving else "."))
             return 0
         spec, branch = made
-        print(f"made {branch} in {para['meta']} for every Open row of {BUFFER}, listed in "
-              f"{spec.relative_to(root)}. Commit that spec.")
+        print(f"made {branch} in {para['meta']} for every Open row of {BUFFER} but a move-in row, listed in "
+              f"{spec.relative_to(root)}. Commit that spec." + (f" {moving[0].upper()}{moving[1:]}." if moving else ""))
         print(f"Write the change there on that branch (git -C {loc} worktree add <dir> {branch}); "
               f"the rows close when `jig sync` takes the release that holds it.")
         return 0
@@ -15847,6 +15847,20 @@ def move_in_takers(snap_files: list[str], read) -> dict[str, list[str]]:
     return out
 
 
+def move_in_left(root: Path, meta: str) -> str:
+    """What `jig propose --buffer` says of the Open move-in rows it leaves out, "" for none: a
+    live move-in proposal carries one already; with none, `jig move-in` proposes it again."""
+    rows = [r[0] for r in buffer_rows((root / BUFFER).read_text() if (root / BUFFER).exists() else "")
+            if r[-1] == "Open" and r[2:3] == [MOVE_IN_NOW]]
+    if not rows:
+        return ""
+    live = [r for r in move_in_records(root, meta) if r["live"]]
+    if live:
+        return (f"a move-in row ({', '.join(rows)}) is carried by {live[0]['branch']} "
+                f"({live[0]['spec'].relative_to(root)}): `jig move-in` says where it stands")
+    return f"a move-in row ({', '.join(rows)}) is left to `jig move-in`, which proposes it again"
+
+
 def move_in_records(root: Path, meta: str) -> list[dict]:
     """Step 1's records here, found by scanning specs as `jig sync` finds a proposal: each spec
     whose `## Buffer rows` lists a row its own table reads as `<meta>/.jig/roadmap.md §
@@ -16237,7 +16251,7 @@ def main(argv: list[str] | None = None) -> int:
     pp = sub.add_parser("propose", help="pararepo: open a proposal branch on the metarepo for a spec")
     pp.add_argument("spec", nargs="?")
     pp.add_argument("slug", nargs="?")
-    pp.add_argument("--buffer", action="store_true", help="every Open row of the sync buffer, in one proposal")
+    pp.add_argument("--buffer", action="store_true", help="every Open row of the sync buffer but a move-in row, `jig move-in`'s, in one proposal")
     pp.add_argument("--withdraw", metavar="BRANCH", help="mark a proposal the metarepo won't release as withdrawn")
     pp.add_argument("--reason", help="why it is withdrawn, recorded in its spec")
     pp.add_argument("--pointers", action="store_true",
