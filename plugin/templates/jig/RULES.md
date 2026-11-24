@@ -943,7 +943,7 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
   label is a term of the glossary: in a family the metarepo's `docs/glossary.md`, read where the
   roadmap is (on its trunk, live from there in a pararepo); in a stand-alone repo its own. It
   matches in any case and spacing: both, case folded with each run of spaces, `-` and `_` read
-  as one `-`, are equal, so `walyt-compatibility` names `## Walyt compatibility`. On trunk, when
+  as one `-`, are equal, so `wallet-compatibility` names `## Wallet compatibility`. On trunk, when
   the roadmap changes, the hook refuses by line a label naming no term, and a `(labels)` naming
   nothing; with no glossary, any label is refused, naming it. On the metarepo's or a
   stand-alone repo's trunk, a commit removing or renaming a term a label names is refused,

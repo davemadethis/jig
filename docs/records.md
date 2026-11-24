@@ -72,7 +72,7 @@ section. Each merge rewrites a kanban view of the roadmap at the root, which any
 `python3 .jig/jig.py roadmap` prints the roadmap's states.
 
 A scope or a `## No phase` item can name the features it touches as [labels](glossary.md#label),
-`(labels teleport, walyt-compatibility)`, each a term of the glossary (the metarepo's, in a
+`(labels teleport, wallet-compatibility)`, each a term of the glossary (the metarepo's, in a
 family). A misspelt label is refused, and a label orders nothing. `roadmap --label <term>` lists
 the work carrying one, across every product.
 

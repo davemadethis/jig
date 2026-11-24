@@ -10142,7 +10142,7 @@ def split_after(what: str) -> tuple[str, list[str] | None]:
     return body, after
 
 
-# `(labels teleport, walyt-compatibility)` on a scope or a `No phase` item: the features it
+# `(labels teleport, wallet-compatibility)` on a scope or a `No phase` item: the features it
 # touches, each a glossary term (R1–R3, R7). Never a ref: a label orders nothing. Read only by
 # split_labels and checked only by label_problems, so every reader of labels (the roadmap, the
 # ideas log) reads and checks them one way.
@@ -10160,7 +10160,7 @@ def split_labels(what: str) -> tuple[str, list[str] | None]:
 
 def label_fold(name: str) -> str:
     """A label or a term as it is compared: case folded, each run of spaces, `-` and `_` one
-    `-`, so the scope-style `walyt-compatibility` names the heading `Walyt compatibility`."""
+    `-`, so the scope-style `wallet-compatibility` names the heading `Wallet compatibility`."""
     return re.sub(r"[\s_-]+", "-", name.casefold()).strip("-")
 
 
