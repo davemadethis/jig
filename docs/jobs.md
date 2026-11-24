@@ -96,6 +96,11 @@ there and records the pass with `python3 .jig/jig.py checked`.
 Then the hubnode runs `python3 .jig/jig.py mark <job> gated`, which removes the scratch
 checkout, and commits `.jig/jobs.json` on trunk. The mark refuses until the check is recorded.
 
+A check counts only for the commit the job's newest handoff note names. If the job hands off
+again after the gate, the scratch checkout is stale: `next` says gate again, and `checked` and
+the mark refuse it. A gated job can't hand off again until the hubnode marks it back to
+`ready`.
+
 ## Merge
 
 `python3 .jig/jig.py merge <job>` happens only on the owner's word, and only for a gated job.
