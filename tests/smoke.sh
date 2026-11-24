@@ -7143,8 +7143,12 @@ expect_pass sh -c "test $rc = 0 && ! echo \"\$0\" | grep -q 'removed' && test ! 
 msg="ideas meta: across releases that only added ideas beside it, the log's last entry E-002 reads as unchanged"
 expect_pass sh -c "! echo \"\$0\" | grep -q 'E-002'" "$out2"
 # Moved down: an idea leaves M with a move line naming L's ideas file.
-cd "$L" && printf '\n### D-001 does L wake?\nOpen (2026-11-05).\nTouches: none — a question for L.\n' >> .jig/ideas.md && git add -A && git -c core.hooksPath=/dev/null commit -qm "L: D-001"
 cd "$M" && E3=E-003
+# The receiving end first: L's idea, with its moved-from line in L's log (a move line needs it).
+cd "$L" && printf '\n### D-001 does L wake?\nOpen (2026-11-05).\nTouches: none — a question for L.\n' >> .jig/ideas.md \
+  && ulog "### Added
+- D-001: moved from M/.jig/decisions.md § $E3." && git add -A && git -c core.hooksPath=/dev/null commit -qm "L: D-001"
+cd "$M"
 python3 -c "import re,sys; f='.jig/ideas.md'; s=open(f).read(); s=re.sub(r'(?ms)^### '+sys.argv[1]+r' .*?(?=^### |\Z)', '', s); open(f,'w').write(s)" "$E3"
 ulog "### Removed
 - $E3: moved to L/.jig/ideas.md § D-001." && git switch -q -c down && git add -A

@@ -6676,7 +6676,7 @@ def move_rules(trunk: str, staged: bool, meta: dict | None) -> list[str]:
             out.append(f"{LOG}: `{line}`: {repo}'s {path} on {t} has no heading {section}: "
                        f"land it there first")
         else:
-            there = section if path == LOG and section else (f"{path} § {section}" if section else path)
+            there = section if path in (LOG, IDEAS) and section else (f"{path} § {section}" if section else path)
             frm = moved_from_in(trunk_show(loc, LOG) or "").get(there)
             if not frm or not is_here(pointer_parts(frm)[0]) or \
                     not same_thing(pointer_parts(frm)[1:], thing_of(what)):
