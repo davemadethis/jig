@@ -6167,22 +6167,34 @@ def same_thing(a: tuple[str, str | None], b: tuple[str, str | None]) -> bool:
     return thing_key(a) == thing_key(b)
 
 
-def family_names(trunk: str, meta: dict | None) -> set[str]:
-    """The repos a claim of this one may move to or come from: a metarepo's pararepos; for a
-    pararepo, its metarepo and the metarepo's other pararepos, read on the metarepo's trunk;
-    nothing for a repo with no family."""
+def family_names(trunk: str, meta: dict | None) -> tuple[set[str], str]:
+    """The repos a claim of this one may move to or come from, and the metarepo that couldn't
+    be reached to read them ("" when none): a metarepo's pararepos; for a pararepo, its
+    metarepo and the metarepo's other pararepos, read on the metarepo's trunk; nothing for a
+    repo with no family."""
     if meta is not None:
-        return set(meta.get("pararepos") or [])
+        return set(meta.get("pararepos") or []), ""
     para = load_para(trunk)
     if para is None:
-        return set()
+        return set(), ""
     out = {para.get("meta", "")} - {""}
     loc = meta_checkout(main_root(), para)
+    if loc is None:
+        return out, para.get("meta", "")
     try:
-        paras = json.loads(trunk_show(loc, META) or "{}").get("pararepos") or [] if loc is not None else []
+        paras = json.loads(trunk_show(loc, META) or "{}").get("pararepos") or []
     except ValueError:
         paras = []
-    return out | {n for n in paras if not is_here(n)}
+    return out | {n for n in paras if not is_here(n)}, ""
+
+
+def in_family(repo: str, names: set[str]) -> bool:
+    """Whether REPO is one of NAMES: by name, or by folder, as `Family` reads its members, so an
+    alias or a checkout's own name is no stranger."""
+    if name_in(repo, names):
+        return True
+    p = repo_path(repo)
+    return p is not None and any((q := repo_path(n)) is not None and q.resolve() == p.resolve() for n in names)
 
 
 def pointer_parts(ptr: str) -> tuple[str, str, str | None]:
@@ -6202,6 +6214,9 @@ def moved_to(moves: dict[str, str], path: str, section: str | None) -> str | Non
     """Where a citation of PATH (§ SECTION) went: the section's own move, or its page's, the
     cited heading carried over when the page's pointer names none."""
     if section and (ptr := moves.get(move_key(f"{path} § {section}"))):
+        return ptr
+    # A log's section is an entry: its move line names it by its id alone (D-5 is D-005).
+    if path == LOG and section and (ptr := moves.get(section)):
         return ptr
     if ptr := moves.get(path):
         return ptr if not section or " § " in ptr else f"{ptr} § {plain(section)}"
@@ -6232,7 +6247,7 @@ def move_rules(trunk: str, staged: bool, meta: dict | None) -> list[str]:
     names a family repo whose trunk still has the thing, the move pending, or moves it here.
     Where the other repo can't be reached the line passes with a warning."""
     new, old = in_index(LOG, staged), at_rev(since_trunk(trunk), LOG)
-    paras = family_names(trunk, meta)
+    paras, unread = family_names(trunk, meta)
     prefix = log_prefix(trunk)
     out = []
     # A move line anywhere else is read by nothing and checked by nothing: only one place holds
@@ -6243,7 +6258,7 @@ def move_rules(trunk: str, staged: bool, meta: dict | None) -> list[str]:
             f"under ## Unreleased ### Removed"
             for sec, grp, line, m in log_move_lines(new, False) if (sec, grp, line) not in was
             and (grp == "Removed" and not move_held(sec)
-                 or grp != "Removed" and name_in(pointer_parts(m.group("to"))[0], paras))]
+                 or grp != "Removed" and in_family(pointer_parts(m.group("to"))[0], paras))]
     # One address per moved thing: a second line would leave readers to pick between two homes.
     # A line this change rewrites in place is no longer the log's, so a corrected target passes.
     kept = set(new.splitlines())
@@ -6287,11 +6302,15 @@ def move_rules(trunk: str, staged: bool, meta: dict | None) -> list[str]:
                        f"a moved entry leaves in the commit that writes its line")
             continue
         repo, path, section = pointer_parts(ptr)
+        if unread and not in_family(repo, paras):
+            print(f"jig: warning: `{line}`: {unread} isn't reachable here (`jig repos`), so this repo's "
+                  f"family wasn't read and {repo} wasn't checked", file=sys.stderr)
+            continue
         if not paras:
             out.append(f"{LOG}: `{line}` moves to {repo}, but this repo has no family (no {META} with "
                        f"pararepos, no {PARA}): a claim moves only between a metarepo and its pararepos")
             continue
-        if not name_in(repo, paras):
+        if not in_family(repo, paras):
             out.append(f"{LOG}: `{line}` moves to {repo}, which isn't of this repo's family "
                        f"({', '.join(sorted(paras))}): a claim moves within its family only")
             continue
@@ -6327,27 +6346,60 @@ def move_rules(trunk: str, staged: bool, meta: dict | None) -> list[str]:
                     not same_thing(pointer_parts(frm)[1:], thing_of(what)):
                 out.append(f"{LOG}: `{line}`: {repo}'s {LOG} on {t} has no moved-from line for {there} naming "
                            f"this repo's {what} (read {loc}/{LOG}): land it there first, with its moved-from line")
-    out += moved_from_rules(new, old, paras)
+    out += moved_from_rules(new, old, paras, unread)
     return out
 
 
-def moved_from_rules(new: str, old: str, paras: set[str]) -> list[str]:
-    """Each moved-from line the change adds names a repo of the family whose trunk still has the
-    thing, the move pending, or whose move line for it points here. One that can't be reached
-    passes with a warning."""
+def moved_from_rules(new: str, old: str, paras: set[str], unread: str = "") -> list[str]:
+    """Both ends of a move stay tied from the receiving side. A moved-from line the change adds
+    goes under ## Unreleased ### Added, names a repo of the family whose trunk still has the thing
+    (the move pending) or moves it here, and one that can't be reached passes with a warning.
+    One the change removes or rewrites while that repo's trunk moves the thing here stays: the
+    move line there would point at a home with no record of it."""
     out = []
     was = {line for _, _, line, _ in moved_from_lines(old)}
+    now = {line for _, _, line, _ in moved_from_lines(new)}
+    # A moved-from line anywhere else is read by nothing and checked by nothing, as a move line.
+    placed = {(sec, grp, line) for sec, grp, line, _ in any_moved_from(old)}
+    out += [f"{LOG}: `{line}` is under ## {sec}{f' ### {grp}' if grp else ''}: a moved-from line goes "
+            "under ## Unreleased ### Added"
+            for sec, grp, line, _m in any_moved_from(new)
+            if (sec, grp, line) not in placed and (grp == "Added" and not move_held(sec)
+                                                   or grp != "Added" and in_family(pointer_parts(_m.group("frm"))[0], paras))]
+
+    def source(m: re.Match) -> tuple[str, Path | None, str, str, str | None]:
+        repo, path, section = pointer_parts(m.group("frm"))
+        loc = repo_path(repo)
+        return repo, (loc if loc and loc.is_dir() else None), path, \
+            (section if path == LOG and section else (f"{path} § {section}" if section else path)), section
+
+    def points_here(loc: Path, key: str, what: str) -> bool:
+        ptr = moves_in(trunk_show(loc, LOG) or "").get(key)
+        return bool(ptr) and is_here(pointer_parts(ptr)[0]) and same_thing(pointer_parts(ptr)[1:], thing_of(what))
+    for sec, _, line, m in moved_from_lines(old):
+        if line in now or not move_held(sec):
+            continue
+        repo, loc, path, key, _ = source(m)
+        if loc is None:
+            print(f"jig: warning: `{line}` leaves the log, and {repo} isn't in `jig repos` here, so "
+                  "whether its move line still points here wasn't checked", file=sys.stderr)
+        elif points_here(loc, key, m.group("what")):
+            out.append(f"{LOG}: `{line}` is the receiving end of {repo}'s move line on its "
+                       f"{Board.trunk_name(loc)} (read {loc}/{LOG}): it stays as written")
     for sec, _, line, m in moved_from_lines(new):
         if line in was or not move_held(sec):
             continue
-        repo, path, section = pointer_parts(m.group("frm"))
-        if not name_in(repo, paras):
+        repo, loc, path, key, section = source(m)
+        if unread and not in_family(repo, paras):
+            print(f"jig: warning: `{line}`: {unread} isn't reachable here (`jig repos`), so this repo's "
+                  f"family wasn't read and {repo} wasn't checked", file=sys.stderr)
+            continue
+        if not in_family(repo, paras):
             out.append(f"{LOG}: `{line}` names {repo}, which isn't of this repo's family"
                        + (f" ({', '.join(sorted(paras))})" if paras else " (it has none)")
                        + ": a claim comes only from a repo of its family")
             continue
-        loc = repo_path(repo)
-        if not loc or not loc.is_dir():
+        if loc is None:
             print(f"jig: warning: `{line}`: {repo} isn't in `jig repos` here, so its source wasn't "
                   "checked", file=sys.stderr)
             continue
@@ -6360,13 +6412,22 @@ def moved_from_rules(new: str, old: str, paras: set[str]) -> list[str]:
             pending = body is not None and pointer_gap(path, section, True, body)[0] == RESOLVES
         else:
             pending = body is not None
-        ptr = moves_in(their_log).get(section if path == LOG and section else
-                                      (f"{path} § {section}" if section else path))
-        pointed = bool(ptr) and is_here(pointer_parts(ptr)[0]) and \
-            same_thing(pointer_parts(ptr)[1:], thing_of(m.group("what")))
-        if not pending and not pointed:
+        if not pending and not points_here(loc, key, m.group("what")):
             out.append(f"{LOG}: `{line}`: {repo}'s {path} on {t} (read {loc}/{path}) neither has "
                        f"{section or path} nor moves it here: name what it moved, as its move line does")
+    return out
+
+
+def any_moved_from(text: str) -> list[tuple[str, str, str, re.Match]]:
+    """(section, group, line, match) for each moved-from-shaped line in log TEXT, wherever it sits."""
+    out, section, group = [], "", ""
+    for line in text.splitlines():
+        if line.startswith("## "):
+            section, group = line[3:].strip(), ""
+        elif line.startswith("### "):
+            group = line[4:].strip()
+        elif m := MOVED_FROM.match(line.rstrip()):
+            out.append((section, group, line.rstrip(), m))
     return out
 
 
@@ -9404,10 +9465,9 @@ def pointer_cleanup(root: Path) -> list[str]:
     olds = dict(LAYOUT)
     for f, path, section, code, level, gap in dangling(root):
         line = f"{f} points to {gap}: "
-        if "(moved: " in gap:
-            out.append(line + "this repo's move line says where it went: the metarepo re-points it "
-                       "(`jig move` proposes that rewrite)")
-            continue
+        # Moved by this repo's move line, the pointer still dangles in the metarepo: the same
+        # answer as any removal, a pointers proposal or a row, with where it went named.
+        moved = "; the metarepo's rewrite is a pointers proposal (`jig propose --pointers`)" if "(moved: " in gap else ""
         found = removal(path, section, code, level)
         if found is None:
             out.append(line + "this repo never had it, so the metarepo's pointer is what's wrong; "
@@ -9432,7 +9492,7 @@ def pointer_cleanup(root: Path) -> list[str]:
         where = f"{path} § {shown}" if shown else path
         missed = f"the metarepo's rewrite in {pinned[0]} missed it; " if pinned else ""
         out.append(line + f"this repo {what}; " + missed
-                   + buffer_offer(root, f"{f}: the pointer to {where}", path, f"{now}, {commit}", shown))
+                   + buffer_offer(root, f"{f}: the pointer to {where}", path, f"{now}, {commit}", shown) + moved)
     return out
 
 

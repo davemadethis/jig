@@ -9381,8 +9381,12 @@ out=$($J reading-list --claims E-002 2>&1)
 expect_pass sh -c "echo \"\$0\" | grep -q 'E-002 moved to L/.jig/decisions.md § D-002' && ! echo \"\$0\" | grep -q 'no entry'" "$out"
 
 # A page of M cites one of L's, so L's cache points at it once its pin takes this release.
-( cd "$L" && printf '# L\n\nL is.\n' > docs/l.md && git add -A && git -c core.hooksPath=/dev/null commit -qm "l page" )
-printf '\nSee `L/docs/l.md`.\n' >> docs/products/walyt/walyt.md && ulog '- docs/products/walyt/walyt.md: cites L/docs/l.md.' \
+( cd "$L" && printf '# L\n\nL is.\n' > docs/l.md && ulog '### D-005 five
+Accepted (owner, 2026-11-03).
+Touches: none — up
+
+Five.' && git add -A && git -c core.hooksPath=/dev/null commit -qm "l page, D-005" )
+printf '\nSee `L/docs/l.md` and `L/.jig/decisions.md § D-005`.\n' >> docs/products/walyt/walyt.md && ulog '- docs/products/walyt/walyt.md: cites L/docs/l.md and L/.jig/decisions.md § D-005.' \
   && emerge cite "E-003: cite L's page" docs/products/walyt/walyt.md .jig/decisions.md >/dev/null 2>&1
 msg="moves: the release stages L's pin bump, every id and page moved, nothing removed or missing"
 out=$($J release 2>&1)
@@ -9423,19 +9427,25 @@ ulog '### Added
 
 - D-003: moved from M/.jig/decisions.md § E-009.' && git add -A; out=$(git commit -qm "D-003: from E-009" 2>&1); rc=$?; git reset -q --hard
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \"M's .jig/decisions.md on main (read .*/M/.jig/decisions.md) neither has E-009\"" "$out"; [ $rc != 0 ] || echo "$out"
-msg="moves B (up): in L, D-005 moved to M as E-010 commits once M's trunk has E-010 with its moved-from line"
-ulog '### D-005 five
-Accepted (owner, 2026-11-03).
-Touches: none — up
+msg="moves B (both ends): in L, removing D-002's moved-from line, the receiving end of M's move line on its trunk, is refused"
+sed -i.bak '/^- D-002: moved from M\/.jig\/decisions.md § E-002\.$/d' .jig/decisions.md && rm .jig/decisions.md.bak && git add -A
+out=$(git commit -qm "drop the record" 2>&1); rc=$?; git reset -q --hard
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'is the receiving end of M.s move line on its main'" "$out"; [ $rc != 0 ] || echo "$out"
+msg="moves B (placed): in L, a moved-from line under ### Changed is refused: it goes under ## Unreleased ### Added"
+ulog '### Changed
 
-Five.' && git add -A && git -c core.hooksPath=/dev/null commit -qm "D-005 planted"
-( cd "$M" && ulog '### E-010 ten
+- D-001: moved from M/.jig/decisions.md § E-004.' && git add -A; out=$(git commit -qm "misplaced" 2>&1); rc=$?; git reset -q --hard
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'is under ## Unreleased ### Changed: a moved-from line goes under ## Unreleased ### Added'" "$out"; [ $rc != 0 ] || echo "$out"
+msg="moves B (up): M's job lands E-010 with its moved-from line, its hook checking L's trunk still has D-005"
+out=$(cd "$M" && ulog '### E-010 ten
 Accepted (owner, 2026-11-03).
 Touches: none — up
 
 Five.' && ulog '### Added
 
-- E-010: moved from L/.jig/decisions.md § D-005.' && git add -A && git -c core.hooksPath=/dev/null commit -qm "E-010 planted" )
+- E-010: moved from L/.jig/decisions.md § D-005.' && emerge e10 "E-010: from L" .jig/decisions.md 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && git -C '$M' log -1 --format=%P main | grep -q ' '" "$out"; [ $rc = 0 ] || echo "$out"
+msg="moves B (up): in L, D-005 moved to M as E-010 commits once M's trunk has E-010 with its moved-from line"
 rment D-005 && ulog '### Removed
 
 - D-005: moved to M/.jig/decisions.md § E-010.' && git add -A; out=$(git commit -qm "D-005: up to M" 2>&1); rc=$?
@@ -9452,20 +9462,28 @@ rment D-006 && ulog '### Removed
 
 - D-006: moved to X/.jig/decisions.md § D-001.' && git add -A; out=$(git commit -qm "D-006: away" 2>&1); rc=$?; git reset -q --hard
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \"moves to X, which isn.t of this repo's family (K, M)\"" "$out"; [ $rc != 0 ] || echo "$out"
+msg="moves B (family): with M out of the repos file, a move line in L passes with a warning that M's family wasn't read"
+rment D-006 && ulog '### Removed
+
+- D-006: moved to K/.jig/decisions.md § D-001.' && git add -A; out=$(JIG_CONFIG="$MV/none.json" git commit -qm "D-006: away" 2>&1); rc=$?; git reset -q --hard HEAD~1 2>/dev/null || git reset -q --hard
+expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q 'warning: .*M isn.t reachable here (.jig repos.), so this repo.s family wasn.t read'" "$out"; [ $rc = 0 ] || echo "$out"
 msg="moves B (sideways): K lands docs/l.md with its moved-from line while L's trunk still has it"
 cd "$K" && mkdir -p docs && printf '# L\n\nL is.\n' > docs/l.md && ulog '### Added
 
 - docs/l.md: moved from L/docs/l.md.' && git add -A; out=$(git commit -qm "l from L" 2>&1); rc=$?
 expect_pass test $rc = 0; [ $rc = 0 ] || echo "$out"
-msg="moves B (sideways): in L, docs/l.md moved to K/docs/l.md commits, answered by a meta: line"
+msg="moves B (sideways): in L, docs/l.md moved to K/docs/l.md commits, P2 answered by a buffer row for M's pointer"
 cd "$L" && git rm -q docs/l.md && ulog '### Removed
 
-- docs/l.md: moved to K/docs/l.md.' && mkdir -p .jig/specs && printf '# l to K\n\n- meta: none — moved to K; M re-points its pointer\n' > .jig/specs/l-to-k.md && git add -A
+- docs/l.md: moved to K/docs/l.md.' && mkdir -p .jig/ledgers && { [ -f .jig/ledgers/BUFFER.md ] || cp "$P/ledgers/BUFFER.md" .jig/ledgers/BUFFER.md; } \
+  && printf '| B9 | M/docs/products/walyt/walyt.md § Walyt: its pointer to L/docs/l.md | docs/l.md moved to K/docs/l.md | owner, 2026-11-23 | Open |\n' >> .jig/ledgers/BUFFER.md && git add -A
 out=$(git commit -qm "l to K" 2>&1); rc=$?
 expect_pass test $rc = 0; [ $rc = 0 ] || echo "$out"
 msg="moves B (sideways): L's jig sync lists M's cached pointer to docs/l.md as moved to K/docs/l.md, not as missing"
 out=$($J sync 2>&1)
 expect_pass sh -c "echo \"\$0\" | grep -q 'docs/l.md (moved: K/docs/l.md)'" "$out"; [ "$fail" = 0 ] || echo "$out"
+msg="moves B (up): L's jig sync lists M's cached pointer to its D-005 as moved to M's E-010, matched by id"
+expect_pass sh -c "echo \"\$0\" | grep -q '.jig/decisions.md § D-005 (moved: M/.jig/decisions.md § E-010)'" "$out"
 msg="moves B (no family): a move line in a stand-alone repo is refused, saying it has no family"
 S="$MV/S"; mkdir -p "$S" && cd "$S" && git init -q -b main && git config user.email t@t && git config user.name t
 cp -r "$P/jig" .jig && cp "$P/AGENTS.md" "$P/CLAUDE.md" . && mkdir -p docs && printf '# A\n\nA is.\n' > docs/a.md && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board

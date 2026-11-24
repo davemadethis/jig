@@ -1247,9 +1247,14 @@ The moved-from line is the move's record at the receiving end, under `## Unrelea
 `- D-016: moved from meta/.jig/decisions.md § D-040.`, `- docs/ui.md: moved from
 meta/docs/ui.md.` or `- docs/ui.md § Build: moved from meta/docs/ui.md § Build.`, one form for ids,
 pages and sections, as the move line is. A `D-?<slug>` written there is numbered with its entry
-at the merge. The hook checks a moved-from line the commit adds: its repo is of the family, and on
-that repo's trunk the thing is still there (the move pending), or that repo's move line for it
-points here; neither, it is refused, naming the file it read. An entry that supersedes a
+at the merge. The hook checks a moved-from line the commit adds: it is under `## Unreleased`
+`### Added` (anywhere else it is refused, as a misplaced move line is); its repo is of the family;
+and on that repo's trunk the thing is still there (the move pending), or that repo's move line
+for it points here; neither, it is refused, naming the file it read. A commit removing or
+rewriting a moved-from line is refused while that repo's trunk has a move line pointing here: it
+is that move's record. Family members are matched by checkout, as `jig repos` finds them, so an
+alias is no stranger; a pararepo whose metarepo can't be reached reads no family, and its lines
+pass with a warning naming the metarepo. An entry that supersedes a
 moved id is refused: its home is the other repo now. It refuses a target that repo lacks, naming
 the file it read, and passes with a warning when the repo can't be reached. Released, the line is
 frozen like any change line, so the map from old id or path to new home needs no history: a
