@@ -290,14 +290,17 @@ or why not.
 
 A staged `kind: roadmap` file proposes changes to `.jig/roadmap.md`: a phase, a scope or an
 exit box to add, rename, reorder or drop, and why. Nothing in it is decided. Show the owner
-the exact diff to `.jig/roadmap.md`; on a yes, apply it on trunk, run `jig roadmap --write`,
+the exact diff to `.jig/roadmap.md`; on a yes, apply it on trunk with `jig roadmap --draft`,
+the change made in the draft it writes, then `jig roadmap --edit`, run `jig roadmap --write`,
 and commit both with the staged file's `Source: … (staged as <file>)` line in the message.
 A scope a spec still takes is re-pointed in that commit: the hook names the specs. Then
 `jig staging resolve <file>`, which looks for that line in a trunk commit to the roadmap.
 
 In a pararepo that plans from its metarepo's roadmap (no `.jig/roadmap.md` of its own), a change
-to its products' sections is never made here or on the metarepo's trunk: write a `BUFFER.md`
-row and run `jig propose --buffer`, write the change on the `propose/` branch it makes, and it
+to its products' sections is never made here or on the metarepo's trunk: on the owner's yes,
+`jig roadmap --draft`, make the change in the draft, and `jig roadmap --edit`. It writes the
+`BUFFER.md` row and the change on this repo's open roadmap proposal in the metarepo, and stages
+a label the metarepo's glossary lacks there; commit the spec and `BUFFER.md` it names. It
 merges in the metarepo at the next sync the owner calls. In a metarepo, merging such a branch
 is a roadmap change like any other: show the diff, and merge on the owner's yes. Rig there lists
 each cross-product wait no section confirms with `(needed by …)`: put it to the owner.

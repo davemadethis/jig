@@ -78,6 +78,23 @@ phases together when it merges that branch. Then the pararepo's roadmap leaves, 
 line pointed at the metarepo's ids. After that, the metarepo holds the one roadmap for every
 product it lists.
 
+## Editing the roadmap
+
+`python3 .jig/jig.py roadmap --draft` writes the roadmap a repo plans from to a draft outside its
+tree, and `roadmap --edit` checks it and writes it. A pararepo may change only its own products'
+sections. Its edit lands as a `BUFFER.md` row and a commit on its open roadmap proposal in the
+metarepo, so nothing moves on the metarepo's trunk until its owner merges it at the next sync. A
+label the metarepo's glossary lacks is left off and staged there as a new term.
+
+## The family report
+
+`python3 .jig/jig.py family`, run in the metarepo or any of its pararepos, prints the same
+report from either: every file waiting in each repo's staging folder, with its age; every
+`propose/` branch the metarepo hasn't merged, with its age, whether anything is written on it,
+and the specs citing it; each pending decision entry touching a term that labels work not done;
+and names that may be one thing under two. A file or a proposal older than a week is marked
+stale. It writes nothing. `rig` prints one line pointing at it when there's something to see.
+
 ## Design sessions
 
 A [rigger](glossary.md#rigger) is a design session for one product repo, kept outside it. It

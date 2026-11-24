@@ -87,7 +87,14 @@ Jobs, for anyone:
 Records:
 
 - `python3 .jig/jig.py decision <id>` prints a decision and what it replaced.
-- `python3 .jig/jig.py roadmap` prints the [roadmap](glossary.md#roadmap)'s states, each phase with its type (Prototype, Pilot or Production). `--product`, `--phase`, `--type`, `--state` and `--owner` narrow what it prints, each repeatable, and `--view` prints that part as the view's Markdown. `--write` regenerates the whole view, and takes no filter. Run in the trunk checkout on a trunk with no roadmap, it commits the roadmap's empty structure first, as the other commands that read the roadmap do.
+- `python3 .jig/jig.py roadmap` prints the [roadmap](glossary.md#roadmap)'s states, each phase with its type (Prototype, Pilot or Production). `--product`, `--phase`, `--type`, `--state`, `--owner` and `--label` narrow what it prints, each repeatable, and `--view` prints that part as the view's Markdown. `--write` regenerates the whole view, and takes no filter. Run in the trunk checkout on a trunk with no roadmap, it commits the roadmap's empty structure first, as the other commands that read the roadmap do.
+  `--label <term>` keeps the scopes and items carrying that [label](glossary.md#label), across every product,
+  headed by the term's owner.
+- `python3 .jig/jig.py roadmap --draft` writes the roadmap this repo plans from to a draft outside the tree, and
+  names the headings this repo may change. `--edit` checks the draft and writes it: on trunk's checkout, or in a
+  [pararepo](glossary.md#pararepo), on its open roadmap proposal in the metarepo.
+- `python3 .jig/jig.py family` reports what a [metarepo](glossary.md#metarepo)'s family has let sit: staged files and
+  proposals with their ages, entries touching labelled work, and two names for one thing.
 - `python3 .jig/jig.py staging` lists staged files. `resolve` lands one and `drop` deletes one.
 - `python3 .jig/jig.py inbox` prints the hubnode's unread messages and marks them read.
 - `python3 .jig/jig.py release` runs the repo's release and tags it.
