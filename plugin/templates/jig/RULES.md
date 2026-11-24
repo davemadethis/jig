@@ -1134,7 +1134,13 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
   deleted. On a metarepo's `propose/<repo>-…` branch the hook refuses, as `--edit` does, a
   change to a section another repo owns, the proposing repo found by its `jig repos` name or
   its folder's, and a roadmap change on a branch naming no pararepo; a section that is
-  trunk's as it stands, merged in, is trunk's change, never the branch's.
+  trunk's as it stands, merged in, is trunk's change, never the branch's. A section the fork has is
+  whose the fork's glossary says; a new one is whose the commit's own glossary says, so a product
+  it proposes is its own, and a rename moves a product's headings in the commit that renames
+  its term. A move's proposal
+  (`jig move`, read from the moved-from or pointers line it adds to the log) may add to the
+  receiver's sections the items that follow the moved page, each touching it, and nothing else
+  there.
 - **Moving in**, once per pararepo, on the owner's yes, by `jig move-in --product <Name>` in the
   pararepo's trunk checkout. It runs one step per `--apply`; without it, it prints each step's
   state (done, next, or whose yes it waits on) and what the next would write.

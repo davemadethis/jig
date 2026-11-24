@@ -10848,10 +10848,12 @@ msg="movein: in M, an unrelated glossary edit on a branch cut before Rex and Rov
 out=$(cd "$MM" && git switch -q behind && printf '\n## Foo\n\nA foo.\n' >> docs/glossary.md && ulog '- docs/glossary.md § Foo: added.' && git add -A && git commit -qm "GLOSSARY: Foo" 2>&1); rc=$?
 (cd "$MM" && git reset -q --hard && git switch -q main)
 expect_pass test $rc = 0; [ $rc = 0 ] || echo "$out"
-msg="movein: in M, Rover renamed Rocket over two commits on a propose/ branch, headings first, passes"
+msg="movein: in M, on a propose/ branch, Rover's headings renamed Rocket before its glossary term are refused, naming Rocket as no product pr owns (roadmap-labels' rule)"
 out=$(cd "$MM" && git branch -q propose/pr-rename "$(git commit-tree 'main^{tree}' -p main -m 'propose: pr: nothing written yet')" && git switch -q propose/pr-rename \
-  && sed -i.bak 's/^## Rover alpha$/## Rocket alpha/' .jig/roadmap.md && rm .jig/roadmap.md.bak && git add -A && git commit -qm "ROADMAP: Rocket alpha" \
-  && sed -i.bak 's/^## Rover$/## Rocket/' docs/glossary.md && rm docs/glossary.md.bak && ulog '- docs/glossary.md § Rocket: Rover renamed.' && git add -A && git commit -qm "GLOSSARY: Rover is Rocket" 2>&1); rc=$?
+  && sed -i.bak 's/^## Rover alpha$/## Rocket alpha/' .jig/roadmap.md && rm .jig/roadmap.md.bak && git add -A && git commit -qm "ROADMAP: Rocket alpha" 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '## Rocket alpha names no product pr owns'" "$out"
+msg="movein: renamed in one commit, headings and glossary term together, read by the commit's own glossary, it passes"
+out=$(cd "$MM" && sed -i.bak 's/^## Rover$/## Rocket/' docs/glossary.md && rm docs/glossary.md.bak && ulog '- docs/glossary.md § Rocket: Rover renamed.' && git add -A && git commit -qm "GLOSSARY: Rover is Rocket" 2>&1); rc=$?
 (cd "$MM" && git reset -q --hard && git switch -q main)
 expect_pass test $rc = 0; [ $rc = 0 ] || echo "$out"
 # A pararepo whose product is a term it already heads its sections with.
@@ -11261,6 +11263,38 @@ expect_pass sh -c "test '$ntag' != v0.1.0 && test $grc2 = 0 && test $mrc = 0 && 
 msg="move (up, a contract page): rig then doesn't list the spec, and jig sync says the proposal is released"
 expect_pass sh -c "test '$(rigquiet move-docs-v-md && echo quiet)' = quiet && echo \"\$0\" | grep -q 'proposal propose/V-move-docs-v-md (.jig/specs/move-docs-v-md.md): released by'" "$($J sync 2>&1)"
 cd "$GM"
+# roadmap-labels' rule on a propose/ branch, and the one exception a move's proposal has: the
+# items that follow the moved page into the receiver's section, each touching it, nothing else there.
+# A real proposal branch, propose/L-move-docs-ls-md-pointers (unmerged), which already moves ls1
+# into ## Kite alpha with its pointers line; each try commits on it and is undone.
+git switch -q propose/L-move-docs-ls-md-pointers
+gtry() {  # gtry <item line or ""> <change k1: 1|""> <pointers line: 1|"">: commit the edit on the branch, out and rc set
+  git reset -q --hard && python3 - "$@" <<'PY'
+import sys, re
+item, change, ptr = sys.argv[1:4]
+f = '.jig/roadmap.md'; s = open(f).read()
+k1 = re.search(r'^- `k1`: .*$', s, re.M).group(0)
+s = s.replace(k1, (k1 + ', changed' if change else k1) + ('\n' + item if item else ''), 1)
+open(f, 'w').write(s)
+if ptr:
+    sys.path.insert(0, '.jig'); import jig
+    f = '.jig/decisions.md'; log = open(f).read()
+    open(f, 'w').write(jig.log_with_line(log, 'Changed', '- Pointers to L/docs/l.md name K/docs/l.md, where it moved.'))
+PY
+  git add -A; out=$(git commit -qm "POINTERS: guard" 2>&1); rc=$?; [ $rc = 0 ] && git reset -q --hard HEAD~1; }
+msg="move (roadmap-labels' rule): on propose/L-…, an item added to K's section touching the moved page, with the commit's pointers line, passes"
+gtry '- `g1`: g one (touches docs/l.md)' "" 1
+expect_pass sh -c "test $rc = 0" "$out"; [ $rc = 0 ] || echo "$out"
+msg="move (roadmap-labels' rule): an item added to K's section that doesn't touch the moved page is refused"
+gtry '- `g2`: g two (touches docs/q2.md)' "" 1
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \"## Kite alpha is K's: L changes only its own sections\"" "$out"
+msg="move (roadmap-labels' rule): a changed existing line in K's section is refused, even beside an item that follows the page"
+gtry '- `g1`: g one (touches docs/l.md)' 1 1
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \"## Kite alpha is K's: L changes only its own sections\"" "$out"
+msg="move (roadmap-labels' rule): an item touching docs/l.md, on a branch whose only move line is docs/ls.md's, is refused"
+gtry '- `g1`: g one (touches docs/l.md)' "" ""
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \"## Kite alpha is K's: L changes only its own sections\"" "$out"
+git reset -q --hard && git switch -q main
 msg="move: a repo outside the family is refused, naming the family"
 expect_pass sh -c "$J move D-001 --to X 2>&1 | grep -q \"X isn't of this repo's family\""
 }

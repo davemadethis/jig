@@ -363,6 +363,10 @@ Part C (`jig move`):
   items as a metarepo does: `jig merge` does it in the job, as in a metarepo. Its trunk route
   (step 2's change on trunk) went with bug-move-spec-lifecycle, on the owner's OK, 2026-11-24.
   Rejected: a staged roadmap file, a second yes for the same repo's own roadmap.
+- Interpreted (the hubnode, 2026-11-24): a move's proposal may add to the receiver's sections the
+  items that follow the page it moves, each touching that page, and nothing else there;
+  roadmap-labels' rule otherwise stands. Rejected: routing the items through the receiver's owner
+  (a second yes for one move).
 - Built as parts A to C with `--partial`. A needs nothing new. B is the record, and C's step 2
   reads it.
 - FEATURES rows, for `marketing/FEATURES.md`:

@@ -12874,13 +12874,58 @@ def others_holding(dropped: set[str], fam: "Family") -> list[str]:
     return out
 
 
-def proposal_section_refusals(branch: str, fork: str, text: str, fam: "Family", meta: dict) -> list[str]:
+# A move's own lines in the metarepo's log, added by its proposal: the page landing here with its
+# moved-from line (up), or the pointers to it renamed (sideways).
+MOVE_LANDS = re.compile(r"^- (?P<as>.+?): moved from (?P<src>[\w.-]+)/.+?\.\s*$", re.M)
+MOVE_POINTERS = re.compile(r"^- Pointers to (?P<src>[\w.-]+)/.+? name (?P<to>[\w.-]+)/(?P<as>.+?), where it moved\.\s*$", re.M)
+
+
+def move_follows(fork_log: str, log: str, names: set[str]) -> list[tuple[str, str]]:
+    """(receiver, page) for each move a proposal from the repo called NAMES carries, read from the
+    lines its LOG adds to FORK_LOG: up, the metarepo itself ("") receives; sideways, the named one."""
+    old = set(fork_log.splitlines())
+    added = "\n".join(l for l in log.splitlines() if l not in old)
+    out = [("", m.group("as").partition(" § ")[0].strip()) for m in MOVE_LANDS.finditer(added)
+           if m.group("src") in names]
+    out += [(m.group("to"), m.group("as").partition(" § ")[0].strip()) for m in MOVE_POINTERS.finditer(added)
+            if m.group("src") in names]
+    return out
+
+
+def only_items_for(old: str, new: str, pages: list[str]) -> bool:
+    """Whether section text NEW differs from OLD only by added items, each touching one of PAGES:
+    the items that follow a moved page into its receiver's section."""
+    left = Counter(l for l in old.splitlines() if l.strip())
+    added = []
+    for l in (l for l in new.splitlines() if l.strip()):
+        if left[l] > 0:
+            left[l] -= 1
+        else:
+            added.append(l)
+    if any(n > 0 for n in left.values()):
+        return False
+    # A section new to the roadmap brings its own heading with the items.
+    added = [l for l in added if not re.match(r"##\s", l)]
+    for l in added:
+        t = TOUCHES_ANY.search(l)
+        if not SCOPE_LINE.fullmatch(l) or not t or not any(
+                same_page(p.strip().strip("`"), page) for p in t.group(1).split(",") for page in pages):
+            return False
+    return bool(added)
+
+
+def proposal_section_refusals(branch: str, fork: str, text: str, fam: "Family", meta: dict,
+                              moves: list[tuple[str, str]] | None = None,
+                              fork_owners: dict[str, str] | None = None) -> list[str]:
     """section_refusals for a metarepo's `propose/<repo>-<slug>` branch changing the roadmap
     from FORK (trunk's, where the branch left it) to TEXT: the proposing repo changes only the
     products it owns. `jig propose` names the branch for the pararepo's folder, so the repo is
     found by its `jig repos` name or its folder's, the longest that the branch starts with; a
     branch naming no pararepo is refused, never passed unjudged. FORK is the commit being made's
-    merge base with trunk, so trunk's own changes merged in are in it, never the branch's."""
+    merge base with trunk, so trunk's own changes merged in are in it, never the branch's. A
+    section FORK has is whose FORK_OWNERS (its glossary) says, so a product renamed in the same
+    commit loses its old headings as its own and a term taken over doesn't bring its sections;
+    a new section is whose the commit's own glossary (FAM's owners) says."""
     def called(r: str) -> set[str]:
         loc = repo_path(r)
         return {r} | ({loc.name} if loc is not None else set())
@@ -12889,9 +12934,22 @@ def proposal_section_refusals(branch: str, fork: str, text: str, fam: "Family", 
         return [f"{branch} names no pararepo of this metarepo (its `pararepos`, by name or folder): "
                 "a roadmap change reaches it by `jig roadmap --edit` in the pararepo that owns the sections"]
     repo = max(names, key=lambda x: len(x[0]))[1]
-    owns = lambda h: bool(h) and fam.owners.get(heading_product(h, fam.owners)) == repo
-    owner = lambda h: (lambda o: "this repo" if o in ("", THIS_REPO) else o)(
-        fam.owners.get(heading_product(h, fam.owners), ""))
+    old_s = {h: t for h, _, t in roadmap_sections(fork)}
+    new_s = {h: t for h, _, t in roadmap_sections(text)}
+
+    def whose(h: str) -> str:
+        owners = fork_owners if fork_owners is not None and h in old_s else fam.owners
+        return owners.get(heading_product(h, owners), "")
+
+    def follows(h: str) -> bool:
+        # A move's proposal carries the moved page's items into its receiver's section, and
+        # nothing else there: the owner's Part C route for items, where no other edit passes.
+        owner = whose(h) if h else None
+        pages = [p for to, p in moves or [] if owner is not None and
+                 (owner in ("", THIS_REPO) if not to else name_in(owner, {to}))]
+        return bool(pages) and only_items_for(old_s.get(h, ""), new_s.get(h, ""), pages)
+    owns = lambda h: bool(h) and whose(h) == repo or follows(h)
+    owner = lambda h: (lambda o: "this repo" if o in ("", THIS_REPO) else o)(whose(h))
     return section_refusals(fork, text, owns, owner, repo, True)
 
 
@@ -12928,8 +12986,17 @@ def roadmap_rules(board: "Board", branch: str, staged: bool, paths: list[str],
         # trunk's tip, so a resolution keeping the branch's old copy of another repo's section
         # reads as the change it is.
         fork = git("merge-base", trunk, "HEAD", *merging_commits())
+        # The branch's own glossary says whose a heading is: a product it proposes is its own.
+        if own := in_index(GLOSSARY, staged):
+            fam.owners = term_owners(own)
+        meta = load_meta(trunk)
+        callers = set()
+        for r in meta.get("pararepos") or []:
+            loc = repo_path(r)
+            callers |= {r} | ({loc.name} if loc is not None else set())
+        moves = move_follows(at_rev(fork, LOG) if fork else at_rev(trunk, LOG), in_index(LOG, staged), callers)
         problems = proposal_section_refusals(branch, at_rev(fork, ROADMAP) if fork else old, text, fam,
-                                             load_meta(trunk))
+                                             meta, moves, term_owners(at_rev(fork, GLOSSARY) or "") if fork else None)
         parsed = parse_roadmap(text, problems)
         problems += ref_problems(parsed, parse_no_phase(text, problems))
         problems += type_problems(parsed, fam.owners)
