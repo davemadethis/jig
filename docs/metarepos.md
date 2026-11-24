@@ -65,7 +65,7 @@ saying where it came from. Down or sideways it arrives through [staging](glossar
 a job there; up it's a proposal. Then the sending repo removes its copy, with a line saying where
 it went. The hook refuses that line until the receiver has its own. Old citations keep resolving
 through it. `python3 .jig/jig.py move <what> --to <repo>` does both steps, one per `--apply`. A
-moved page's roadmap items go with it, unless a spec already took them.
+moved page's roadmap items go with it, unless a spec took them or left them for later.
 
 A pararepo with a [roadmap](glossary.md#roadmap) of its own can move it into the metarepo's, once, on the owner's yes.
 `python3 .jig/jig.py move-in --product <Name>` does it in two steps, one per `--apply`. First it proposes the

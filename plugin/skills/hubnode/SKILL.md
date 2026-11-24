@@ -321,8 +321,8 @@ receiver, whose hubnode resolves it in a job and merges; up, a `propose/` branch
 taken by a job opened on it. Step 2, once the receiver's trunk holds it: in a metarepo, open a job
 from the move's spec (`jig open <job> --spec .jig/specs/move-<slug>.md`) and run it there (M4);
 `jig merge` moves the page's roadmap items and closes the spec in the merge commit. In a
-pararepo, run it on trunk and commit: the spec closes in that change. Sideways, step 1 also sends the
-metarepo a pointers proposal, worked ahead of the move. A roadmap file it stages in a metarepo for a receiver
+pararepo, run it on trunk and commit: the spec closes in that change, unless step 2 opened a
+pointers proposal in the metarepo (sideways), which the spec then names, and `jig sync` follows. A roadmap file it stages in a metarepo for a receiver
 keeping its own roadmap waits in staging: after the job merges, `jig staging resolve` forwards it.
 
 Work with no phase yet, parked mid-build (naming the pages it will touch) or not started, is

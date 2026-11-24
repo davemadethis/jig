@@ -155,8 +155,12 @@ same path.
     change in a job.
     - **Sideways from a pararepo:** the metarepo's cached pointers to the moved thing are
       rewritten from `<me>/<path>[ § s]` to `<to>/<as>[ § s]`. The rewrite is made on a
-      `propose/<me>-move-<slug>-pointers` branch, written by the command, and recorded as
-      `meta: <meta> pointers <branch>`, which P2 accepts.
+      `propose/<me>-move-<slug>-pointers` branch, written by the command from the metarepo's
+      trunk once the receiver holds the thing, with the metarepo's roadmap items for the page,
+      and recorded as `meta: <meta> pointers <branch>`, which P2 accepts. That spec stays, as a
+      pararepo spec naming a metarepo branch does, so `jig sync` follows the branch through it.
+    - Otherwise, step 2 closes the move's spec: on a pararepo's trunk in the same change, and in
+      a metarepo by the job opened from it, which `jig merge` closes.
 11. **Roadmap items follow the page** (the owner, 2026-11-20: "roadmap items relating to the
     items being moved should move too"). A moved page's items that no spec or note takes go to
     the receiver's plan:
@@ -167,10 +171,10 @@ same path.
 
     An item a spec or note takes stays where it is, and the page is dropped from its
     `(touches …)`. The change is written by the route the losing roadmap's edits take:
-    - in the metarepo's job commit, when the metarepo loses the page;
+    - in the metarepo's job merge commit, written by `jig merge`, when the metarepo loses the page;
     - in the step's proposal, when a pararepo that plans from the metarepo loses it;
-    - as a `kind: roadmap` file staged here, when a pararepo with a roadmap of its own loses it.
-      Its hubnode applies it on trunk on the owner's yes (R5).
+    - in step 2's change on its trunk, or by `jig merge` in a job, when a pararepo with a roadmap
+      of its own loses it (the hubnode's Interpreted line, Decisions).
 12. **RULES.md and docs.** The changes:
     - Roadmap: Moving in, by `jig move-in`. Edits: names and new products stay the metarepo
       hubnode's, who decides a product a pararepo proposes with its phases at that proposal's
@@ -268,7 +272,7 @@ Part C (`jig move`):
   - removes the page and writes its move line;
   - makes `propose/L-move-docs-l-md-pointers` in `M`, rewriting `M`'s `L/docs/l.md` to
     `K/docs/l.md`;
-  - records `meta: M pointers <branch>`.
+  - records `meta: M pointers <branch>` in the move's spec, which stays, naming the branch.
 
   P2 passes on `L`'s commit.
 - [ ] (no regression) `python3 .jig/jig.py queue -- bash tests/smoke.sh moves move movein pararepo
@@ -351,10 +355,6 @@ Part C (`jig move`):
 - Interpreted (the hubnode, 2026-11-23): a pararepo keeping its own roadmap edits it in step 2's
   change on its trunk, or `jig merge` does it in a job, as in a metarepo. Rejected: a staged
   roadmap file, a second yes for the same repo's own roadmap.
-- Interpreted (moving-in-command's work session, 2026-11-24, reported to the hubnode): sideways,
-  the metarepo's pointers proposal is made at step 1, worked ahead of the move as `meta: <meta>
-  pointers` allows, not at step 2. Step 2 closes the move's spec on a pararepo's trunk, so P2 reads
-  its answer as committed; a line written at step 2 into the spec it deletes would reach no commit.
 - Built as parts A to C with `--partial`. A needs nothing new. B is the record, and C's step 2
   reads it.
 - FEATURES rows, for `marketing/FEATURES.md`:

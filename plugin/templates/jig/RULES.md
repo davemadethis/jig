@@ -1594,12 +1594,14 @@ judges, recorded as `meta: <meta> proposal <branch>` with the metarepo's own cit
 listed. Step 2 waits for the receiver's trunk to hold the moved-from line, its id numbered; it
 then removes the entry, page or section here and writes the move line, staged in the checkout it
 runs in. In a metarepo's trunk checkout it is refused (M4): it runs in a job opened from the move's
-spec, which `jig merge` closes; on a pararepo's trunk the spec closes in step 2's own change, and
-P2 reads its answer as it stood. The spec's `- move:` and `meta:` lines are the move's record,
-found by scanning specs: a withdrawn up proposal is proposed again under the next free name. Sideways from a
-pararepo, step 1 also writes the metarepo's pointer rewrites, worked ahead of the move, on
-`propose/<repo>-move-<slug>-pointers`, recorded in the spec as `meta: <meta> pointers <branch>`,
-which P2 accepts at step 2.
+spec, which `jig merge` closes; on a pararepo's trunk the spec closes in step 2's own change. The
+spec's `- move:` and `meta:` lines are the move's record, found by scanning specs: a withdrawn up
+proposal is proposed again under the next free name, and down or sideways, step 1's state is the
+receiver's (its staged file or a branch landing it waits; landed, step 2 is next; neither, it was
+dropped there and step 1 sends it again). Sideways from a pararepo, step 2 also writes, from the
+metarepo's trunk once the receiver holds the thing, the metarepo's pointer rewrites and roadmap
+items on `propose/<repo>-move-<slug>-pointers`, recorded as `meta: <meta> pointers <branch>`,
+which P2 accepts; that spec stays, as a pararepo spec naming a metarepo branch does.
 
 A moved page's roadmap items follow it. An item a spec or note takes, or a spec leaves for later
 (`Later:`), stays, the page dropped from its `(touches …)`; any other goes to the receiver's plan, in its phase of the same name, else its
@@ -1607,7 +1609,7 @@ No phase list: the receiver's product section of the metarepo's roadmap, the met
 phases when it moves up, or, for a receiver keeping a roadmap of its own, a `kind: roadmap` file
 staged there (from a metarepo's job, it waits in staging until the job merges, and `jig staging
 resolve` forwards it). The metarepo's roadmap changes only by its own merge or a `propose/` branch:
-a page moving up takes its items in step 1's proposal, and sideways in step 1's pointers proposal,
+a page moving up takes its items in step 1's proposal, and sideways in step 2's pointers proposal,
 whatever roadmap the sending pararepo keeps; no roadmap file is staged to it. The losing roadmap
 changes by its own route: in a metarepo, `jig merge` moves the items in the job's merge commit,
 read from the move lines the merge adds, as it re-points a renamed page; in a pararepo planning
