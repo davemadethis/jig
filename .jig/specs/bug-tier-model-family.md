@@ -2,6 +2,8 @@ Source: orbyt-supply hubnode session / 2026-11-24 / Dave (owner) (staged as feed
 
 # bug-tier-model-family: a model's tier is read from its exact id, not its family
 
+Kept separate from bug-board-name-follows-registry: skill-text-only takes the light review, and they share only the log's append-only Fixed lines (owner, 2026-11-24).
+
 ## Intent
 A tier is a model family at any version. `tiers.json` keeps its shape: `model[tier]` is the id
 a session is started or raised to. Reading it backwards (which tier is this session on?) and
