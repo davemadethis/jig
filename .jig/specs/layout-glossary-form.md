@@ -84,6 +84,7 @@ The owner's words:
 - Keep reading table rows as terms during the move. Rejected: the owner wants one form, and the table form's readers are most of the code this part replaces. [assumed]
 
 ## Decisions
+- Interpreted: the request is built as five jobs, one per part, in the order layout-docmap, layout-roadmap-json, layout-later-ledger, layout-glossary-form, layout-rules-templates-names. Each part changes a different system, so each review stays small, and the order is real (parts 2 to 4 build on part 2's products list and ids, and part 5 splits and templates what 2 to 4 rewrite). The alternative is one job carrying all five specs, which the owner leaned to on 2026-11-23 ("Recommend building 2,3,4 with 1 then") before he said "your call". He hasn't answered this yet (the owner was away when it was written). Keeping them apart needs `Kept separate` lines on his word.
 - Interpreted: the terms under "Basic terms" are H3, as non-feature items outside a feature. A product's own terms are H3 directly under its H1, before its first H2 (the stager's reading).
 - Interpreted: a product's or a feature's own definition is the paragraph directly under its heading (the stager's reading).
 - Interpreted: in a stand-alone repo the H1s are its software product and any hardware it runs on, and the H2s are its features (the stager's reading). In a pararepo, the H1s are products on the metarepo's list.

@@ -103,6 +103,7 @@ Every part:
 - Read the JSON field list from the repo's `.jig/templates/`. Rejected: a repo could then widen its own fields, which is the hand-made field the owner ruled out. One example in `jig.py` is the source, and the template is its copy. [assumed]
 
 ## Decisions
+- Interpreted: the request is built as five jobs, one per part, in the order layout-docmap, layout-roadmap-json, layout-later-ledger, layout-glossary-form, layout-rules-templates-names. Each part changes a different system, so each review stays small, and the order is real (parts 2 to 4 build on part 2's products list and ids, and part 5 splits and templates what 2 to 4 rewrite). The alternative is one job carrying all five specs, which the owner leaned to on 2026-11-23 ("Recommend building 2,3,4 with 1 then") before he said "your call". He hasn't answered this yet (the owner was away when it was written). Keeping them apart needs `Kept separate` lines on his word.
 - Interpreted: a file over the cap gets a refine pass. It is split only if it governs two things (the stager's reading, from the owner's line on quality over size).
 - Interpreted: the rulesets are jobs, docs, handoff, workflow, roadmap, decisions, staging, release and inbox, plus metarepo or pararepo where the repo is one. Each role's skill names the rulesets it reads (the stager's reading).
 

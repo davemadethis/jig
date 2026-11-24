@@ -69,6 +69,7 @@ The owner's words, 2026-11-24:
 - Put later on the roadmap. Rejected by the owner: "the roadmap does not carry later". [seen]
 
 ## Decisions
+- Interpreted: the request is built as five jobs, one per part, in the order layout-docmap, layout-roadmap-json, layout-later-ledger, layout-glossary-form, layout-rules-templates-names. Each part changes a different system, so each review stays small, and the order is real (parts 2 to 4 build on part 2's products list and ids, and part 5 splits and templates what 2 to 4 rewrite). The alternative is one job carrying all five specs, which the owner leaned to on 2026-11-23 ("Recommend building 2,3,4 with 1 then") before he said "your call". He hasn't answered this yet (the owner was away when it was written). Keeping them apart needs `Kept separate` lines on his word.
 - Interpreted: jig still refuses a roadmap change that drops an id a row names, as it does for a spec's `Later:` today (the stager's reading).
 - Interpreted: every later row names a roadmap id already on trunk's roadmap. Claude put that to the owner with the description, and the owner answered "Agreed".
 - Interpreted: the command is `jig ledger <later|deferred>`, one subcommand for the "command adds a row to either ledger" the owner agreed to. The workarounds ledger keeps its R7 path.

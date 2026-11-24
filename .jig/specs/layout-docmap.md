@@ -61,6 +61,7 @@ as such. Why not make it it's own .json file? And agreed, query instead."
   the docmap is not configuration and gets its own file. [seen]
 
 ## Decisions
+- Interpreted: the request is built as five jobs, one per part, in the order layout-docmap, layout-roadmap-json, layout-later-ledger, layout-glossary-form, layout-rules-templates-names. Each part changes a different system, so each review stays small, and the order is real (parts 2 to 4 build on part 2's products list and ids, and part 5 splits and templates what 2 to 4 rewrite). The alternative is one job carrying all five specs, which the owner leaned to on 2026-11-23 ("Recommend building 2,3,4 with 1 then") before he said "your call". He hasn't answered this yet (the owner was away when it was written). Keeping them apart needs `Kept separate` lines on his word.
 - Interpreted: `boards`, `deep_subsystems` and `not_docs` move with `docmap`, since they describe the docs tree, not how jig runs (the stager's reading).
 - Interpreted: `jig update` moves the keys in each repo (the stager's reading). The move is a step in the `STEPS` table, keyed on the keys being in `config.json`, not on the stamp.
 - Interpreted: two jobs that change the docmap at once merge as they do today in `config.json`. jig writes `docmap.json` sorted, one key per line, so two separate additions merge as lines. Nothing new handles this, because the docmap already lives in a merged JSON file.
