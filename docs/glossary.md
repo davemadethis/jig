@@ -102,8 +102,9 @@ that replaces the old one.
 ## Roadmap
 
 The owner's plan for a repo: its phases in order, each phase's scopes, and work named but not
-yet placed. It's optional. Progress on it is worked out from merged work, and it isn't a
-task tracker anyone ticks.
+yet placed. Every stand-alone repo and metarepo keeps one, and a pararepo plans from its
+metarepo's. Progress on it is worked out from merged work, and it isn't a task tracker anyone
+ticks.
 
 ## Phase
 

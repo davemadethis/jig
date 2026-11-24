@@ -1,7 +1,7 @@
 {
   "roadmap-labels": {
     "spec": ".jig/specs/roadmap-labels.md",
-    "state": "claimed",
+    "state": "ready",
     "after": [],
     "owns": [],
     "shares": [
@@ -49,32 +49,9 @@
       "plugin/skills/hubnode/SKILL.md",
       "plugin/templates/jig/RULES.md",
       "plugin/templates/jig/jig.py",
-      "tests/smoke.sh"
-    ],
-    "reserved": {}
-  },
-  "bug-deferred-scope": {
-    "spec": ".jig/specs/bug-deferred-scope.md",
-    "state": "claimed",
-    "after": [],
-    "owns": [],
-    "shares": [
-      "docs/glossary.md",
-      "docs/jobs.md",
-      "docs/records.md",
-      "plugin/templates/jig/RULES.md",
-      "plugin/templates/jig/jig.py",
-      "plugin/templates/specs/_template.md",
       "tests/smoke.sh",
-      "plugin/skills/spec/SKILL.md",
-      "plugin/skills/review/SKILL.md",
-      "plugin/skills/bug/SKILL.md",
-      "plugin/skills/hubnode/SKILL.md",
-      "plugin/skills/rig/SKILL.md",
-      "plugin/skills/retro/SKILL.md",
-      "plugin/skills/init/SKILL.md",
-      "plugin/skills/update/SKILL.md",
-      "tests/fixtures/**"
+      "plugin/skills/release/SKILL.md",
+      "plugin/templates/ledgers/BUFFER.md"
     ],
     "reserved": {}
   }
