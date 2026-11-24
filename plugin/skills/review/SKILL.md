@@ -46,7 +46,9 @@ Its job is to find the reason this change is wrong. Its questions:
 
 1. Does every "done when" item have evidence? Name it, or it isn't done. Does "done when"
    cover the symptom in the spec's `Source:` line? A fix spec whose "done when" doesn't, and whose
-   `Out of scope` doesn't say why, is blocking.
+   `Out of scope` doesn't say why, is blocking. So is an `Out of scope` line that leaves work for
+   later, in any wording ("later", "a follow-up", "once this lands"), with no `Later:` id naming
+   it: that line closes with the spec, and the work with it.
 2. Did anything change outside "touches" / "out of scope"?
 3. Is there a sibling path that does the same job differently now? Asymmetry is a finding.
 4. If this is a fix: is `Alternatives considered` filled, and is each rejection reason

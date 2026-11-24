@@ -72,7 +72,12 @@ inline visual, it may; the sections and their contents stay these.
    group with an overlap (one line: one job for its items, or keep some apart), each
    dependency cycle (`cycles`), and in a metarepo each cross-product wait no section confirms
    (`unconfirmed`): the owner rules on it, and it blocks nothing.
-5. **Running:** each open job with its step, who takes it, and whether it continues a session
+5. **Left for later:** each id in `later`, with the job that left it and its roadmap text: work
+   a merged job's spec named on its `Later:` line, still open and taken by no spec. It asks
+   nothing and is never the next step: the owner placed it. Show it so it can't drop out of
+   sight; it leaves the list when a spec takes it or the owner's roadmap change drops it.
+   Omit the part when `later` is empty.
+6. **Running:** each open job with its step, who takes it, and whether it continues a session
    or starts one, as `jig rig` printed it from `jig next`; then each `fixing` feedback report
    with its group and its session.
 
@@ -80,9 +85,9 @@ Then close what merges left, which needs no answer: `jig rig --close` removes ev
 `finished` in one commit on trunk, each one's scopes and staged marks kept on its note, then
 resolves each `built` staged file (resolve writes nothing for those); archive the sessions you started for jobs no longer on the board, with the
 host's tool where it has one, unless one is still working (that one stays, and you say why).
-Draw both as the sixth part:
+Draw both as the seventh part:
 
-6. **Finished:** each spec `jig rig --close` closed or kept, each staged file it resolved,
+7. **Finished:** each spec `jig rig --close` closed or kept, each staged file it resolved,
    and each session archived or still working. A `noted` file (a carried file `resolve` would
    write, a decisions file most often) is never resolved here: it shows under Waiting on you as
    "noted: <note> carried it; the hubnode's step", and § 4 takes that step.
