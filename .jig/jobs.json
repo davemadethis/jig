@@ -1,23 +1,4 @@
 {
-  "roadmap-labels": {
-    "spec": ".jig/specs/roadmap-labels.md",
-    "state": "gated",
-    "after": [],
-    "owns": [],
-    "shares": [
-      "plugin/templates/jig/jig.py",
-      "plugin/templates/jig/RULES.md",
-      "plugin/skills/hubnode/SKILL.md",
-      "plugin/skills/rig/SKILL.md",
-      "plugin/skills/spec/SKILL.md",
-      "docs/records.md",
-      "docs/metarepos.md",
-      "docs/commands.md",
-      "docs/glossary.md",
-      "tests/smoke.sh"
-    ],
-    "reserved": {}
-  },
   "ideas-log": {
     "spec": ".jig/specs/ideas-log.md",
     "state": "claimed",

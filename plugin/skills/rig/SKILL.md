@@ -71,7 +71,10 @@ inline visual, it may; the sections and their contents stay these.
    `/jig:fix` found, the next step whose `state` is `open`, each
    group with an overlap (one line: one job for its items, or keep some apart), each
    dependency cycle (`cycles`), and in a metarepo each cross-product wait no section confirms
-   (`unconfirmed`): the owner rules on it, and it blocks nothing.
+   (`unconfirmed`): the owner rules on it, and it blocks nothing. In a family, then the
+   `Family:` line when rig printed one (`family`): stale staged files, stale or empty
+   proposals, entries touching labelled work and pairs of names, for `jig family`. It is a
+   report, not a question, so it counts in neither number.
 5. **Left for later:** each id in `later`, with the job that left it and its roadmap text: work
    a merged job's spec named on its `Later:` line, still open and taken by no spec. It asks
    nothing and is never the next step: the owner placed it. Show it so it can't drop out of
