@@ -74,7 +74,8 @@ anything.
 ## The rig
 
 `/jig:rig` is the hubnode's front door. It shows one picture: what can start now, what waits on
-what, what waits on you, and the [roadmap](glossary.md#roadmap)'s next step. Then it asks you one batch of decisions
+what, what waits on you, the [roadmap](glossary.md#roadmap)'s next step, and the work merged jobs left for later
+until a spec takes it or you drop it. Then it asks you one batch of decisions
 and acts on your answers. `/jig:rig auto` writes the specs and starts the jobs it can without
 asking, and leaves your questions open for later.
 
