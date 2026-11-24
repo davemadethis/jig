@@ -7,6 +7,8 @@ A breaking change is one that a reader taking the release must act on: a `**Brea
 
 ## Unreleased
 
+## v0.16.0 - 2026-11-24
+
 ### Added
 - A spec names the work it leaves for later on a `Later:` line of roadmap ids, beside `Scope:`, each already on trunk's roadmap: the hook checks them as it checks `Scope:` ids, the drop guard included. `jig gate` prints `Closes with the spec at merge:` with the spec's `Later:` ids and `## Out of scope` lines, the merge keeps the `Later:` line on the note, and `jig rig` lists each id still open under Left for later (`later` in `--json`). Work left for later in an `## Out of scope` line, with no `Later:` id, is a blocking review finding.
 
