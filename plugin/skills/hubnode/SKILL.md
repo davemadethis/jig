@@ -311,6 +311,14 @@ the owner the name, the definition and the phases, change any on the branch on t
 merge it in a job opened on it (`jig open <job> --branch propose/<repo>-move-in`), or on trunk.
 A job merging it from another branch is refused by R5.
 
+A claim (an entry, a page, a section) moves to the repo of the family that owns it by `jig move
+<what> --to <repo>`, on the owner's yes, one step per `--apply`. Step 1 writes
+`.jig/specs/move-<slug>.md` here (commit it) and sends the text: staged and forwarded to the
+receiver, whose hubnode resolves it in a job and merges; up, a `propose/` branch in the metarepo,
+taken by a job opened on it. Step 2, once the receiver's trunk holds it: in a metarepo, open a job
+and run it there (M4), and `jig merge` moves the page's roadmap items in the merge commit; in a
+pararepo, run it and commit. Sideways, step 2's pointers proposal goes to the metarepo with it.
+
 Work with no phase yet, parked mid-build (naming the pages it will touch) or not started, is
 an item under `## No phase` in `.jig/roadmap.md`, proposed the same way. A roadmap change asks
 for no decision entry and no change line. A built item stays, read done from the spec that

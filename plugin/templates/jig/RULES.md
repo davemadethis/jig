@@ -1546,6 +1546,30 @@ never as missing. The answer is a removal's: the metarepo's rewrite as a pointer
 (`jig propose --pointers`), or a `BUFFER.md` row. A pararepo bumping its pin past such a release
 reads the pointer's new home in the pin-bump request.
 
+`jig move <what> --to <repo> [--as <path>]` does both ends, one step per `--apply`; without it,
+it prints each step's state and what the next would write, read from the repos each run. `<what>`
+is an entry id, a page, or `<page> § <heading>`; `--as` is the page's path there (the same path by
+default). Step 1 writes `.jig/specs/move-<slug>.md` here, the job that removes the claim, and
+sends the text with its `moved-from:` pointer by the route for its direction: a file staged with
+`target: <repo>` and forwarded down or sideways (an entry as `### <their prefix>?<slug>`, who and
+date kept, a `Supersedes` of this log's ids dropped); up, a `propose/<repo>-move-<slug>` branch in
+the metarepo whose one commit, the entry or page with its moved-from line, the metarepo's hook
+judges, recorded as `meta: <meta> proposal <branch>` with the metarepo's own citations of it
+listed. Step 2 waits for the receiver's trunk to hold the moved-from line, its id numbered; it
+then removes the entry, page or section here and writes the move line, staged in the checkout it
+runs in. In a metarepo's trunk checkout it is refused (M4): it runs in a job. Sideways from a
+pararepo, it also writes the metarepo's pointer rewrites on `propose/<repo>-move-<slug>-pointers`,
+recorded as `meta: <meta> pointers <branch>`, which P2 accepts.
+
+A moved page's roadmap items follow it. An item a spec or note takes stays, the page dropped from
+its `(touches …)`; any other goes to the receiver's plan, in its phase of the same name, else its
+No phase list: the receiver's product section of the metarepo's roadmap, the metarepo's own
+phases when it moves up, or, for a receiver keeping a roadmap of its own, a `kind: roadmap` file
+staged there. The losing roadmap changes by its own route: in a metarepo, `jig merge` moves the
+items in the job's merge commit, read from the move lines the merge adds, as it re-points a
+renamed page; in a pararepo planning from the metarepo, in the step's proposal; in a pararepo
+keeping a roadmap of its own, by `jig merge` in a job's merge, or in the same change on trunk.
+
 The metarepo's decisions are its `.jig/decisions.md` (Decision log), cited as
 `<meta>/.jig/decisions.md § D-012`. A superseded entry, and a released section's change lines,
 are history: their paths aren't pointers, and this repo's own released lines aren't checked as
@@ -1829,6 +1853,7 @@ jig propose <spec> <slug> --pointers  the same, recorded as pointer rewrites wor
 jig propose --buffer [slug]  pararepo: every Open row of the sync buffer but a move-in row, in one proposal
 jig propose --withdraw <branch> --reason <text>  pararepo: a proposal the metarepo won't release
 jig move-in --product <Name> [--definition <text>] [--apply]  pararepo trunk: move its roadmap into the metarepo's, one step per --apply
+jig move <what> --to <repo> [--as <path>] [--apply]  an entry, page or section to another repo of the family, both ends, one step per --apply
 jig sync --answered <ids> --in <release> --reason <text>  pararepo trunk: close rows a release answered
 ```
 

@@ -256,9 +256,9 @@ Part C (`jig move`):
     L/.jig/decisions.md § D-001.`, and the job merges;
   - run in `M`'s trunk checkout, step 2 is refused, naming M4.
 - [ ] (a page down, with its items) `jig move docs/products/walyt/battery.md --to L --as
-  docs/battery.md`: step 2's commit moves the untaken item `charge` into `## Walyt alpha` with
-  `(touches docs/battery.md)`. A scope a spec takes stays, with the page dropped from its
-  `(touches …)`. The merge passes.
+  docs/battery.md`: step 2 runs in M's job, and the merge commit `jig merge` makes moves the
+  untaken item `charge` into `## Walyt alpha` with `(touches docs/battery.md)`. A scope a spec
+  takes stays, with the page dropped from its `(touches …)`. The merge passes.
 - [ ] (up) In `L`, `jig move D-003 --to M` makes `propose/L-move-d-003` in `M`, whose commit,
   the entry as `E-?…` with its moved-from line, passed `M`'s hook. The spec says `meta: M
   proposal propose/L-move-d-003`. After `M`'s job takes the proposal and numbers it, `--apply`
@@ -344,6 +344,10 @@ Part C (`jig move`):
   target's existence only, so a hand-made move now needs the line at both ends.
 - Writes in this repo are staged, never committed: the hubnode commits on the owner's yes, as
   with `jig propose` and `jig update --apply`.
+- Interpreted (the hubnode, 2026-11-23): in a metarepo, the roadmap items that follow a moved
+  page move in the job's merge commit, written by `jig merge` from the move lines the merge adds,
+  as it re-points a renamed page. Rejected: widening R5 for job branches (the owner declined it
+  for `## Proposals` jobs), and a staged roadmap file, which would need a second yes.
 - Built as parts A to C with `--partial`. A needs nothing new. B is the record, and C's step 2
   reads it.
 - FEATURES rows, for `marketing/FEATURES.md`:

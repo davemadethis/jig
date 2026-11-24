@@ -98,3 +98,4 @@ Across repos:
 - `python3 .jig/jig.py rigger <repo>` sets up a rigger's folder for a repo.
 - `python3 .jig/jig.py propose <spec> <slug>` opens a proposal branch on the [metarepo](glossary.md#metarepo).
 - `python3 .jig/jig.py move-in --product <Name>` moves a pararepo's [roadmap](glossary.md#roadmap) into its metarepo's. It shows each step and its state. `--apply` does the next one.
+- `python3 .jig/jig.py move <what> --to <repo>` moves a decision entry, a page or a section to another repo of its family, both ends. It shows each step and its state. `--apply` does the next one.
