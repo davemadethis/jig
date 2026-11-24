@@ -319,8 +319,11 @@ A claim (an entry, a page, a section) moves to the repo of the family that owns 
 `.jig/specs/move-<slug>.md` here (commit it) and sends the text: staged and forwarded to the
 receiver, whose hubnode resolves it in a job and merges; up, a `propose/` branch in the metarepo,
 taken by a job opened on it. Step 2, once the receiver's trunk holds it: in a metarepo, open a job
-and run it there (M4), and `jig merge` moves the page's roadmap items in the merge commit; in a
-pararepo, run it and commit. Sideways, step 2's pointers proposal goes to the metarepo with it.
+from the move's spec (`jig open <job> --spec .jig/specs/move-<slug>.md`) and run it there (M4);
+`jig merge` moves the page's roadmap items and closes the spec in the merge commit. In a
+pararepo, run it on trunk and commit: the spec closes in that change. Sideways, step 1 also sends the
+metarepo a pointers proposal, worked ahead of the move. A roadmap file it stages in a metarepo for a receiver
+keeping its own roadmap waits in staging: after the job merges, `jig staging resolve` forwards it.
 
 Work with no phase yet, parked mid-build (naming the pages it will touch) or not started, is
 an item under `## No phase` in `.jig/roadmap.md`, proposed the same way. Work a spec leaves for

@@ -271,7 +271,7 @@ Part C (`jig move`):
   - records `meta: M pointers <branch>`.
 
   P2 passes on `L`'s commit.
-- [ ] (no regression) `python3 .jig/jig.py queue -- bash tests/smoke.sh moves movein pararepo
+- [ ] (no regression) `python3 .jig/jig.py queue -- bash tests/smoke.sh moves move movein pararepo
   metarepo roadmap rig boundary staging decisions supersede removals pin_bump claims sync_buffer`
   passes. `movein` is the new section holding Part A. `claude plugin validate ./plugin` passes.
 
@@ -303,7 +303,7 @@ Part C (`jig move`):
   Commands.
 - `plugin/skills/hubnode/SKILL.md`: moving in and moves, by command.
 - `docs/metarepos.md` (Moving claims), `docs/commands.md`.
-- `tests/smoke.sh`: a new `movein` section; `moves`, `pararepo`, `staging`, `claims`,
+- `tests/smoke.sh`: new `movein` and `move` sections; `moves`, `pararepo`, `staging`, `claims`,
   `boundary` and `sync_buffer` gain cases.
 - `marketing/FEATURES.md`: the rows under Decisions.
 - Process or product: product (jig's behaviour), written in RULES.md, the skill and the docs
@@ -348,6 +348,13 @@ Part C (`jig move`):
   page move in the job's merge commit, written by `jig merge` from the move lines the merge adds,
   as it re-points a renamed page. Rejected: widening R5 for job branches (the owner declined it
   for `## Proposals` jobs), and a staged roadmap file, which would need a second yes.
+- Interpreted (the hubnode, 2026-11-23): a pararepo keeping its own roadmap edits it in step 2's
+  change on its trunk, or `jig merge` does it in a job, as in a metarepo. Rejected: a staged
+  roadmap file, a second yes for the same repo's own roadmap.
+- Interpreted (moving-in-command's work session, 2026-11-24, reported to the hubnode): sideways,
+  the metarepo's pointers proposal is made at step 1, worked ahead of the move as `meta: <meta>
+  pointers` allows, not at step 2. Step 2 closes the move's spec on a pararepo's trunk, so P2 reads
+  its answer as committed; a line written at step 2 into the spec it deletes would reach no commit.
 - Built as parts A to C with `--partial`. A needs nothing new. B is the record, and C's step 2
   reads it.
 - FEATURES rows, for `marketing/FEATURES.md`:
