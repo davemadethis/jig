@@ -3440,8 +3440,15 @@ def cmd_gate(root: Path, args) -> int:
     print(f"  (cd {scratch} && python3 {DIR}/jig.py checked --tier {step['tier']} "
           f"--effort {step['effort']} --seconds <s>)")
     print()
-    closing = closes_with(trunk, git("show", f"{commit}:{(job or {}).get('spec') or ''}")
-                          if (job or {}).get("spec") else "")
+    # The merge closes the job's spec and its Bug-for specs alike (close_specs).
+    closing = []
+    if job is not None:
+        own = list(dict.fromkeys(x for x in [(job or {}).get("spec") or ""] + [
+            f for f in git("-c", "core.quotePath=false", "ls-tree", "-r", "--name-only", commit, "--",
+                           SPECS).splitlines() if is_spec(f) and bug_for(git("show", f"{commit}:{f}")) == name] if x))
+        for f in own:
+            lines = closes_with(trunk, git("show", f"{commit}:{f}"))
+            closing += ([f"{f}:"] + [f"  {l}" for l in lines]) if lines and len(own) > 1 else lines
     if closing:
         # The merge deletes the spec: this is the owner's last look at what goes with it.
         print("Closes with the spec at merge:")
@@ -10581,7 +10588,8 @@ def cited(path: str, text: str, bad) -> str:
     """What PATH's `Scope:` and `Later:` lines name that BAD holds, as a refusal says it:
     "takes a, b", "leaves c for later", or both; "" when none."""
     took = [s for s in scopes_in(path, text) if bad(s)]
-    left = [s for s in laters_in(path, text) if bad(s)]
+    # A note's Later: is history: the owner drops a deferred item without rewriting it.
+    left = [s for s in laters_in(path, text) if bad(s)] if is_spec(path) else []
     return " and ".join(x for x in (f"takes {', '.join(took)}" if took else "",
                                      f"leaves {', '.join(left)} for later" if left else "") if x)
 
@@ -11196,22 +11204,47 @@ def ensure_roadmap(root: Path, trunk: str = "", *, init: bool = False, write: bo
     if why:
         print(f"jig: {trunk} has no {ROADMAP}: {why}", file=sys.stderr)
         return
-    here = write and git("branch", "--show-current") == trunk and is_main_worktree(root) \
-        and not (main / ROADMAP).exists() and not git("diff", "--cached", "--name-only")
-    if not here:
-        print(f"jig: {trunk} has no {ROADMAP}: `jig roadmap` in the {trunk} checkout writes it",
-              file=sys.stderr)
+    held = seed_held(root, main, trunk, write)
+    if held:
+        print(f"jig: {trunk} has no {ROADMAP}: {held}", file=sys.stderr)
         return
     write_seed(main)
     git("add", "--", ROADMAP, ROADMAP_VIEW, check=True, cwd=str(main))
     # A metarepo's subjects lead with an id (M6), so its seed commit leads with ROADMAP.
     subject = f"ROADMAP: {SEED_SUBJECT.split(': ', 1)[1]}" if (main / META).is_file() else SEED_SUBJECT
-    if subprocess.run(["git", "commit", "-q", "-m", subject], cwd=str(main)).returncode:
+    # The pathspec commits these two files alone, whatever else the index holds.
+    if subprocess.run(["git", "commit", "-q", "-m", subject, "--", ROADMAP, ROADMAP_VIEW],
+                      cwd=str(main)).returncode:
         print(f"jig: {ROADMAP} is written and staged but not committed: fix what the hook refused, "
               "then `git commit`", file=sys.stderr)
         return
     _FAMILIES.clear()
     print(f"jig: committed {ROADMAP} and {ROADMAP_VIEW} on {trunk}: {subject}", file=sys.stderr)
+
+
+def seed_held(root: Path, main: Path, trunk: str, write: bool) -> str:
+    """Why the seed isn't committed here, said as what to do, or "" when it may be: its commit
+    is the trunk checkout's own, and never lands inside someone's merge or staged work."""
+    later = f"`jig roadmap` in the {trunk} checkout writes it"
+    if not is_main_worktree(root):
+        return f"this is a worktree, not the {trunk} checkout: {later}"
+    if not write:
+        return later
+    if git("branch", "--show-current") != trunk:
+        return f"the {trunk} checkout is on another branch: {later} once it is back on {trunk}"
+    state = next((what for ref, what in (("MERGE_HEAD", "a merge"), ("CHERRY_PICK_HEAD", "a cherry-pick"),
+                                          ("REVERT_HEAD", "a revert"), ("rebase-apply", "a rebase or `git am`"),
+                                          ("rebase-merge", "a rebase"))
+                  if Path(git("rev-parse", "--path-format=absolute", "--git-path", ref, cwd=str(main))).exists()),
+                 "")
+    if state:
+        return f"{state} is in progress here: finish it, then {later}"
+    if (main / ROADMAP).exists() or (main / ROADMAP_VIEW).exists():
+        return (f"{ROADMAP} is here but not on {trunk}, perhaps left staged by a refused commit: "
+                "commit it, or remove it and run `jig roadmap` again")
+    if git("diff", "--cached", "--name-only", cwd=str(main)):
+        return f"changes are staged here: commit or unstage them, then {later}"
+    return ""
 
 
 def cmd_roadmap(root: Path, args) -> int:
@@ -11734,7 +11767,7 @@ def roadmap_rules(board: "Board", branch: str, staged: bool, paths: list[str],
                 continue
             body = in_index(f, staged)
             for line, verb, ids in (("Scope:", "takes", scopes_in(f, body)),
-                                    ("Later:", "leaves for later", laters_in(f, body))):
+                                    ("Later:", "leaves for later", laters_in(f, body) if is_spec(f) else [])):
                 if gone := [s for s in ids if s in dropped]:
                     named.add(f)
                     out.append(f"{ROADMAP} drops {', '.join(gone)}, which {f} still {verb}: re-point "
@@ -11746,7 +11779,7 @@ def roadmap_rules(board: "Board", branch: str, staged: bool, paths: list[str],
                     continue
                 body = sn.show(f)
                 for line, verb, ids in (("Scope:", "takes", scopes_in(f, body)),
-                                        ("Later:", "leaves for later", laters_in(f, body))):
+                                        ("Later:", "leaves for later", laters_in(f, body) if is_spec(f) else [])):
                     if gone := [s for s in ids if s in dropped]:
                         out.append(f"{ROADMAP} drops {', '.join(gone)}, which {label}:{f} still {verb}: "
                                    f"{label} re-points its {line} line first")

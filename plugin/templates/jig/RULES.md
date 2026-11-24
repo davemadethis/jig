@@ -630,8 +630,9 @@ else stops with the files named, and a person resolves it.
    tracked edit, which belongs on the job's branch. `jig update` removes one left behind.
    `jig mark <job> gated` refuses until `jig checked` has recorded the checkout's commit;
    `jig mark <job> gated --batch` leaves the check to the batch (Workflow).
-   After the check lines the gate prints `Closes with the spec at merge:`, the spec's `Later:`
-   ids, each with its roadmap text, and every `## Out of scope` line: the owner's last look at
+   After the check lines the gate prints `Closes with the spec at merge:`, the `Later:` ids of
+   the job's spec and its `Bug-for:` specs, each with its roadmap text, and every `## Out of
+   scope` line: the owner's last look at
    what the merge deletes with the spec. A spec with neither prints no such block.
    The hooks set that checkout up with `.jig/scripts/setup.sh`, when it is added and again
    after its merge of trunk, so the checks run in an environment built from the job's own
@@ -856,7 +857,7 @@ spec whose job has left the board, with the note that completed it. A spec a cac
 pointer names is kept, saying so, as is a pararepo's spec naming a metarepo proposal or
 pointers branch. `jig rig --close`, on trunk in the trunk checkout with a
 clean tree, removes them in one commit, `close finished specs: <names>`, each one's `Scope:`
-on its note as a merge writes it, and rewrites `ROADMAP.md`; then, closing anything or not,
+and `Later:` on its note as a merge writes them, and rewrites `ROADMAP.md`; then, closing anything or not,
 it runs `jig staging resolve` on each built staged file, printing resolve's line. Anywhere else
 it refuses and writes nothing.
 Under **Left for later** it lists each id a landed note's `Later:` line names that trunk's
@@ -1019,7 +1020,9 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
   ids, a No phase item or a scope, each already on trunk's roadmap. Only a roadmap change on
   the owner's yes puts one there, so each deferral is a line he approves. `Later:` takes
   nothing: the id's state is unchanged, so an item left for later stays open. The hook checks
-  its ids wherever it checks `Scope:` ids, with the same refusal, the drop guard included.
+  a spec's `Later:` ids wherever it checks `Scope:` ids, with the same refusal, the drop guard
+  included. A note's `Later:` line is history: the owner's roadmap change drops the item without
+  touching it.
   `jig gate` prints them, with the spec's `## Out of scope` lines, as what closes with the
   spec; the merge carries the line to the note's header; and rig lists each id still open
   under Left for later (Workflow). An `## Out of scope` line is work nothing will do, or work

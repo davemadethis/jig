@@ -5345,6 +5345,8 @@ msg="roadmap: in a metarepo, dropping the roadmap and its view in one commit is 
 git rm -q .jig/roadmap.md ROADMAP.md && out=$(git commit -qm "GLOSSARY: drop roadmap" 2>&1); rc=$?
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'removes it, but every stand-alone repo and metarepo keeps a roadmap'" "$out"
 git -c core.hooksPath=/dev/null commit -qm "GLOSSARY: drop roadmap"     # planted: a metarepo from before the rule
+msg="roadmap: release accepts that drop commit as M4's bookkeeping, as it did before the rule"
+out=$(mrel); expect_pass sh -c "! echo \"\$0\" | grep -q 'without a reviewed merge'" "$out"
 msg="roadmap: in a metarepo with no roadmap at that commit, a ROADMAP.md commit made with hooks off is still refused by release"
 printf 'hand\n' > ROADMAP.md && git add -A \
   && git -c core.hooksPath=/dev/null commit -qm "GLOSSARY: hand view" && c=$(git rev-parse --short=12 HEAD)
@@ -5369,7 +5371,17 @@ mkdir -p .jig/specs && printf '# s1\n\nSource: smoke\n\n## Intent\nx\n' > .jig/s
 $J open N --spec .jig/specs/s1.md >/dev/null && git add -A && git commit -qm "open N"
 msg="roadmap: jig reading-list in a job's worktree writes nothing, says where the roadmap is written, and exits 0 as before"
 out=$(cd .git/jig/worktrees/N && $J reading-list n.txt 2>&1); rc=$?
-expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q 'main has no .jig/roadmap.md: .jig roadmap. in the main checkout writes it' && test ! -e .git/jig/worktrees/N/.jig/roadmap.md && git log -1 --format=%s | grep -qx 'open N' && test -z \"\$(git status --porcelain)\"" "$out"
+expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q 'main has no .jig/roadmap.md: this is a worktree, not the main checkout: .jig roadmap. in the main checkout writes it' && test ! -e .git/jig/worktrees/N/.jig/roadmap.md && git log -1 --format=%s | grep -qx 'open N' && test -z \"\$(git status --porcelain)\"" "$out"
+msg="roadmap: with a merge in progress and nothing staged, jig rig commits nothing, the merge stays the user's, and it says why"
+head=$(git rev-parse HEAD); side=$(git commit-tree "HEAD^{tree}" -p HEAD -m side)   # a commit to merge, no checkout
+git merge -q --no-commit --no-ff "$side" >/dev/null 2>&1    # MERGE_HEAD set; the same tree, so nothing staged
+out=$($J rig 2>&1)
+expect_pass sh -c "test \"\$(git rev-parse HEAD)\" = $head && git rev-parse -q --verify MERGE_HEAD >/dev/null && test ! -e .jig/roadmap.md && echo \"\$0\" | grep -q 'a merge is in progress here: finish it'" "$out"
+git merge --abort
+msg="roadmap: with a change staged, jig rig commits nothing and says the staged changes hold it back"
+printf 'x\n' > staged.txt && git add staged.txt; out=$($J rig 2>&1)
+expect_pass sh -c "test \"\$(git rev-parse HEAD)\" = $head && git diff --cached --name-only | grep -qx staged.txt && test ! -e .jig/roadmap.md && echo \"\$0\" | grep -q 'changes are staged here'" "$out"
+git rm -q --cached staged.txt && rm staged.txt
 msg="roadmap: in the trunk checkout on trunk, jig rig commits the empty structure as its own commit, says so, then prints its picture"
 out=$($J rig 2>&1); rc=$?
 expect_pass sh -c "test $rc = 0 && git log -1 --format=%s | grep -qx 'roadmap: the empty structure jig init writes' && test \"\$(git show --name-only --format= HEAD | sort | tr '\\n' ' ')\" = '.jig/roadmap.md ROADMAP.md ' && echo \"\$0\" | grep -q 'committed .jig/roadmap.md and ROADMAP.md on main' && echo \"\$0\" | grep -q '^Can start now:' && ! $J roadmap | grep -q 'stale\\|missing'" "$out"
@@ -5392,6 +5404,12 @@ out=$(cd .git/jig/worktrees/H && printf 'job\n' >> ROADMAP.md && git add -A && g
 expect_pass sh -c "test $rc = 0 && ! echo \"\$0\" | grep -q R5" "$out"
 msg="roadmap: with no roadmap, survey lists a hand-written ROADMAP.md as a stray"
 expect_pass hrsurvey "assert 'ROADMAP.md' in [e['path'] for e in r['homeless']], r['homeless']"
+msg="roadmap: with a hand-written ROADMAP.md and no .jig/roadmap.md, jig merge leaves ROADMAP.md byte for byte and writes no roadmap"
+git show HEAD:ROADMAP.md > "$T/nr.hand"
+$J open M --owns 'm/**' >/dev/null && git add -A && git commit -qm "open M"
+( cd .git/jig/worktrees/M && mkdir -p m && printf 'm\n' > m/m.txt && git add -A && git commit -qm m \
+  && $J reviewed >/dev/null && $J handoff >/dev/null 2>&1 && pcfold && git add -A && git commit -qm "note M" )
+gated M; expect_pass sh -c "$J merge M >/dev/null 2>&1 && git log -1 --format=%s | grep -q 'merge M' && cmp -s ROADMAP.md '$T/nr.hand' && git show HEAD:ROADMAP.md | cmp -s - '$T/nr.hand' && test ! -e .jig/roadmap.md"
 NI="$T/init-own-roadmap"; pcnew "$NI" && printf '# Our roadmap\nhand written\n' > ROADMAP.md && git add -A && git commit -qm init && cp ROADMAP.md "$T/ni.before"
 msg="roadmap: init in a repo whose root ROADMAP.md is its own writes neither file, says to move it in, and leaves ROADMAP.md byte for byte"
 out=$($J init 2>&1)
@@ -9672,6 +9690,15 @@ expect_pass sh -c "$J rig --json | python3 -c \"import json,sys; d=json.load(sys
 msg="close: an open, pages-less No phase item no note's Later: names stays out of rig, as before"
 printf -- '- `other`: other work\n' >> .jig/roadmap.md && $J roadmap --write >/dev/null && git add -A && git commit -qm other
 expect_pass sh -c "! $J rig | grep -q 'other work' && ! $J rig --json | grep -q 'No phase/other'"
+msg="close: the owner's roadmap change drops a deferred item with the note's Later: line untouched, and rig stops listing it"
+cp .jig/roadmap.md "$T/ll.roadmap"; sed -i.bak '/`labels`/d' .jig/roadmap.md && rm .jig/roadmap.md.bak && $J roadmap --write >/dev/null && git add -A
+expect_pass sh -c "git commit -qm 'drop labels' && git show HEAD:$note | sed '/^## /,\$d' | grep -qx 'Later: No phase/labels' && ! $J rig | grep -q 'Left for later'"
+git reset -q --hard HEAD~1
+msg="close: jig gate shows a Bug-for spec's Later: id and Out of scope line too, under its file"
+printf -- '- `tags`: tags on each item\n' >> .jig/roadmap.md && cspec lb && $J roadmap --write >/dev/null && git add -A && git commit -qm "tags and lb"
+cjob LB lb "" "printf '# lb bug\n\nBug-for: LB\nLater: No phase/tags\n\n## Out of scope\n- the colours: the theme job does it\n' > .jig/specs/lb-bug.md"
+out=$($J gate LB 2>&1); git worktree remove --force .git/jig/worktrees/gate-LB 2>/dev/null
+expect_pass sh -c "echo \"\$0\" | sed -n '/^Closes with the spec at merge:/,/^\$/p' | grep -A2 '^  .jig/specs/lb-bug.md:' | grep -q 'later  *No phase/tags: tags on each item' && echo \"\$0\" | sed -n '/^Closes with the spec at merge:/,/^\$/p' | grep -q 'out of scope  - the colours: the theme job does it'" "$out"
 msg="close: once a new spec takes No phase/labels, Left for later no longer lists it"
 cspec lab 'No phase/labels' && git add -A && git commit -qm lab
 expect_pass sh -c "! $J rig | grep -q 'Left for later' && $J rig --json | python3 -c \"import json,sys; assert json.load(sys.stdin)['later'] == []\""
