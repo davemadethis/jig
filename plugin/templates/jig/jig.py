@@ -2897,10 +2897,19 @@ def cmd_handoff(root: Path, args) -> int:
     name, job = board.job_for_branch(branch)
     if not name:
         name = branch or "work"          # solo: no job, the branch is the unit
-    # The trunk checkout's board too: `jig mark gated` writes it there before the hubnode
-    # commits it, and a note filed in between would merge on the older note's check.
-    if job is not None and "gated" in (job.get("state"),
-                                       Board.load(root, working_tree=True).jobs.get(name, {}).get("state")):
+    # The trunk checkout's jobs too: `jig mark gated` writes them there before the hubnode
+    # commits them, and a note filed in between would merge on the older note's check. The
+    # hubnode may be mid-edit, so a copy that doesn't parse leaves trunk's committed board.
+    marked = None
+    if job is not None:
+        try:
+            marked = (json.loads((main_root() / JOBS).read_text()).get(name) or {}).get("state")
+        except FileNotFoundError:
+            pass
+        except (OSError, ValueError, AttributeError):
+            print(f"warning: couldn't read the trunk checkout's {JOBS}: judged by {board.trunk}'s "
+                  "committed board", file=sys.stderr)
+    if job is not None and "gated" in (job.get("state"), marked):
         # Gated covers the note it was gated on; a newer note would merge on that gate's check.
         die(f"{name} is gated on {board.trunk}: the hubnode marks it back (`jig mark {name} ready`) "
             "before a new handoff, which is gated again")

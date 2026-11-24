@@ -2482,8 +2482,13 @@ msg="handoff: refused while trunk's board has the job gated, naming jig mark rea
 out=$(cd .git/jig/worktrees/ks && $J handoff 2>&1); rc=$?
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -qF 'jig mark ks ready' && test -z \"\$(git -C .git/jig/worktrees/ks status --porcelain)\"" "$out"
 $J mark ks ready >/dev/null && git add -A && git commit -qm "ks ready"
+cp .jig/jobs.json "$T/jobs.keep" && printf '{"ks": ' > .jig/jobs.json
+msg="handoff: a trunk checkout jobs.json that doesn't parse leaves trunk's committed board, said in one line"
+out=$(cd .git/jig/worktrees/ks && $J handoff 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q \"couldn't read the trunk checkout's .jig/jobs.json: judged by main's committed board\" && ! echo \"\$0\" | grep -q Traceback" "$out"
+cp "$T/jobs.keep" .jig/jobs.json
 msg="handoff: marked back, the handoff goes through, and next says gate"
-(cd .git/jig/worktrees/ks && $J handoff >/dev/null && foldin && git add -A && git commit -qm "note ks 3")
+(cd .git/jig/worktrees/ks && foldin && git add -A && git commit -qm "note ks 3")
 expect_pass sh -c "$J next ks | grep -q '^ks: gate — hubnode, continue the hubnode (Job; .jig gate ks.)'"
 # One reader of the line: outside bug_for and bug_specs_at, jig.py names Bug-for only quoted in
 # backticks, as its messages and docstrings do, so any other reader a sync brings in fails here.
