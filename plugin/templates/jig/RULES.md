@@ -614,7 +614,9 @@ else stops with the files named, and a person resolves it.
    commit after the reviewed one. DEFERRED.md is judged by its net change from the reviewed
    commit to the branch, not commit by commit: a row edited and restored later deleted
    nothing, and only a line the net change deletes, one trunk didn't delete, counts as a
-   change since the check. A job may hand off several times.
+   change since the check. A job may hand off several times, but not while trunk's board has
+   it gated: the hubnode marks it back (`jig mark <job> ready`) first, and the new note is
+   gated again, so a gated state never outlives the note it was gated on.
    The review needn't be HEAD itself. A clean `jig sync` of a reviewed commit hands off with
    no new `jig reviewed`: the merge carries nothing a reviewer didn't see. A fix, or a sync
    resolved by hand, is refused, naming the files, until it has a review-change (Workflow;
@@ -629,6 +631,10 @@ else stops with the files named, and a person resolves it.
    The scratch checkout lives until the job is marked gated or merged: `jig mark <job> gated`
    and `jig merge <job>` remove it, untracked files and all, and refuse while it holds a
    tracked edit, which belongs on the job's branch. `jig update` removes one left behind.
+   The checkout must hold the commit the job's newest note names (HEAD, or HEAD's first
+   parent when trunk was merged in). One built from an older note is stale: `jig next` says
+   gate, and `jig checked` there and `jig mark <job> gated` refuse it, naming `jig gate <job>`,
+   which builds it again.
    `jig mark <job> gated` refuses until `jig checked` has recorded the checkout's commit;
    `jig mark <job> gated --batch` leaves the check to the batch (Workflow).
    After the check lines the gate prints `Closes with the spec at merge:`, the `Later:` ids of
@@ -881,7 +887,9 @@ reruns no check the builder's report shows for the same commit. Only the check r
 
 `jig checked --tier N --effort N --seconds S` records a complete run that passed: HEAD, the
 check role's numbers, the seconds and the date, in `.git/jig/checked.log` (never committed;
-shared by every worktree). It warns when the numbers differ from the check role's. `jig
+shared by every worktree). It warns when the numbers differ from the check role's. In a
+job's gate checkout that no longer holds the commit the job's newest note names, it records
+nothing and names `jig gate <job>`. `jig
 status` prints the last one's seconds and date: what a complete check costs here.
 
 `jig checked --ci <run url> --tier N --effort N --seconds S` records a complete check that ran

@@ -2424,6 +2424,57 @@ nx "a gated job with nothing since its note is still the merge" k8 "k8: merge �
 noted=$(git rev-parse --short=12 k8~1)
 (cd .git/jig/worktrees/k8 && printf 'y\n' >> k8/x.txt && git commit -qam more)
 nx "a gated job changed since its note is the review-change, not the merge" k8 "k8: review-change — review, new session (Job; gated at $noted, changed since: mark it back; review-change, handoff, gate again)"
+cd "$NX"
+# A stale gate: a gate's checkout holds the commit of the note it was built from, and a newer
+# note makes it stale. The report's case: gated, no check recorded, then a fix and a new handoff.
+$J open ks --owns 'ks/**' >/dev/null && git add -A && git commit -qm "open ks"
+(cd .git/jig/worktrees/ks && mkdir ks && printf 'x\n' > ks/x.txt && git add -A && git commit -qm x && $J reviewed >/dev/null \
+  && $J handoff >/dev/null && foldin && git add -A && git commit -qm "note ks 1")
+$J gate ks >/dev/null 2>&1
+old=$(git -C .git/jig/worktrees/gate-ks rev-parse --short=12 HEAD)
+(cd .git/jig/worktrees/ks && printf 'y\n' >> ks/x.txt && git commit -qam fix && $J reviewed --change >/dev/null \
+  && $J handoff >/dev/null && foldin && git add -A && git commit -qm "note ks 2")
+new=$(git rev-parse --short=12 ks~1)
+msg="next: a gate checkout built from an older note is the gate again, naming both commits"
+out=$($J next ks 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -q '^ks: gate — hubnode, continue the hubnode (Job; .git/jig/worktrees/gate-ks holds $old, not $new that .jig/handoffs/ks-.*-2.md names: .jig gate ks.)\$'" "$out"
+touch .git/jig/checked.log; logged=$(wc -l < .git/jig/checked.log)
+msg="checked: in a stale gate checkout, refused, naming the note's commit and jig gate; nothing recorded"
+out=$(cd .git/jig/worktrees/gate-ks && $J checked --tier 3 --effort 4 --seconds 1 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'not $new' && echo \"\$0\" | grep -qF 'jig gate ks' && test \$(wc -l < .git/jig/checked.log) = $logged" "$out"
+# A check recorded before the new handoff covers the old note only.
+$J open kt --owns 'kt/**' >/dev/null && git add -A && git commit -qm "open kt"
+(cd .git/jig/worktrees/kt && mkdir kt && printf 'x\n' > kt/x.txt && git add -A && git commit -qm x && $J reviewed >/dev/null \
+  && $J handoff >/dev/null && foldin && git add -A && git commit -qm "note kt 1")
+$J gate kt >/dev/null 2>&1
+(cd .git/jig/worktrees/gate-kt && $J checked --tier 3 --effort 4 --seconds 1 >/dev/null)
+(cd .git/jig/worktrees/kt && printf 'y\n' >> kt/x.txt && git commit -qam fix && $J reviewed --change >/dev/null \
+  && $J handoff >/dev/null && foldin && git add -A && git commit -qm "note kt 2")
+msg="next: a check recorded before the new handoff doesn't make it mark gated: gate"
+expect_pass sh -c "$J next kt | grep -q '^kt: gate — hubnode, continue the hubnode (Job; .git/jig/worktrees/gate-kt holds '"
+msg="mark gated: a stale checkout is refused, naming jig gate; the checkout and the board stay"
+board=$(shasum < .jig/jobs.json)
+out=$($J mark kt gated 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -qF 'jig gate kt' && test -d .git/jig/worktrees/gate-kt && test \"\$(shasum < .jig/jobs.json)\" = '$board'" "$out"
+$J gate kt >/dev/null 2>&1
+want=$(git rev-parse kt~1)
+msg="gate: run again, the checkout holds the new note's commit, and next says check"
+expect_pass sh -c "cd .git/jig/worktrees/gate-kt && { test \$(git rev-parse HEAD) = $want || test \$(git rev-parse HEAD^1) = $want; } && cd '$NX' && $J next kt | grep -q '^kt: check — '"
+(cd .git/jig/worktrees/gate-kt && $J checked --tier 3 --effort 4 --seconds 1 >/dev/null)
+msg="mark gated and merge: the rebuilt checkout's check gates the job, and it merges"
+expect_pass sh -c "$J mark kt gated >/dev/null && git add -A && git commit -qm 'kt gated' && $J merge kt >/dev/null 2>&1"
+# Repro B: a gated job can't hand off again until it is marked back.
+$J gate ks >/dev/null 2>&1
+(cd .git/jig/worktrees/gate-ks && $J checked --tier 3 --effort 4 --seconds 1 >/dev/null)
+$J mark ks gated >/dev/null && git add -A && git commit -qm "ks gated"
+(cd .git/jig/worktrees/ks && printf 'z\n' >> ks/x.txt && git commit -qam fix2 && $J reviewed --change >/dev/null)
+msg="handoff: refused while trunk's board has the job gated, naming jig mark ready"
+out=$(cd .git/jig/worktrees/ks && $J handoff 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -qF 'jig mark ks ready' && test -z \"\$(git -C .git/jig/worktrees/ks status --porcelain)\"" "$out"
+$J mark ks ready >/dev/null && git add -A && git commit -qm "ks ready"
+msg="handoff: marked back, the handoff goes through, and next says gate"
+(cd .git/jig/worktrees/ks && $J handoff >/dev/null && foldin && git add -A && git commit -qm "note ks 3")
+expect_pass sh -c "$J next ks | grep -q '^ks: gate — hubnode, continue the hubnode (Job; .jig gate ks.)'"
 # One reader of the line: outside bug_for and bug_specs_at, jig.py names Bug-for only quoted in
 # backticks, as its messages and docstrings do, so any other reader a sync brings in fails here.
 onereader() { awk '/^[A-Za-z_@]/{d = ($1 == "def") ? $2 : ""} /Bug-for/ && d !~ /^bug_(for|specs_at)\(/ && !/`Bug-for/{print FILENAME ":" NR ": " $0; bad=1} END{exit bad}' "$1"; }
@@ -8908,6 +8959,33 @@ def clash(*a, **k):
 m.record_plan = clash
 sys.exit(m.cmd_merge_log(pathlib.Path('.').resolve(), True))" 2>&1); rc=$?
 expect_pass sh -c "test $rc = 2 && echo \"\$0\" | grep -q 'planned both a text and a removal for docs/decisions/0001-use-markdown.md' && test -z \"\$(git status --porcelain)\"" "$out"
+# entry_files in a metarepo: a path the run removes leaves entry_files with it, the log in its place.
+mlentry() {  # mlentry <dir> <reg|folder|prose> <entry_files json>: a metarepo with two records and an index, on branch ml
+  pcnew "$1" && mkdir -p docs/decisions
+  printf '# 0001. Use A\n\n- **Date:** 2026-01-01\n- **Status:** accepted\n\n## Context\n\nWe needed A.\n' > docs/decisions/0001-a.md
+  printf '# 0002. Use B\n\n- **Date:** 2026-01-02\n- **Status:** accepted\n\n## Context\n\nWe needed B.\n' > docs/decisions/0002-b.md
+  printf '# Decisions\n\n- [0001](0001-a.md)\n- [0002](0002-b.md)\n' > docs/decisions/README.md
+  [ "$2" = prose ] && printf '\nHow we write them: one file each.\n' >> docs/decisions/README.md
+  [ "$2" = reg ] && printf '# Decisions\n\n| Id | Decision | Status | Date |\n|---|---|---|---|\n| D-001 | a | accepted (Ann) | 2026-01-01 |\n' > DECISIONS.md
+  git add -A && git commit -qm init && $J init --meta --name mm >/dev/null 2>&1; git add -A && git commit -qm meta-init >/dev/null 2>&1
+  python3 -c "import json,sys; f='.jig/meta.json'; d=json.load(open(f)); d['entry_files']=json.loads(sys.argv[1]); json.dump(d, open(f,'w'), indent=2)" "$3"
+  git add -A && git -c core.hooksPath=/dev/null commit -qm entry && git switch -q -c ml; }
+mlentry "$T/ml-entry-reg" reg '["docs/decisions/README.md", "DECISIONS.md"]'
+out=$($UP --apply --merge-log 2>&1)
+msg="merge-log entry_files: a register and a removed index both leave entry_files, the log alone left; the commit and rules pass"
+expect_pass sh -c "echo \"\$0\" | grep -qF \".jig/meta.json entry_files: ['docs/decisions/README.md', 'DECISIONS.md'] → ['.jig/decisions.md']\" && test \"\$(python3 -c \"import json; print(json.load(open('.jig/meta.json'))['entry_files'])\")\" = \"['.jig/decisions.md']\" && git commit -qm 'TOOL: merge the log' && $J rules >/dev/null" "$out"
+mlentry "$T/ml-entry-folder" folder '["docs/decisions/README.md", ".jig/decisions.md"]'
+dry=$($UP --merge-log 2>&1); $UP --apply --merge-log >/dev/null 2>&1
+msg="merge-log entry_files: a folder-only run drops the removed index, prints it in the dry run, stages META, and the commit passes"
+expect_pass sh -c "echo \"\$0\" | grep -qF \".jig/meta.json entry_files: ['docs/decisions/README.md', '.jig/decisions.md'] → ['.jig/decisions.md']\" && git diff --cached --name-only | grep -qx .jig/meta.json && test \"\$(python3 -c \"import json; print(json.load(open('.jig/meta.json'))['entry_files'])\")\" = \"['.jig/decisions.md']\" && git commit -qm 'TOOL: merge the log'" "$dry"
+mlentry "$T/ml-entry-kept" prose '["docs/decisions/README.md", "docs/decisions/*.md", "docs/decisions/0001-a.md"]'
+$UP --apply --merge-log >/dev/null 2>&1
+msg="merge-log entry_files: a kept index and a glob stay as written; a removed record goes"
+expect_pass sh -c "test -e docs/decisions/README.md && test \"\$(python3 -c \"import json; print(json.load(open('.jig/meta.json'))['entry_files'])\")\" = \"['.jig/decisions.md', 'docs/decisions/README.md', 'docs/decisions/*.md']\""
+mlentry "$T/ml-entry-none" folder '["docs/glossary.md", ".jig/ideas.md"]'
+before=$(shasum < .jig/meta.json); $UP --apply --merge-log >/dev/null 2>&1
+msg="merge-log entry_files: a folder-only run whose entry_files names nothing removed leaves META unstaged, byte for byte"
+expect_pass sh -c "test ! -e docs/decisions/0001-a.md && ! git diff --cached --name-only | grep -qx .jig/meta.json && test \"\$(shasum < .jig/meta.json)\" = '$before'"
 }
 
 # ---------------------------------------------------------------- a heading is a page's address
