@@ -59,10 +59,12 @@ commit.
 
 ## Moving claims
 
-A claim found to have only one owner moves down to that pararepo. The pararepo lands the text
-first, through [staging](glossary.md#staging) and a job of its own. Then the metarepo removes
-its copy, with a line saying where it went. Old citations keep resolving through that line. A
-claim moves down only. Going up is a proposal.
+A claim found to have only one owner moves to it: down to a pararepo, up to the metarepo, or
+sideways to another pararepo. The receiving repo lands the text first, with a line in its log
+saying where it came from. Down or sideways it arrives through [staging](glossary.md#staging) and
+a job there; up it's a proposal. Then the sending repo removes its copy, with a line saying where
+it went. The hook refuses that line until the receiver has its own. Old citations keep resolving
+through it.
 
 A pararepo with a [roadmap](glossary.md#roadmap) of its own can move it into the metarepo's, once, on the owner's yes.
 `python3 .jig/jig.py move-in --product <Name>` does it in two steps, one per `--apply`. First it proposes the

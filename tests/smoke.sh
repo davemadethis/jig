@@ -5008,8 +5008,11 @@ metahead=$(git -C "$FM" rev-parse HEAD); gated Y; $J merge Y >/dev/null 2>&1
 msg="family: once pb merges the job taking it, meta's roadmap shows Familiar App No phase/y done, and pb wrote nothing to meta"
 cd "$FM"; expect_pass sh -c "$J roadmap | grep -qE '^  Familiar App No phase/y +done' && test \"\$(git -C '$FM' rev-parse HEAD)\" = '$metahead'"
 # A page meta moves down to pa takes its item into pa's section in the same commit.
-cd "$FA" && printf '# W\n\nW is.\n' > docs/w.md && git add -A && git commit -qm "w arrives"
 cd "$FM" && printf '# W\n\nW is.\n' > docs/w.md && plant "meta page w"
+cd "$FA" && printf '# W\n\nW is.\n' > docs/w.md && ulog '### Added
+
+- docs/w.md: moved from meta/docs/w.md.' && git add -A && git commit -qm "w arrives"
+cd "$FM"
 sed -i.bak 's/^- `d`: a demo$/- `d`: a demo\n- `w`: the w work (touches docs\/w.md)/' .jig/roadmap.md && rm .jig/roadmap.md.bak && git add -A && git commit -qm 'GLOSSARY: Demos/w'
 git switch -q -c mvw && git rm -q docs/w.md && ulog "### Removed
 
@@ -9198,8 +9201,9 @@ sec_moves() {
 MV="$T/moves"; mkdir -p "$MV"
 emerge() { b=$1 s=$2; shift 2; git switch -q -c "$b" && git add -A -- "$@" && git commit -qm "$s" && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-edit "$b"; }
 mvjson() { python3 -c "import json,sys; f=sys.argv[1]; d=json.load(open(f)); d[sys.argv[2]]=json.loads(sys.argv[3]); json.dump(d, open(f,'w'), indent=2)" "$@"; }
-stagef() {  # stagef <name> <target> <kind> <destination> <body>: a staged file in this repo
-  mkdir -p .jig/staging && printf -- '---\nstaged: true\ntarget: %s\nkind: %s\nchange: %s\ndestination: %s\nsource: owner / 2026-11-21\nstatus: staged\n---\n%b' "$2" "$3" "$([ "$3" = roadmap ] && echo update || echo new)" "$4" "$5" > ".jig/staging/$1"; }
+stagef() {  # stagef <name> <target> <kind> <destination> <body> [moved-from]: a staged file in this repo
+  mkdir -p .jig/staging && printf -- '---\nstaged: true\ntarget: %s\nkind: %s\nchange: %s\ndestination: %s\nsource: owner / 2026-11-21\nstatus: staged\n%s---\n%b' "$2" "$3" "$([ "$3" = roadmap ] && echo update || echo new)" "$4" "${6:+moved-from: $6
+}" "$5" > ".jig/staging/$1"; }
 mvlines() { ulog "### Removed
 
 - E-2: moved to ${1:-L/.jig/decisions.md § D-002}.
@@ -9247,7 +9251,7 @@ msg="moves: a strike line giving another reason doesn't let released E-002 go, a
 git switch -q -c t1 && rment E-002 && ulog '### Removed
 
 - E-002: moved to L as D-001.' && git add -A; out=$(git commit -qm "E-002: try" 2>&1); rc=$?
-expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'E-002: project scope, not a product decision' && echo \"\$0\" | grep -q 'E-002: moved to <pararepo>/.jig/decisions.md § <its id there>'" "$out"
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'E-002: project scope, not a product decision' && echo \"\$0\" | grep -q 'E-002: moved to <repo of its family>/.jig/decisions.md § <its id there>'" "$out"
 [ $rc != 0 ] || echo "$out"
 msg="moves: the strike line still lets it go"
 git reset -q --hard && rment E-002 && ulog '### Removed
@@ -9257,17 +9261,22 @@ expect_pass git commit -qm "E-002: struck"
 git reset -q --hard main && git switch -q main && git branch -qD t1
 
 # The text lands first: staged in M to L, then a job there.
-stagef mv-entries.md L decisions .jig/decisions.md '### D-?battery two\nAccepted (owner, 2026-11-02).\nTouches: none — moved\n\nThe battery is 400 mAh.\n\n### D-?mods four\nOpen (owner, 2026-11-02).\nTouches: none — moved\n\nWhich mods ship?\n'
-stagef mv-battery.md L doc docs/battery.md '# Battery\n\nThe battery.\n'
-stagef mv-walyt.md L doc docs/walyt.md '# Walyt\n\n## Mods\n\nMods snap on.\n'
-msg="moves: the three staged files forward to L"
-out=$(for f in mv-entries.md mv-battery.md mv-walyt.md; do $J staging resolve $f; done 2>&1)
+stagef mv-entries.md L decisions .jig/decisions.md '### D-?battery two\nAccepted (owner, 2026-11-02).\nTouches: none — moved\n\nThe battery is 400 mAh.\n' 'M/.jig/decisions.md § E-002'
+stagef mv-mods.md L decisions .jig/decisions.md '### D-?mods four\nOpen (owner, 2026-11-02).\nTouches: none — moved\n\nWhich mods ship?\n' 'M/.jig/decisions.md § E-004'
+stagef mv-battery.md L doc docs/battery.md '# Battery\n\nThe battery.\n' 'M/docs/products/walyt/battery.md'
+stagef mv-walyt.md L doc docs/walyt.md '# Walyt\n\n## Mods\n\nMods snap on.\n' 'M/docs/products/walyt/walyt.md § Mods'
+msg="moves: the four staged files forward to L"
+out=$(for f in mv-entries.md mv-mods.md mv-battery.md mv-walyt.md; do $J staging resolve $f; done 2>&1)
 expect_pass sh -c "test -f '$L/.jig/staging/mv-entries.md' && test -f '$L/.jig/staging/mv-walyt.md' && test ! -e .jig/staging/mv-battery.md"
 cd "$L" && git switch -q -c land
-for f in mv-entries.md mv-battery.md mv-walyt.md; do $J staging resolve $f >/dev/null 2>&1; done
+for f in mv-entries.md mv-mods.md mv-battery.md mv-walyt.md; do $J staging resolve $f >/dev/null 2>&1; done
 git add -A && git commit -qm "D-?battery, D-?mods: land from M" && $J reviewed >/dev/null && git switch -q main && git merge -q --no-ff --no-commit land && $J merge --number >/dev/null && git commit -qm "merge land"
 msg="moves: L numbers the landed entries, accepted D-002 keeping E-002's who and date, and Open D-001"
 expect_pass sh -c "grep -qx '### D-002 two' .jig/decisions.md && grep -qx '### D-001 four' .jig/decisions.md && grep -qx 'Accepted (owner, 2026-11-02).' .jig/decisions.md && test -f docs/battery.md && grep -qx '## Mods' docs/walyt.md"
+msg="moves: L's log has a moved-from line for each, under ## Unreleased ### Added, the ids numbered with their entries"
+expect_pass sh -c "sed -n '/^## Unreleased/,/^## v/p' .jig/decisions.md | sed -n '/^### Added/,/^### [A-Z]/p' > $T/mf; grep -qx -- '- D-002: moved from M/.jig/decisions.md § E-002.' $T/mf && grep -qx -- '- D-001: moved from M/.jig/decisions.md § E-004.' $T/mf && grep -qx -- '- docs/battery.md: moved from M/docs/products/walyt/battery.md.' $T/mf && grep -qx -- '- docs/walyt.md § Mods: moved from M/docs/products/walyt/walyt.md § Mods.' $T/mf; r=\$?; rm -f $T/mf; exit \$r"
+msg="moves: jig decision D-002 in L prints where it moved from, and reading-list --claims D-002 names it"
+expect_pass sh -c "$J decision D-002 | grep -q 'D-002 moved from M/.jig/decisions.md § E-002' && $J reading-list --claims D-002 | grep -q 'D-002 moved from M/.jig/decisions.md § E-002'"
 
 cd "$M"
 # A job moving only a section leaves its page, so it moves no roadmap item.
@@ -9286,7 +9295,7 @@ moveit() {  # moveit [pointers…]: on branch mv, E-002 and E-004 out of the log
     && python3 -c "f='docs/products/walyt/walyt.md'; s=open(f).read(); open(f,'w').write(s.replace('## Mods\n\nMods snap on.\n\n',''))" \
     && mvlines "$@" && git add -A; }
 tryit() { out=$(git commit -qm "E-002, E-004: move to L" 2>&1); rc=$?; git reset -q --hard; }
-for bad in "§ D-009:L/.jig/decisions.md § D-009::::has no entry D-009" "nope.md::L/docs/nope.md:::has no docs/nope.md" "§ Nope::::L/docs/walyt.md § Nope:has no heading Nope" "X::X/.jig/decisions.md § D-001:::which isn.t one of"; do
+for bad in "§ D-009:L/.jig/decisions.md § D-009::::has no entry D-009" "nope.md::L/docs/nope.md:::has no docs/nope.md" "§ Nope::::L/docs/walyt.md § Nope:has no heading Nope" "X::X/.jig/decisions.md § D-001:::which isn.t of this repo.s family"; do
   IFS=: read -r name a b c d want <<<"$bad"
   msg="moves: a move line naming $name is refused, naming what it read"
   moveit "${a:-}" "${b:-}" "${c:-}" "${d:-}"; tryit
@@ -9371,6 +9380,10 @@ msg="moves: reading-list --claims E-002 names the move in its note"
 out=$($J reading-list --claims E-002 2>&1)
 expect_pass sh -c "echo \"\$0\" | grep -q 'E-002 moved to L/.jig/decisions.md § D-002' && ! echo \"\$0\" | grep -q 'no entry'" "$out"
 
+# A page of M cites one of L's, so L's cache points at it once its pin takes this release.
+( cd "$L" && printf '# L\n\nL is.\n' > docs/l.md && git add -A && git -c core.hooksPath=/dev/null commit -qm "l page" )
+printf '\nSee `L/docs/l.md`.\n' >> docs/products/walyt/walyt.md && ulog '- docs/products/walyt/walyt.md: cites L/docs/l.md.' \
+  && emerge cite "E-003: cite L's page" docs/products/walyt/walyt.md .jig/decisions.md >/dev/null 2>&1
 msg="moves: the release stages L's pin bump, every id and page moved, nothing removed or missing"
 out=$($J release 2>&1)
 PB="$L/.jig/staging/pin-bump-M.md"
@@ -9379,6 +9392,88 @@ cd "$L"
 msg="moves: L's jig sync lists E-002 and E-004 as moved"
 out=$($J sync 2>&1)
 expect_pass sh -c "echo \"\$0\" | grep -q 'E-002 (moved: .jig/decisions.md § D-002, this repo)' && echo \"\$0\" | grep -q 'E-004 (moved: .jig/decisions.md § D-001, this repo)'" "$out"
+# Moves in every direction, both ends recorded.
+rm -f .jig/staging/pin-bump-M.md && setjson .jig/para.json pin v0.1.1 && $J init --para >/dev/null 2>&1 && git add -A && git commit -qm "meta: M v0.1.0 → v0.1.1" >/dev/null 2>&1
+K="$MV/K"; mkdir -p "$K" && cd "$K" && git init -q -b main && git config user.email t@t && git config user.name t
+cp -r "$P/jig" .jig && cp "$P/AGENTS.md" "$P/CLAUDE.md" . && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
+$J init --para M --location "$M" --pin v0.1.1 >/dev/null && $J repos add repo "$K" --name K >/dev/null && git add -A && git commit -qm para
+( cd "$M" && mvjson .jig/meta.json pararepos '["L", "K"]' && git add -A && git -c core.hooksPath=/dev/null commit -qm "TOOL: K joins" )
+cd "$M"
+msg="moves B (both ends): M's move of E-003 to L is refused while L's trunk has D-003 but no moved-from line for it"
+( cd "$L" && ulog '### D-003 three
+Accepted (owner, 2026-11-01).
+Touches: none — moved
+
+Builds on D-002 and D-001.' && git add -A && git -c core.hooksPath=/dev/null commit -qm "D-003 planted" )
+git switch -q -c e3 && rment E-003 && ulog '### Removed
+
+- E-003: moved to L/.jig/decisions.md § D-003.' && git add -A
+out=$(git commit -qm "E-003: move to L" 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'has no moved-from line for D-003 naming this repo.s E-003'" "$out"; [ $rc != 0 ] || echo "$out"
+msg="moves B (both ends): once L's trunk has the moved-from line, the same move commits"
+( cd "$L" && ulog '### Added
+
+- D-003: moved from M/.jig/decisions.md § E-003.' && git add -A && git -c core.hooksPath=/dev/null commit -qm "D-003 moved-from" )
+out=$(git commit -qm "E-003: move to L" 2>&1); rc=$?
+expect_pass test $rc = 0; [ $rc = 0 ] || echo "$out"
+git switch -q main && git branch -q -D e3
+cd "$L"
+msg="moves B (source checked): in L, a moved-from line naming M's E-009, which M neither has nor moves to L, is refused, naming M's file"
+ulog '### Added
+
+- D-003: moved from M/.jig/decisions.md § E-009.' && git add -A; out=$(git commit -qm "D-003: from E-009" 2>&1); rc=$?; git reset -q --hard
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \"M's .jig/decisions.md on main (read .*/M/.jig/decisions.md) neither has E-009\"" "$out"; [ $rc != 0 ] || echo "$out"
+msg="moves B (up): in L, D-005 moved to M as E-010 commits once M's trunk has E-010 with its moved-from line"
+ulog '### D-005 five
+Accepted (owner, 2026-11-03).
+Touches: none — up
+
+Five.' && git add -A && git -c core.hooksPath=/dev/null commit -qm "D-005 planted"
+( cd "$M" && ulog '### E-010 ten
+Accepted (owner, 2026-11-03).
+Touches: none — up
+
+Five.' && ulog '### Added
+
+- E-010: moved from L/.jig/decisions.md § D-005.' && git add -A && git -c core.hooksPath=/dev/null commit -qm "E-010 planted" )
+rment D-005 && ulog '### Removed
+
+- D-005: moved to M/.jig/decisions.md § E-010.' && git add -A; out=$(git commit -qm "D-005: up to M" 2>&1); rc=$?
+expect_pass test $rc = 0; [ $rc = 0 ] || echo "$out"
+msg="moves B (up): jig decision D-005 in L names the move"
+expect_pass sh -c "$J decision D-005 | grep -q 'D-005 moved to M/.jig/decisions.md § E-010'"
+msg="moves B (family): in L, a move line naming a repo outside the family is refused"
+ulog '### D-006 six
+Accepted (owner, 2026-11-03).
+Touches: none — up
+
+Six.' && git add -A && git -c core.hooksPath=/dev/null commit -qm "D-006 planted"
+rment D-006 && ulog '### Removed
+
+- D-006: moved to X/.jig/decisions.md § D-001.' && git add -A; out=$(git commit -qm "D-006: away" 2>&1); rc=$?; git reset -q --hard
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \"moves to X, which isn.t of this repo's family (K, M)\"" "$out"; [ $rc != 0 ] || echo "$out"
+msg="moves B (sideways): K lands docs/l.md with its moved-from line while L's trunk still has it"
+cd "$K" && mkdir -p docs && printf '# L\n\nL is.\n' > docs/l.md && ulog '### Added
+
+- docs/l.md: moved from L/docs/l.md.' && git add -A; out=$(git commit -qm "l from L" 2>&1); rc=$?
+expect_pass test $rc = 0; [ $rc = 0 ] || echo "$out"
+msg="moves B (sideways): in L, docs/l.md moved to K/docs/l.md commits, answered by a meta: line"
+cd "$L" && git rm -q docs/l.md && ulog '### Removed
+
+- docs/l.md: moved to K/docs/l.md.' && mkdir -p .jig/specs && printf '# l to K\n\n- meta: none — moved to K; M re-points its pointer\n' > .jig/specs/l-to-k.md && git add -A
+out=$(git commit -qm "l to K" 2>&1); rc=$?
+expect_pass test $rc = 0; [ $rc = 0 ] || echo "$out"
+msg="moves B (sideways): L's jig sync lists M's cached pointer to docs/l.md as moved to K/docs/l.md, not as missing"
+out=$($J sync 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -q 'docs/l.md (moved: K/docs/l.md)'" "$out"; [ "$fail" = 0 ] || echo "$out"
+msg="moves B (no family): a move line in a stand-alone repo is refused, saying it has no family"
+S="$MV/S"; mkdir -p "$S" && cd "$S" && git init -q -b main && git config user.email t@t && git config user.name t
+cp -r "$P/jig" .jig && cp "$P/AGENTS.md" "$P/CLAUDE.md" . && mkdir -p docs && printf '# A\n\nA is.\n' > docs/a.md && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
+git rm -q docs/a.md && ulog '### Removed
+
+- docs/a.md: moved to X/docs/a.md.' && git add -A; out=$(git commit -qm "a away" 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'this repo has no family'" "$out"; [ $rc != 0 ] || echo "$out"
+cd "$L"
 msg="moves: one live read of another repo's trunk: trunk_show, defined once, called by meta_citations and move_rules"
 expect_pass sh -c "! grep -q 'def live\\b' '$P/jig/jig.py' && test \$(grep -c '^def trunk_show(' '$P/jig/jig.py') = 1 \
   && awk '/^def meta_citations/,/^def uncovered_paths/' '$P/jig/jig.py' | grep -q 'trunk_show(' && awk '/^def move_rules/,/^    return out/' '$P/jig/jig.py' | grep -q 'trunk_show('"

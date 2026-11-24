@@ -1224,8 +1224,9 @@ not what it decided (M2 checks its pages); and so is removing an entry no accept
 name what it would supersede, and retires nothing until it is accepted. The one other removal is
 a struck entry, project scope rather than a decision (Documentation: Product and project): the
 commit removing it adds, under `## Unreleased` `### Removed`, a line naming its id
-(`- D-040: project scope, not a product decision.`). In a metarepo the other is a move: a claim
-handed down to the pararepo that owns it (Metarepo and pararepos, What the metarepo holds), whose
+(`- D-040: project scope, not a product decision.`). In a repo of a family (Metarepo and
+pararepos) the other is a move: a claim handed to the repo of the family that owns it, down to a
+pararepo, up to the metarepo, or sideways to another pararepo (What the metarepo holds), whose
 line is its forwarding address, a pointer to its new home: `- D-040: moved to
 app/.jig/decisions.md § D-016.`, and for a page or a section `- docs/ui.md: moved to
 app/docs/ui.md.` or `- docs/ui.md § Build: moved to app/docs/ui.md § Build.`. An Open entry or a
@@ -1235,15 +1236,26 @@ lets nothing go, and the refusal names both lines. The hook checks a move line t
 the line is under `## Unreleased` (a move line anywhere else is refused, and nothing reads
 one there); it is the only move line for its id, page or section, in the log or the commit (a line not
 yet released may be corrected in place);
-the repo is one of `meta.json`'s `pararepos`; a moved id is an entry this commit removes, not
+the repo is of this one's family (a metarepo's `pararepos`; for a pararepo, its metarepo and the
+`pararepos` its metarepo's trunk lists), and a repo with no family is refused, saying so; a moved
+id is an entry this commit removes, not
 one an accepted entry supersedes (its successor is what moves); this repo no longer has the
 page or section; and the target is on that repo's trunk, read through `jig repos` (an id as an entry
-heading in its log, matched by number, a heading as `§` resolves). An entry that supersedes a
-moved id is refused: its home is the pararepo now. It refuses a target that repo lacks, naming the
-file it read, and passes with a warning when the repo can't be reached. Released, the line is
+heading in its log, matched by number, a heading as `§` resolves), whose log there has the
+**moved-from line** naming this repo's thing ("land it there first, with its moved-from line").
+The moved-from line is the move's record at the receiving end, under `## Unreleased` `### Added`:
+`- D-016: moved from meta/.jig/decisions.md § D-040.`, `- docs/ui.md: moved from
+meta/docs/ui.md.` or `- docs/ui.md § Build: moved from meta/docs/ui.md § Build.`, one form for ids,
+pages and sections, as the move line is. A `D-?<slug>` written there is numbered with its entry
+at the merge. The hook checks a moved-from line the commit adds: its repo is of the family, and on
+that repo's trunk the thing is still there (the move pending), or that repo's move line for it
+points here; neither, it is refused, naming the file it read. An entry that supersedes a
+moved id is refused: its home is the other repo now. It refuses a target that repo lacks, naming
+the file it read, and passes with a warning when the repo can't be reached. Released, the line is
 frozen like any change line, so the map from old id or path to new home needs no history: a
 supersedes chain that reaches a moved id ends at its pointer, and `jig decision`, `jig
-reading-list --claims`, `jig sync` and the pin-bump request name it. Before the log, a register row struck so
+reading-list --claims`, `jig sync` and the pin-bump request name it. At the receiving end, `jig
+decision <id>` prints `moved from <pointer>`, and `jig reading-list --claims` names it. Before the log, a register row struck so
 says `struck` in its Status cell, and `--merge-log` leaves it out, its number still taken. `jig decision <id>` prints an
 entry and its supersedes chain, newest last; for a removed id it reads the entry from git, with
 the commit and release it stood in, and names what holds now. `jig update` lists a superseded
@@ -1375,6 +1387,12 @@ decisions file adds its entries under its own checks. `jig rig --close` resolves
 marks built; a file resolve refuses there is left, named.
 A story, request or report whose spec is in an unanswered group of overlapping waiting specs
 (The board) isn't resolved until the group is answered.
+
+A staged decision entry, page or section that moves a claim from another repo of the family
+carries the optional `moved-from: <repo>/<path>[ § <heading or id>]` header. `resolve` writes its
+moved-from line (Decision log, Released sections) in the same change: for the one entry the file
+holds (its `D-?<slug>`, numbered with it at the merge), the page it wrote, or the section, named
+`<page> § <heading>` from the pointer. A file with the header holds one entry.
 
 A batch whose files depend on each other says so in each file's optional `after:` header: the
 staged file names it waits for (`a` reads as `a.md`). `jig staging` lists files so each comes after
@@ -1509,12 +1527,18 @@ or `## 20`, and words after the number aren't compared. Headings are compared as
 and emphasis marks dropped. The name folds case (`App/…` is `app/…`); the path and heading
 don't. A superseded or rejected decision row isn't checked.
 
-A claim found to have one owner moves down to it, released or not. The pararepo lands the text
-first, through staging (`target: <pararepo>`) and a job there: its entry keeps who and date and
-drops a `Supersedes` of the metarepo's ids, since that chain stays in the metarepo's log. The
-metarepo then removes the entry, page or section with its move line (Decision log, Released
-sections), in one commit. Frozen citations of the old id keep resolving through the line, so
-nothing released is rewritten. A claim moves down only: up is `jig propose` and the buffer.
+A claim found to have one owner moves to it, released or not, in any direction: down from the
+metarepo to a pararepo, up from a pararepo to its metarepo, or sideways between two pararepos
+of one metarepo. The receiving repo lands the text first, with its moved-from line: down or
+sideways through staging (`target: <repo>`, `moved-from: <pointer>`) and a job there, up by a
+`propose/` branch in the metarepo. Its entry keeps who and date and drops a `Supersedes` of the
+sending log's ids, since that chain stays there. The sending repo then removes the entry, page
+or section with its move line (Decision log, Released sections), in one commit, which the hook
+refuses until the receiver's trunk has the moved-from line. Frozen citations of the old id keep
+resolving through the line, so nothing released is rewritten. A metarepo pointer to a page or
+section a pararepo moved away reads `(moved: <pointer>)` in `jig sync`, the release and P2,
+never as missing: the metarepo re-points it, and a pararepo bumping its pin past such a release
+reads the pointer's new home in the pin-bump request.
 
 The metarepo's decisions are its `.jig/decisions.md` (Decision log), cited as
 `<meta>/.jig/decisions.md § D-012`. A superseded entry, and a released section's change lines,

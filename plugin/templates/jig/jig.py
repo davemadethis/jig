@@ -3060,6 +3060,8 @@ def claims_of_id(root: Path, want: str, prefix: str) -> tuple[list[str], list[tu
         entry = next((e for e in entries if e["id"] == by), None)
     elif not entry:
         notes.append(f"no entry {want} in {LOG} or in its history: lines naming it are listed.")
+    if entry and (frm := moved_from_in(text).get(entry["id"])):
+        notes.append(f"{entry['id']} moved from {frm}.")
 
     def id_re(i: str) -> str:
         # D-2 and D-002 are one decision, as R6 counts it; whole ids only, D-7 is not D-70.
@@ -6062,6 +6064,10 @@ STRIKE_WHY = "project scope, not a product decision."
 # `- D-040: moved to <repo>/.jig/decisions.md § D-016.`, a page or `<page> § <heading>` in
 # place of the id. The target is a pointer, as the pararepo cites with, so one form covers all three.
 MOVE_LINE = re.compile(r"^- `?(?P<what>[^`\s][^`]*?)`?: moved to `?(?P<to>[\w.-]+/[^`]+?)`?\.?$")
+# The receiving end of a move: `- D-016: moved from <repo>/.jig/decisions.md § E-085.` under
+# ## Unreleased ### Added, a page or `<page> § <heading>` in place of the id. It mirrors the move
+# line, one form for all three, and is frozen once released as any change line is.
+MOVED_FROM = re.compile(r"^- `?(?P<what>[^`\s][^`]*?)`?: moved from `?(?P<frm>[\w.-]+/[^`]+?)`?\.?$")
 
 
 def move_key(what: str) -> str:
@@ -6111,6 +6117,74 @@ def moves_in(text: str) -> Moves:
     return out
 
 
+def moved_from_lines(text: str) -> list[tuple[str, str, str, re.Match]]:
+    """(section, group, line, match) for each moved-from line in log TEXT under a ### Added group."""
+    out, section, group = [], "", ""
+    for line in text.splitlines():
+        if line.startswith("## "):
+            section, group = line[3:].strip(), ""
+        elif line.startswith("### "):
+            group = line[4:].strip()
+        elif group == "Added" and (m := MOVED_FROM.match(line.rstrip())):
+            out.append((section, group, line.rstrip(), m))
+    return out
+
+
+def moved_from_in(text: str) -> Moves:
+    """Every moved-from line in log TEXT under ## Unreleased or a release, as {id, path or path §
+    heading here: the pointer it came from}, read as moves_in reads move lines."""
+    out = Moves()
+    for section, _, _, m in moved_from_lines(text):
+        if move_held(section):
+            out[move_key(m.group("what"))] = m.group("frm").strip()
+    return out
+
+
+def is_here(repo: str) -> bool:
+    """Whether a repo name in a pointer is this repo, by any name `jig repos` knows it by."""
+    p = repo_path(repo)
+    return p is not None and p.resolve() == main_root().resolve()
+
+
+def thing_of(what: str) -> tuple[str, str | None]:
+    """A moved thing as (path, section): an id is its log's section, a page its path alone."""
+    path, _, section = what.partition(" § ")
+    if not section and re.fullmatch(r"[A-Za-z][\w]*-(?:\d+|\?[a-z0-9-]+)", path.strip()):
+        return LOG, path.strip()
+    return path.strip(), section.strip() or None
+
+
+def thing_key(t: tuple[str, str | None]) -> str:
+    """How a (path, section) thing is compared: an id by its number (E-2 is E-002), a section by
+    its plain heading, a page by its path."""
+    path, section = t
+    if path == LOG and section:
+        return f"{LOG} § {move_key(section)}"
+    return move_key(f"{path} § {section}") if section else path
+
+
+def same_thing(a: tuple[str, str | None], b: tuple[str, str | None]) -> bool:
+    return thing_key(a) == thing_key(b)
+
+
+def family_names(trunk: str, meta: dict | None) -> set[str]:
+    """The repos a claim of this one may move to or come from: a metarepo's pararepos; for a
+    pararepo, its metarepo and the metarepo's other pararepos, read on the metarepo's trunk;
+    nothing for a repo with no family."""
+    if meta is not None:
+        return set(meta.get("pararepos") or [])
+    para = load_para(trunk)
+    if para is None:
+        return set()
+    out = {para.get("meta", "")} - {""}
+    loc = meta_checkout(main_root(), para)
+    try:
+        paras = json.loads(trunk_show(loc, META) or "{}").get("pararepos") or [] if loc is not None else []
+    except ValueError:
+        paras = []
+    return out | {n for n in paras if not is_here(n)}
+
+
 def pointer_parts(ptr: str) -> tuple[str, str, str | None]:
     """A move's pointer as (repo, path, section or None)."""
     repo, _, rest = ptr.partition("/")
@@ -6152,11 +6226,13 @@ def trunk_show(loc: Path, path: str) -> str | None:
 
 
 def move_rules(trunk: str, staged: bool, meta: dict | None) -> list[str]:
-    """Each move line the change adds names one of the metarepo's pararepos, a thing this repo
-    no longer has, and a target on that pararepo's trunk. Where the pararepo can't be reached
-    the line passes with a warning: the check is a courtesy to the reader, not the move's record."""
+    """Each move line the change adds names a repo of this one's family (down, up or sideways),
+    a thing this repo no longer has, and a target on that repo's trunk whose moved-from line
+    names this repo's thing: both ends say where the claim went. Each moved-from line it adds
+    names a family repo whose trunk still has the thing, the move pending, or moves it here.
+    Where the other repo can't be reached the line passes with a warning."""
     new, old = in_index(LOG, staged), at_rev(since_trunk(trunk), LOG)
-    paras = set((meta or {}).get("pararepos") or [])
+    paras = family_names(trunk, meta)
     prefix = log_prefix(trunk)
     out = []
     # A move line anywhere else is read by nothing and checked by nothing: only one place holds
@@ -6211,10 +6287,13 @@ def move_rules(trunk: str, staged: bool, meta: dict | None) -> list[str]:
                        f"a moved entry leaves in the commit that writes its line")
             continue
         repo, path, section = pointer_parts(ptr)
+        if not paras:
+            out.append(f"{LOG}: `{line}` moves to {repo}, but this repo has no family (no {META} with "
+                       f"pararepos, no {PARA}): a claim moves only between a metarepo and its pararepos")
+            continue
         if not name_in(repo, paras):
-            listed = f" ({', '.join(sorted(paras))})" if paras else ""
-            out.append(f"{LOG}: `{line}` moves to {repo}, which isn't one of {META}'s pararepos"
-                       f"{listed}: a claim moves down to a pararepo of this metarepo only")
+            out.append(f"{LOG}: `{line}` moves to {repo}, which isn't of this repo's family "
+                       f"({', '.join(sorted(paras))}): a claim moves within its family only")
             continue
         wpath, _, wsec = what.partition(" § ")
         if num is None and (body := in_index(wpath.strip(), staged)):
@@ -6234,13 +6313,60 @@ def move_rules(trunk: str, staged: bool, meta: dict | None) -> list[str]:
         if body is None:
             out.append(f"{LOG}: `{line}`: {repo}'s {t} has no {path} (read {loc}/{path} on {t}): "
                        f"land it there first")
-        elif section and path == LOG:
-            if move_key(section) not in {move_key(e["id"]) for e in log_entries(body, log_prefix_of(body))}:
-                out.append(f"{LOG}: `{line}`: {repo}'s {LOG} on {t} has no entry {section}: "
-                           f"land it there first")
-        elif section and pointer_gap(path, section, True, body)[0] != RESOLVES:
+        elif section and path == LOG and \
+                move_key(section) not in {move_key(e["id"]) for e in log_entries(body, log_prefix_of(body))}:
+            out.append(f"{LOG}: `{line}`: {repo}'s {LOG} on {t} has no entry {section}: "
+                       f"land it there first")
+        elif section and path != LOG and pointer_gap(path, section, True, body)[0] != RESOLVES:
             out.append(f"{LOG}: `{line}`: {repo}'s {path} on {t} has no heading {section}: "
                        f"land it there first")
+        else:
+            there = section if path == LOG and section else (f"{path} § {section}" if section else path)
+            frm = moved_from_in(trunk_show(loc, LOG) or "").get(there)
+            if not frm or not is_here(pointer_parts(frm)[0]) or \
+                    not same_thing(pointer_parts(frm)[1:], thing_of(what)):
+                out.append(f"{LOG}: `{line}`: {repo}'s {LOG} on {t} has no moved-from line for {there} naming "
+                           f"this repo's {what} (read {loc}/{LOG}): land it there first, with its moved-from line")
+    out += moved_from_rules(new, old, paras)
+    return out
+
+
+def moved_from_rules(new: str, old: str, paras: set[str]) -> list[str]:
+    """Each moved-from line the change adds names a repo of the family whose trunk still has the
+    thing, the move pending, or whose move line for it points here. One that can't be reached
+    passes with a warning."""
+    out = []
+    was = {line for _, _, line, _ in moved_from_lines(old)}
+    for sec, _, line, m in moved_from_lines(new):
+        if line in was or not move_held(sec):
+            continue
+        repo, path, section = pointer_parts(m.group("frm"))
+        if not name_in(repo, paras):
+            out.append(f"{LOG}: `{line}` names {repo}, which isn't of this repo's family"
+                       + (f" ({', '.join(sorted(paras))})" if paras else " (it has none)")
+                       + ": a claim comes only from a repo of its family")
+            continue
+        loc = repo_path(repo)
+        if not loc or not loc.is_dir():
+            print(f"jig: warning: `{line}`: {repo} isn't in `jig repos` here, so its source wasn't "
+                  "checked", file=sys.stderr)
+            continue
+        t = Board.trunk_name(loc)
+        their_log = trunk_show(loc, LOG) or ""
+        body = their_log if path == LOG else trunk_show(loc, path)
+        if path == LOG and section:
+            pending = move_key(section) in {move_key(e["id"]) for e in log_entries(their_log, log_prefix_of(their_log))}
+        elif section:
+            pending = body is not None and pointer_gap(path, section, True, body)[0] == RESOLVES
+        else:
+            pending = body is not None
+        ptr = moves_in(their_log).get(section if path == LOG and section else
+                                      (f"{path} § {section}" if section else path))
+        pointed = bool(ptr) and is_here(pointer_parts(ptr)[0]) and \
+            same_thing(pointer_parts(ptr)[1:], thing_of(m.group("what")))
+        if not pending and not pointed:
+            out.append(f"{LOG}: `{line}`: {repo}'s {path} on {t} (read {loc}/{path}) neither has "
+                       f"{section or path} nor moves it here: name what it moved, as its move line does")
     return out
 
 
@@ -6277,7 +6403,7 @@ def frozen_problems(old: str, new: str, trunk: str, only: set[str] | None = None
             f"supersedes it: an entry is removed only by the commit adding the accepted one "
             f"that says `Supersedes {e['id']}.`, or by the commit adding under ## Unreleased "
             f"### Removed one of two lines: the strike, `- {e['id']}: {STRIKE_WHY}`, or the move, "
-            f"`- {e['id']}: moved to <pararepo>/{LOG} § <its id there>.`: add it in the same commit" for e in bare if e["section"] not in ("Unreleased", "")]
+            f"`- {e['id']}: moved to <repo of its family>/{LOG} § <its id there>.`: add it in the same commit" for e in bare if e["section"] not in ("Unreleased", "")]
     prefix = log_prefix_of(new)
     have = {id_number(e["id"], prefix) for e in log_entries(new, prefix)}
     out += [f"{LOG}: the ### Removed line for {prefix}{n:03d} strikes an entry the log still has: "
@@ -6529,6 +6655,8 @@ def cmd_decision(root: Path, args) -> int:
         return "## Open" if e["section"] == "Open" else e["section"] or "above ## Open"
 
     print(by_id[want]["block"])
+    if frm := moved_from_in(path.read_text() if path.exists() else "").get(want):
+        print(f"\n{want} moved from {frm}.")
     if len(chain) > 1:
         print("\nChain, oldest first:")
         for i in chain:
@@ -8044,7 +8172,8 @@ def para_rules(root: Path, board: "Board", para: dict, staged: bool) -> list[str
     # what a contract change is.
     # The cache lives in the primary checkout: it is ignored, so a job's worktree has none.
     # Worse than at the base counts: a file lost is still news when its heading was already missing.
-    broken = [f"{f} points to {gap}" for f, path, section, code in pointers(root, main_root())
+    moves = moves_in(in_index(LOG, staged))
+    broken = [f"{f} points to {moved_gap(gap, path, section, moves)}" for f, path, section, code in pointers(root, main_root())
               if any(d == path or d.startswith(f"{path}/") for d in diffed)
               for level, gap in [pointer_gap(path, section, code, body_now(path, staged))]
               if level > pointer_gap(path, section, code, body_at(base(trunk), path))[0]]
@@ -8934,6 +9063,10 @@ def meta_citations(root: Path, para: dict, ids: str, loc: Path | None = None,
         for n, line in enumerate(text.splitlines(), 1):
             if closed_row(f, line) or buffer_copy(copies, line) or n - 1 in frozen:
                 continue
+            # A move's two records, its move line and its moved-from line, say where a claim went
+            # and came from: history, frozen once released, never a citation to rewrite.
+            if f == LOG and (MOVE_LINE.match(line.rstrip()) or MOVED_FROM.match(line.rstrip())):
+                continue
             for m in POINTER.finditer(line) if any(t in line.casefold() for t in named) else ():
                 if not name_in(m.group("name"), {name}):
                     continue
@@ -9137,12 +9270,22 @@ def pointer_gap(path: str, section: str | None, code: bool, body: str | None) ->
     return NO_HEADING, f"{path} § {shown_section(want, code)}, which {path} has no heading for"
 
 
+def moved_gap(gap: str, path: str, section: str | None, moves: dict[str, str]) -> str:
+    """A pointer's gap as a report says it: one this repo's move line sends elsewhere reads
+    `(moved: <pointer>)`, never as missing."""
+    ptr = moved_to(moves, path, section)
+    return f"{path}{f' § {section}' if section else ''} (moved: {ptr})" if ptr else gap
+
+
 def dangling(root: Path) -> list[tuple[str, str, str | None, bool, int, str]]:
     """Each cached pointer that misses this repo's HEAD, as (cache file, path, section, code,
-    level, gap), one per line a report prints: pointers into a missing file read the same."""
+    level, gap), one per line a report prints: pointers into a missing file read the same. A
+    page or section this repo moved away reads where it went."""
     seen, out = set(), []
+    moves = moves_in(body_at("HEAD", LOG) or "")
     for f, path, section, code in pointers(root):
         level, gap = pointer_gap(path, section, code, body_at("HEAD", path))
+        gap = moved_gap(gap, path, section, moves) if level else gap
         if level and (f, gap) not in seen:
             seen.add((f, gap))
             out.append((f, path, section, code, level, gap))
@@ -9261,6 +9404,10 @@ def pointer_cleanup(root: Path) -> list[str]:
     olds = dict(LAYOUT)
     for f, path, section, code, level, gap in dangling(root):
         line = f"{f} points to {gap}: "
+        if "(moved: " in gap:
+            out.append(line + "this repo's move line says where it went: the metarepo re-points it "
+                       "(`jig move` proposes that rewrite)")
+            continue
         found = removal(path, section, code, level)
         if found is None:
             out.append(line + "this repo never had it, so the metarepo's pointer is what's wrong; "
@@ -9541,6 +9688,10 @@ def read_staged(path: Path) -> tuple[dict, str, list[str]]:
         bad.append(f"destination {head['destination']!r}: a roadmap change lands in {ROADMAP} only")
     if head.get("kind") == "pin-bump" and (head.get("destination") != PARA or head.get("change") != "update"):
         bad.append(f"a pin bump is `change: update` to {PARA} only")
+    if head.get("moved-from") and not re.fullmatch(r"[\w.-]+/\S.*", head["moved-from"]):
+        bad.append(f"moved-from {head['moved-from']!r} is not a pointer, <repo>/<path>[ § <heading or id>]")
+    if head.get("moved-from") and head.get("kind") not in ("decisions", "doc"):
+        bad.append("moved-from: only a decision entry, a page or a section moves between repos")
     if head.get("kind") == "pin-bump" and not head.get("release"):
         bad.append("no release: a pin bump names the release it moves the pin to")
     if head.get("kind") == "roadmap" and head.get("change") == "new":
@@ -9820,6 +9971,18 @@ def cmd_staging(root: Path, args) -> int:
         print(f"resolved {path.name}: {msg}")
         return 0
 
+    came = head.get("moved-from", "")
+
+    def moved_here(text: str, what: str) -> str:
+        """The log TEXT with the moved-from line for WHAT, landed from `moved-from:`, in this job."""
+        line = f"- {what}: moved from {came}."
+        return text if line in text.splitlines() else log_with_line(text or LOG_SEED, "Added", line)
+
+    def landed_as(where: str) -> str:
+        """What the moved-from line names for a page landed at WHERE: the section, when one moved."""
+        section = pointer_parts(came)[2]
+        return f"{where} § {section}" if section else where
+
     def inside(rel: str) -> Path:
         """A destination stays inside the repo: no absolute path, no climbing out with .."""
         out = (root / rel).resolve()
@@ -9927,6 +10090,9 @@ def cmd_staging(root: Path, args) -> int:
         if not landed(dest):
             die(f"needs judgment: edit {dest} with this file's content, keeping `{mark}` in it "
                 "as provenance, then resolve again", 1)
+        if came:
+            inside(LOG).write_text(moved_here(inside(LOG).read_text() if inside(LOG).exists() else "", landed_as(dest)))
+            return done(f"{dest} carries it; its moved-from line is in {LOG}")
         return done(f"{dest} carries it")
     if kind == "decisions":
         log = inside(dest)
@@ -9949,6 +10115,9 @@ def cmd_staging(root: Path, args) -> int:
         dupes = [e["id"] for e in entries if decision_id(e["id"]) in have]
         if dupes:
             die(f"{', '.join(dupes)} already in {dest}: stage it as `change: update`", 1)
+        if came and len(entries) != 1:
+            die(f"{path.name} moves one claim (`moved-from: {came}`) but holds {len(entries)} entries: "
+                "stage one entry per moved claim", 1)
         for e in entries:
             # Open questions are asked under ## Open; an accepted entry is this release's.
             section = "## Unreleased" if e["status"].startswith("Accepted") else "## Open"
@@ -9956,10 +10125,14 @@ def cmd_staging(root: Path, args) -> int:
                 text = text.rstrip("\n") + f"\n\n{section}\n"
             text = re.sub(rf"^{section}[ \t]*\n", lambda m: f"{m.group(0)}\n{e['block']}\n", text,
                           count=1, flags=re.M)
+        if came:
+            # Numbered with its entry at the merge: number_placeholders renames the id everywhere.
+            text = moved_here(text, entries[0]["id"])
         log.parent.mkdir(parents=True, exist_ok=True)
         log.write_text(text)
         n = len(entries)
-        return done(f"{n} entr{'ies' if n > 1 else 'y'} added to {dest}")
+        return done(f"{n} entr{'ies' if n > 1 else 'y'} added to {dest}"
+                    + (f", with its moved-from line" if came else ""))
     out = inside(dest)
     if out.exists():
         die(f"{dest} exists: stage it as `change: update`, or pick another path", 1)
@@ -9972,6 +10145,9 @@ def cmd_staging(root: Path, args) -> int:
         out.write_text(text)
     else:
         out.write_text(body.rstrip("\n") + f"\n\n---\n{mark}\n")
+    if came:
+        inside(LOG).write_text(moved_here(inside(LOG).read_text() if inside(LOG).exists() else "", landed_as(dest)))
+        filled += f", with its moved-from line in {LOG}"
     return done(f"written to {dest}{filled}")
 
 
