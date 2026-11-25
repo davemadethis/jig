@@ -38,7 +38,7 @@ passes.
 - [seen] The mechanism. `roadmap_md` writes `_HEADS[head]` (11473). `roadmap_data` reads
   `_HEADS.get(p["name"])` before `product_of` (11538). `uncarried` calls `roadmap_data(md, {})`,
   and then `unkept`, which calls `roadmap_md` (11925-11926, 11674). `convert_roadmap` then calls
-  `roadmap_data(md, owners)` (11936).
+  `roadmap_data(md, owners)` (11935).
 - [seen] Finding 2. In `## a`, a note `See:` with a fence holding `(after b)` converts to the
   note `"See:\n```\n```"`, and `uncarried` returns `[]`. `parse_roadmap` adds fenced lines to
   `pre` and `used` (11262-11276). `roadmap_data` keeps only `pre` lines where
