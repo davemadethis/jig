@@ -974,9 +974,11 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
   update` writes those as the repo's templates. The hook refuses a field or a type they don't
   have (each exit check's too), a key written twice in one object, a phase with neither `exit`
   nor `scopes`, a product `products` doesn't include or the glossary doesn't hold, a duplicate
-  phase or scope id, a value jig would read back as something else (a text ending in what reads
-  as `touches`, an item's text holding `; stops at` or `; parked`), and every problem below, and
-  `jig roadmap` reports them. A note or a text is otherwise kept as written, lists and line
+  phase or scope id, a text ending the Markdown way in `(after …)`, `(labels …)`, `(needed by
+  …)` or `(touches …)` (that is the field's to say), a value jig would read back as something
+  else (an item's text holding `; stops at ` or ending `; parked YYYY-MM-DD`), and every problem
+  below, and `jig roadmap` reports them. No phase's items are in no order: a rewrite may group
+  them by product. A note or a text is otherwise kept as written, lists and line
   breaks included. "Every scope is done" is
   implied, never written as a box. A scope's `touches` are the pages it will change.
 - **Dependencies**: a scope's `after` names what it waits on; a phase's `after` applies to each
@@ -1037,9 +1039,12 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
   unchanged, a note whole (its lists and the prose after them), lines nested under an item as
   its text, each phase under the product its heading's `Owner:` term named, an old
   `## Up next` folded into No phase, and a parked item's text split into `text`, `stopped_at`
-  and `parked` where it has that form. A line `roadmap.json` has no place for (prose above the
-  first heading, or among a phase's `Exit when:` boxes) is listed, and the conversion waits
-  until the owner moves it into the note or deletes it. It removes `roadmap.md`, and a `ROADMAP.md` jig
+  and `parked` where it has that form. Every other non-blank line is accounted for: one no part
+  of `roadmap.json` holds (prose above the first heading but the title and jig's own seed
+  comment, prose or a fence among the boxes, after `Scopes:` or in No phase, an indented line
+  before a list's first item), each problem the old file's own checks name, and each value the
+  result couldn't keep is listed, and the conversion waits until the owner moves, fixes or
+  deletes it. Nothing is dropped unnamed. It removes `roadmap.md`, and a `ROADMAP.md` jig
   generated (a repo's own is left). It runs in two runs: the hook runs trunk's committed
   checker, and an older one refuses a commit removing `roadmap.md`, so the first run installs
   the checker and names the conversion as waiting on it, and the run after that commit

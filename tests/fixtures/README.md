@@ -12,5 +12,6 @@ section 1, a source file, a merged job, a handoff, a spec, both ledgers' worth o
 - `jig-0.2/`: the visible `jig/` folder every 0.2.x repo had.
 - `dot-jig-v7/`: `.jig/` with the one-file board, version 7.
 
-`roadmap-show/` is not a generation: a `roadmap.json` and the charts `jig roadmap show` draws of
-it, at the default width (one band per phase) and at `--width 200`, compared byte for byte.
+`roadmap-show/` is not a generation: a metarepo's `roadmap.json` with two products, and the
+charts `jig roadmap show` draws of it, at the default width (one band per phase) and at
+`--width 200`, compared byte for byte.

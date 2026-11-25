@@ -11132,14 +11132,17 @@ def is_list_heading(name: str, section: str = NO_PHASE) -> bool:
     return n == section.lower() or (section == NO_PHASE and n.endswith(" " + NO_PHASE.lower()))
 
 
-def parse_section(text: str, section: str, problems: list[str] | None = None) -> list[dict]:
+def parse_section(text: str, section: str, problems: list[str] | None = None,
+                  used: set[int] | None = None) -> list[dict]:
     """A reserved section's items, `(after …)` and `(touches …)` split off, each with the
-    heading of its LIST, which is its id's first part."""
+    heading of its LIST, which is its id's first part. USED gets the number of each line read
+    into an item or a list's heading."""
     problems = [] if problems is None else problems
+    used = set() if used is None else used
     shape = "<what it is>"
     items: list[dict] = []
     inside, fence, at = False, False, section
-    for n, raw in enumerate(text.splitlines(), 1):
+    for n, raw in enumerate(text.split("\n"), 1):
         line = raw.rstrip()
         if line.lstrip().startswith("```"):
             fence = not fence
@@ -11149,10 +11152,13 @@ def parse_section(text: str, section: str, problems: list[str] | None = None) ->
         if m := re.match(r"##\s+(.+?)$", line):
             inside = is_list_heading(m.group(1), section)
             at = m.group(1).strip()
+            if inside:
+                used.add(n)
             continue
         if inside and line.strip() and line[0] in " \t" and items:
             # An old roadmap.md's lines nested under an item (fold_up_next kept them): its text.
             items[-1]["more"].append(line)
+            used.add(n)
             continue
         if not inside or not line.strip() or line[0] in " \t":
             continue
@@ -11175,6 +11181,7 @@ def parse_section(text: str, section: str, problems: list[str] | None = None) ->
             problems.append(f"line {n}: {at} item {m.group(1)} appears twice")
         if refs == []:
             problems.append(f"line {n}: {at} item {m.group(1)} has (after …) naming nothing")
+        used.add(n)
         items.append({"id": m.group(1), "sid": f"{at}/{m.group(1)}", "what": what, "text": body,
                       "touches": pages, "after": refs or [], "needed": needed or [], "line": n, "list": at,
                       "labels": labels, "more": []})
@@ -11229,17 +11236,20 @@ def retarget_touches(text: str, moves: dict[str, str], keep=lambda heading: True
     return "".join(out)
 
 
-def parse_roadmap(text: str, problems: list[str] | None = None) -> list[dict]:
+def parse_roadmap(text: str, problems: list[str] | None = None, used: set[int] | None = None) -> list[dict]:
     """Phases in file order, each {name, exit: [(ticked, text)], scopes: [(id, what)]}.
     Anything it can't read is added to PROBLEMS by line, never dropped quietly: a scope lost
     to a typo would read as a phase with less work in it. Fenced code is skipped, so a roadmap
     that quotes an example doesn't grow phases. `## No phase` is no phase: parse_no_phase
     reads it; an old `## Up next` is reported, for `jig update` to fold. A phase's note is the
-    prose before its first list or box, fences kept: a box there stays unparsed, as before notes, so it never shows under a done phase."""
+    prose before its first list or box, fences kept: a box there stays unparsed, as before notes, so it never shows under a done phase.
+    USED gets the number of each line read into a phase: its heading, note, waits, boxes and
+    scopes, so a conversion can name every line nothing read."""
     problems = [] if problems is None else problems
+    used = set() if used is None else used
     phases: list[dict] = []
     part, fence, ids, skip = "", False, set(), False
-    for n, raw in enumerate(text.splitlines(), 1):
+    for n, raw in enumerate(text.split("\n"), 1):
         line = raw.rstrip()
         in_pre = phases and not skip and not part
         if raw.startswith(HOLD):
@@ -11255,18 +11265,24 @@ def parse_roadmap(text: str, problems: list[str] | None = None) -> list[dict]:
                 phases[-1]["note"].append(line)
             if in_pre:
                 phases[-1]["pre"].append(line)
+                used.add(n)
             continue
         if fence:
             if in_note:
                 phases[-1]["note"].append(line)
             if in_pre:
                 phases[-1]["pre"].append(line)
+                used.add(n)
             continue
         if in_pre and not re.match(r"##\s+", line) and not re.fullmatch(r"(?i)(exit when|scopes):", line.strip()):
             # Every line above Exit when: and Scopes:, list or not: an old roadmap.md's note whole.
             phases[-1]["pre"].append(line)
+            if not phase_labels(line):
+                used.add(n)
         if m := re.match(r"##\s+(.+?)$", line):
             skip = m.group(1).strip().lower() in RESERVED or is_list_heading(m.group(1))
+            if not skip:
+                used.add(n)
             if m.group(1).strip().lower() == UP_NEXT.lower():
                 problems.append(f"line {n}: ## {UP_NEXT} is folded into ## {NO_PHASE}, the one list "
                                 f"for work with no phase: move its items there (`jig update --apply` "
@@ -11276,7 +11292,7 @@ def parse_roadmap(text: str, problems: list[str] | None = None) -> list[dict]:
             if any(p["name"] == m.group(1) for p in phases):
                 problems.append(f"line {n}: phase {m.group(1)} appears twice")
             phases.append({"name": m.group(1), "exit": [], "scopes": [], "line": n, "headed": False,
-                           "note": [], "noting": True, "pre": [], "dropped": [], "after": [], "after_line": 0, "after_of": {},
+                           "note": [], "noting": True, "pre": [], "after": [], "after_line": 0, "after_of": {},
                            "needed": [], "needed_of": {}, "labels_of": {}})
             part = ""
         elif skip or not phases:
@@ -11294,6 +11310,7 @@ def parse_roadmap(text: str, problems: list[str] | None = None) -> list[dict]:
             # scopes offered as free work.
             after, needed = w
             name = phases[-1]["name"]
+            used.add(n)
             if in_note:
                 phases[-1]["note"].append(line)
             for kind in repeated_waits(line.strip()):
@@ -11316,13 +11333,13 @@ def parse_roadmap(text: str, problems: list[str] | None = None) -> list[dict]:
             phases[-1]["note"].append(line)
         elif re.fullmatch(r"(?i)exit when:", line.strip()):
             part, phases[-1]["headed"] = "exit", True
+            used.add(n)
         elif re.fullmatch(r"(?i)scopes:", line.strip()):
             part, phases[-1]["headed"] = "scopes", True
+            used.add(n)
         elif part == "exit" and (m := re.match(r"\s*- \[([ xX])\]\s*(.*)", line)):
             phases[-1]["exit"].append((m.group(1) != " ", unhold(m.group(2).strip())))
-        elif part == "exit" and line.strip():
-            # Prose among an old roadmap.md's boxes: nothing reads it, and a conversion names it.
-            phases[-1]["dropped"].append(line)
+            used.add(n)
         elif part == "scopes" and line.strip():
             m = SCOPE_LINE.fullmatch(line)
             if not m:
@@ -11333,6 +11350,7 @@ def parse_roadmap(text: str, problems: list[str] | None = None) -> list[dict]:
             if sid in ids:
                 problems.append(f"line {n}: scope {sid} appears twice")
             ids.add(sid)
+            used.add(n)
             what, refs, needed, labels = split_waits((m.group(2) or "").strip())
             what = unhold(what)
             for kind in repeated_waits((m.group(2) or "").strip()):
@@ -11406,15 +11424,14 @@ _HEADS: dict[str, tuple[str, str]] = {}
 
 
 # The internal form's mark for a value written as it is: a note line, or a text JSON-encoded
-# where a plain line can't hold it (a line break, space at either end, a tail that reads as
-# `after`, `labels` or `needed_by`). No roadmap.md has it.
+# where a plain line can't hold it (a line break of any kind, space at either end). No
+# roadmap.md has it.
 HOLD = "\x02"
 
 
 def hold(text: str) -> str:
     """TEXT as the internal form writes it on one line: plain when a line holds it."""
-    if (any(c in text for c in "\n\r") or text != text.strip() or text.startswith(HOLD)
-            or split_waits(text)[1:] != (None, None, None)):
+    if (text and text.splitlines() != [text]) or text != text.strip() or text.startswith(HOLD):
         return HOLD + json.dumps(text, ensure_ascii=False)
     return text
 
@@ -11460,7 +11477,7 @@ def roadmap_md(data: dict) -> str:
         if w := " ".join(f"({k} {', '.join(p[key])})" for k, key in (("after", "after"), ("needed by", "needed_by"))
                          if p.get(key)):
             out += ["", w]
-        if p.get("exit"):
+        if "exit" in p:
             out += ["", "Exit when:"] + [f"- [{'x' if e.get('done') else ' '}] {hold(str(e.get('text', '')))}"
                                          for e in p["exit"] if isinstance(e, dict)]
         # A phase with neither is refused as parse_roadmap refuses one: no heading for it here.
@@ -11471,8 +11488,9 @@ def roadmap_md(data: dict) -> str:
     for i in data.get("no_phase") or []:
         if not isinstance(i, dict):
             continue
-        text = "; ".join(x for x in (hold(str(i.get("text") or "")), f"stops at {i['stopped_at']}" if i.get("stopped_at") else "",
-                                     f"parked {i['parked']}" if i.get("parked") else "") if x)
+        # The text first even when empty, so `; stops at` and `; parked` read back as themselves.
+        text = "; ".join([hold(str(i.get("text") or ""))] + [x for x in (f"stops at {i['stopped_at']}" if i.get("stopped_at") else "",
+                                     f"parked {i['parked']}" if i.get("parked") else "") if x])
         lists.setdefault(str(i.get("product") or ""), []).append(record_line(i, text))
     for prod, lines in lists.items():
         out += ["", f"## {prod + ' ' if prod else ''}{NO_PHASE}", *([""] + lines if lines else [])]
@@ -11508,8 +11526,9 @@ def roadmap_data(md: str, owners: dict[str, str], products: list[str] | None = N
         if prod and prod not in out["products"]:
             out["products"].append(prod)
 
-    def rec(base: dict, what: str, labels, after, needed) -> dict:
-        text, touches = split_touches(what)
+    def rec(base: dict, what: str, labels, after, needed, touches=None) -> dict:
+        # TOUCHES already split off (an item's): WHAT is its text whole, nested lines and all.
+        text, touches = split_touches(what) if touches is None else (what, touches)
         for key, v in (("text", text), ("labels", labels), ("touches", touches), ("after", after),
                        ("needed_by", needed)):
             if v:
@@ -11546,8 +11565,7 @@ def roadmap_data(md: str, owners: dict[str, str], products: list[str] | None = N
         elif m := re.fullmatch(r"(.*?); parked (\d{4}-\d{2}-\d{2})", what, re.S):
             what, parked = m.group(1), m.group(2)
         what += "".join("\n" + l for l in i["more"])
-        rec(item, what + (f" (touches {', '.join(i['touches'])})" if i["touches"] else ""),
-            i["labels"], i["after"], i["needed"])
+        rec(item, what, i["labels"], i["after"], i["needed"], i["touches"])
         if prod:
             item["product"] = prod
         if stopped:
@@ -11606,6 +11624,9 @@ def roadmap_shape(data, where: str = ROADMAP) -> list[str]:
         # An id is written `<phase>/<id>` on one line in specs: no space and no `/` in it.
         if kind != "phase" and isinstance(r.get("id"), str) and r["id"] and not SCOPE_ID.fullmatch(r["id"]):
             out.append(f"{where}: {at}'s `id` holds a space or a /: an id is one word")
+        if kind != "phase" and isinstance(r.get("text"), str) and (field := tail_field(r["text"])):
+            out.append(f"{where}: {at}'s `text` ends in what reads as `{field}`: put it in `{field}`, "
+                       "or reword the text's end")
         if kind == "no_phase" and isinstance(r.get("parked"), str) and r["parked"] and not PARKED.fullmatch(r["parked"]):
             out.append(f"{where}: {at}'s `parked` is a date, YYYY-MM-DD")
         prod = r.get("product")
@@ -11620,6 +11641,16 @@ def roadmap_shape(data, where: str = ROADMAP) -> list[str]:
     for n, i in enumerate(data.get("no_phase") or [] if isinstance(data.get("no_phase"), list) else [], 1):
         check(i, "no_phase", f"{NO_PHASE} item {i.get('id') if isinstance(i, dict) and i.get('id') else n}")
     return out
+
+
+def tail_field(text: str) -> str:
+    """The field a text's end reads as, written the Markdown way (`(after …)`, `(labels …)`,
+    `(needed by …)`, `(touches …)`), or "": a habit from roadmap.md, and in JSON only prose."""
+    for field, said in (("labels", split_labels(text)[1] is not None), ("touches", TOUCHES.search(text)),
+                        ("after", AFTER.search(text)), ("needed_by", NEEDED.search(text))):
+        if said:
+            return field
+    return ""
 
 
 def roadmap_file_problems(raw: str, owners: dict[str, str], glossary: str = GLOSSARY) -> list[str]:
@@ -11670,11 +11701,15 @@ def unkept(data: dict) -> list[str]:
             continue
         for a, b in zip(ss, tt):
             compare(a, b, f"{at} scope {a.get('id')}")
-    items, again = data.get("no_phase") or [], back["no_phase"]
-    if len(items) != len(again):
-        return out + [f"{ROADMAP}: `no_phase` can't be kept as written"]
-    for a, b in zip(items, again):
-        compare(a, b, f"{NO_PHASE} item {a.get('id')}")
+    # No phase has no order: the internal form groups its items by product, so each is matched
+    # by its product and id, wherever a rewrite puts it.
+    key = lambda r: (r.get("product") or "", r.get("id"))
+    again = {key(b): b for b in back["no_phase"]}
+    for a in data.get("no_phase") or []:
+        if key(a) not in again:
+            out.append(f"{ROADMAP}: {NO_PHASE} item {a.get('id')} can't be kept as written")
+            continue
+        compare(a, again[key(a)], f"{NO_PHASE} item {a.get('id')}")
     return out
 
 
@@ -11691,7 +11726,8 @@ JSON_SAID = (("has (after …) naming nothing", "has an empty `after`"),
              ("drop one (after …)", "drop one `after` ref"),
              ("(- `<scope>`: <what it is>, unindented, its name with no space or /)",
               "(its `id` is one word, no space or /)"),
-             ("neither `Exit when:` nor `Scopes:`", "neither `exit` nor `scopes`"))
+             ("neither `Exit when:` nor `Scopes:`", "neither `exit` nor `scopes`"),
+             (f" (every `## ` heading but ## {NO_PHASE} is a phase)", ""))
 
 
 def unline(problem: str) -> str:
@@ -11843,23 +11879,51 @@ OLD_ROADMAP_VIEW = "ROADMAP.md"
 OLD_VIEW_MARK = "_Generated by `jig roadmap --write`"
 
 
+# The comment jig's seed wrote above the first heading (3c7905c to aa9e2b8): jig's words, so the
+# conversion drops it. A comment holding anything else is the owner's, and is named.
+SEED_COMMENT = [
+    f"<!-- The owner's plan, changed on trunk only and on the owner's word ({DIR}/RULES.md, Roadmap).",
+    "Phases are level-two headings, in order, each with an `Exit when:` checklist, a `Scopes:` list",
+    "of backticked scope names with what each is, or both. Work with no phase is an item under",
+    "No phase below, a backticked id and what it is. A spec takes an id on its `Scope:` line, and",
+    "names one it leaves for later work on its `Later:` line. -->",
+]
+
+
 def uncarried(md: str) -> list[str]:
-    """Each line of the old roadmap MD that roadmap.json has no place for, so the conversion
-    waits until the owner moves or deletes it: prose above the first heading (but the title and
-    the comment jig's seed wrote) and prose among a phase's `Exit when:` boxes."""
-    out, fence, comment = [], False, False
-    for l in md.splitlines():
-        if not fence and re.match(r"##\s+", l):
-            break
-        if l.lstrip().startswith("```"):
-            fence = not fence
-        if comment or l.startswith("<!-- The owner's plan"):
-            comment = "-->" not in l
-            continue
-        if l.strip() and not (not fence and re.match(r"#\s+", l)):
-            out.append(f"above the first heading: {l.strip()}")
-    for p in parse_roadmap(fold_up_next(md) if up_next_heading(md) else md):
-        out += [f"## {p['name']}, among its Exit when: boxes: {l.strip()}" for l in p["dropped"]]
+    """What of the old roadmap MD the conversion would lose or change, so it waits until the owner
+    moves or deletes it: every non-blank line no parser read into a phase, a scope, an item or
+    a note (the first line's `# ` title and jig's seed comment aside), every problem the parsers
+    name, and every value the result couldn't keep. Nothing else is dropped: the conversion
+    carries each line it doesn't name here."""
+    folded = fold_up_next(md) if up_next_heading(md) else md
+    out = []
+    # The fold moves lines and drops only its own heading: anything else it lost is named.
+    count = lambda t: Counter(l.rstrip() for l in t.split("\n") if l.strip()
+                              and not re.fullmatch(rf"##\s+({UP_NEXT}|{NO_PHASE})", l.strip(), re.I))
+    out += [f"a line the fold of ## {UP_NEXT} loses: {l.strip()}" for l in (count(md) - count(folded))]
+    used, problems = set(), []
+    parse_roadmap(folded, problems, used)
+    parse_section(folded, NO_PHASE, problems, used)
+    lines = folded.split("\n")
+    first = next((n for n, l in enumerate(lines, 1) if l.strip()), 0)
+    if first and re.match(r"#\s+", lines[first - 1]):
+        used.add(first)
+    for n in range(len(lines)):
+        if [l.rstrip() for l in lines[n:n + len(SEED_COMMENT)]] == SEED_COMMENT:
+            used.update(range(n + 1, n + len(SEED_COMMENT) + 1))
+    named = {int(m.group(1)) for x in problems if (m := re.match(r"line (\d+): ", x))}
+    # In the old file's own words: these lines are Markdown, not roadmap.json's fields.
+    out += [re.sub(r"^line \d+: ", "", x) for x in problems]
+    under = "above the first heading"
+    for n, l in enumerate(lines, 1):
+        if re.match(r"##\s+", l):
+            under = f"under {l.strip()}"
+        if l.strip() and n not in used and n not in named:
+            out.append(f"{under}: {l.strip()}")
+    if not problems:
+        data = roadmap_data(md, {})
+        out += [x.split(": ", 1)[1] for x in roadmap_shape(data) or unkept(data)]
     return out
 
 
@@ -14032,8 +14096,10 @@ def roadmap_rules(board: "Board", branch: str, staged: bool, paths: list[str],
                 for f in paths if takes_scopes(f) and (what := cited(f, in_index(f, staged), lambda s: True))]
     known = roadmap_scopes(text)
     if on_trunk and (ROADMAP in paths or GLOSSARY in guarded):
+        # Products are a metarepo's (Family reads them only there), so elsewhere a product is
+        # refused as jig roadmap reports it, never committed for the readers to miss.
         shape = roadmap_file_problems(roadmap_raw(staged=staged) if staged else roadmap_raw(cwd=Path(".")),
-                                      term_owners(in_index(GLOSSARY, staged)))
+                                      term_owners(in_index(GLOSSARY, staged)) if fam.kind == "meta" else {})
         if shape:
             return shape
     if on_trunk and ROADMAP in paths:
@@ -14614,10 +14680,10 @@ STEPS: list = [
      f"{OLD_ROADMAP} goes, and so does a {OLD_ROADMAP_VIEW} jig generated (`jig roadmap show` charts it now)",
      lambda root, after: (root / OLD_ROADMAP).is_file() and knows_roadmap_json(root)
      and not uncarried(read_raw(root / OLD_ROADMAP)), convert_roadmap),
-    (lambda root: f"{OLD_ROADMAP} waits to convert to {ROADMAP}, which has no place for these lines: "
+    (lambda root: f"{OLD_ROADMAP} waits to convert to {ROADMAP}, which can't carry these as they are: "
      + "; ".join(uncarried(read_raw(root / OLD_ROADMAP)))
-     + ". Move each into its phase's note (above Exit when:) or delete it, commit, and run "
-     "`jig update --apply` again",
+     + ". Move each line into its phase's note (above Exit when:) or delete it, fix each problem, "
+     "commit, and run `jig update --apply` again",
      lambda root, after: (root / OLD_ROADMAP).is_file() and knows_roadmap_json(root)
      and bool(uncarried(read_raw(root / OLD_ROADMAP))), lambda root, here: None),
     (lambda root: f"{OLD_ROADMAP} waits to convert to {ROADMAP}: "

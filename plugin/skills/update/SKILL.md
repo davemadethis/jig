@@ -257,7 +257,11 @@ with nothing answering them. Each offers one `BUFFER.md` row: add it only on a y
    next commit is checked by the new copy.
 4. If the Steps listed `.jig/roadmap.md` as waiting to convert to `.jig/roadmap.json`, run
    `/jig:update` again now: with step 3's commit on trunk the new checker judges the
-   conversion, which an older one refuses. That run writes `.jig/roadmap.json`, removes
+   conversion, which an older one refuses. Only this second run, the checker on trunk reading
+   JSON, lists what the conversion can't carry as it is (`.jig/roadmap.md waits to convert …,
+   which can't carry these as they are`). Show the owner each line it names, and for each take
+   their word: move it into its phase's note, fix it, or delete it. Edit `.jig/roadmap.md` as
+   they say, commit it on trunk, and run update again; it converts once nothing is listed. That run writes `.jig/roadmap.json`, removes
    `.jig/roadmap.md` and a `ROADMAP.md` jig generated (the first run already added the
    `roadmap:` line to AGENTS.md's Commands); show `jig roadmap show` and the diff, and commit on the owner's yes.
 5. In a pararepo (`.jig/para.json`), then run `jig init --para` and commit only what it
