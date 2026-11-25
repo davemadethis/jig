@@ -12150,17 +12150,22 @@ ktry '- `g3`: g three (touches docs/l.md)'
 expect_pass sh -c "test $rc = 0" "$out"; [ $rc = 0 ] || echo "$out"
 msg="move (the products rule): including Kite2 for an item that doesn't touch the moved page is refused, naming products and the hubnode"
 ktry '- `g4`: g four (touches docs/l2.md)'
-expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \".products. adds or drops a product L doesn't own, and no move of L's carries items into: a product's inclusion is the metarepo hubnode's\"" "$out"
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \".products. adds or drops a product L doesn't own: a product's inclusion is the metarepo hubnode's, or comes with the items a move carries into it\"" "$out"
 git reset -q --hard && git switch -q main  # end of the propose/ branch tries
 msg="move: a repo outside the family is refused, naming the family"
 expect_pass sh -c "$J move D-001 --to X 2>&1 | grep -q \"X isn't of this repo's family\""
 # A pararepo converting a roadmap of its own: the metarepo's products place none of its phases.
 gnew PP && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
 $J init --para M --location "$GM" >/dev/null 2>&1 && git add -A && git commit -qm para-init
-git rm -q --ignore-unmatch .jig/roadmap.json && printf '# Roadmap\n\n## Kite alpha\nScopes:\n- `s`: a scope\n' > .jig/roadmap.md && gplant "PP's own old roadmap"
-msg="move: a pararepo with its own old roadmap converts it with no product, though M's glossary has Kite, and the commit passes"
+mkdir -p docs && printf '# Own\n\nOwn is.\n' > docs/own.md && printf '# Glossary\n\n## Spinner\n\nThe spinner.\n' > docs/glossary.md
+git rm -q --ignore-unmatch .jig/roadmap.json && printf '# Roadmap\n\n## Kite alpha\nScopes:\n- `s`: a scope (labels spinner) (touches docs/own.md)\n' > .jig/roadmap.md && gplant "PP's own old roadmap"
+msg="move: before its conversion, a pararepo with its own old roadmap reads none of M's roadmap as its own"
+expect_pass sh -c "! $J roadmap 2>&1 | grep -q \"is M's\" && ! $J roadmap 2>&1 | grep -q 'Walyt alpha'"
+msg="move: a pararepo with its own old roadmap converts it by its own pages and glossary, with no product though M's glossary has Kite, and the commit passes"
 out=$($J update --apply 2>&1)
-expect_pass sh -c "python3 -c \"import json; d = json.load(open('.jig/roadmap.json')); assert d['products'] == [] and d['phases'] == [{'name': 'Kite alpha', 'scopes': [{'id': 's', 'text': 'a scope'}]}], d\" && git add -A && git commit -qm 'jig update: convert'" "$out"
+expect_pass sh -c "python3 -c \"import json; d = json.load(open('.jig/roadmap.json')); assert d['products'] == [] and d['phases'] == [{'name': 'Kite alpha', 'scopes': [{'id': 's', 'text': 'a scope', 'labels': ['spinner'], 'touches': ['docs/own.md']}]}], d\" && git add -A && git commit -qm 'jig update: convert'" "$out"
+msg="move: once converted, jig roadmap in the pararepo lists its own phases, not M's"
+expect_pass sh -c "$J roadmap | grep -qE '^  Kite alpha/s +open' && ! $J roadmap 2>&1 | grep -q \"is M's\""
 }
 
 UNITS="rules merge_derived update board_split docmap worktree_setup metarepo,staging pararepo release r6_takes,r6_ints merge_after_sync repos workflow init_old_board ledger_rows hardware update_per_file pararepo_commands entry_globs report_fixes sync_buffer buffer_answered pointers removals feedback slash_names homes structure meta_docs agents_lines page_contract roadmap labels family family_report roadmap_edit phase_types boundary decisions ideas ideas_fold ideas_meta ideas_labels supersede touches,touches_terms sweep staging_batches merge_log findings glossary headings check_levels role_line consolidate cheaper_rounds next svg update_roles holders rig rig_batch close versioning pin_bump moves move movein claims inbox rigger queue"

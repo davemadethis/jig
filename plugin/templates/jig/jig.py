@@ -12512,7 +12512,10 @@ class Family:
             self.kind, self.meta_loc = "meta", root
             self.owners = term_owners(at_rev(trunk, GLOSSARY))
             paras = list(meta.get("pararepos") or [])
-        elif para is not None and not self.text:
+        elif para is not None and not self.text and not at_rev(trunk, OLD_ROADMAP):
+            # A pararepo whose trunk holds its own roadmap, as JSON or in the old Markdown form
+            # waiting to convert, plans from it: its pages and glossary judge it, before the
+            # conversion and after.
             self.kind, self.meta_name = "para", para.get("meta", "")
             self.meta_loc = meta_checkout(root, para)
             if self.meta_loc is None:
@@ -12538,7 +12541,7 @@ class Family:
                 continue
             # One that keeps a roadmap of its own is its own family of one: its ids are its
             # roadmap's, and the same `alpha/x` here is another scope.
-            if trunk_show(loc, ROADMAP):
+            if trunk_show(loc, ROADMAP) or trunk_show(loc, OLD_ROADMAP):
                 continue
             self.others.append((name, Snapshot(Board.trunk_name(loc), cwd=loc)))
 
@@ -13225,8 +13228,8 @@ def section_refusals(old: str, new: str, may, owner_of, who: str, newcomer: bool
             continue
         name = f"## {h}" if h else "`products`"
         if not h:
-            out.append(f"`products` adds or drops a product {who} doesn't own, and no move of {who}'s "
-                       "carries items into: a product's inclusion is the metarepo hubnode's")
+            out.append(f"`products` adds or drops a product {who} doesn't own: a product's inclusion is "
+                       "the metarepo hubnode's, or comes with the items a move carries into it")
             continue
         if h not in old_s and newcomer:
             out.append(f"{name} names no product {who} owns: a new product is the metarepo "
