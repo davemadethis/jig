@@ -100,7 +100,14 @@ stage() {  # stage <file> <target> <kind> <change> <destination> [body]
   printf -- '---\nstaged: true\ntarget: %s\nkind: %s\nchange: %s\ndestination: %s\nsource: chat %s\nstatus: staged\n---\n%b' \
     "$2" "$3" "$4" "$5" "$1" "${6:-# Title\n\nbody\n}" > ".jig/staging/$1"
   case "${6:-}" in *"Touches: docs/shared.md"*) [ -f docs/shared.md ] || { mkdir -p docs && printf '# Shared\n' > docs/shared.md; } ;; esac; }
-board() { python3 -c "import json,sys; b=json.load(open('.jig/config.json')); $1; json.dump(b, open('.jig/config.json','w'), indent=2)"; }
+# The board as one dict, written back as two files: the docmap's four keys go to .jig/docmap.json
+# where the repo has one (an old layout's fixture keeps them in config.json).
+board() { python3 -c "import json,sys,os
+K=('docmap','not_docs','deep_subsystems','boards'); dm=os.path.exists('.jig/docmap.json')
+b=json.load(open('.jig/config.json')); b.update(json.load(open('.jig/docmap.json')) if dm else {})
+$1
+json.dump({k: v for k, v in b.items() if k not in K or not dm}, open('.jig/config.json','w'), indent=2)
+dm and json.dump({k: b[k] for k in K if k in b}, open('.jig/docmap.json','w'), indent=2, sort_keys=True)"; }
 dec() { ulog "### D-$1 x
 Accepted (owner, 2026-10-30).
 Touches: docs/shared.md" && git add -A; }
@@ -306,8 +313,8 @@ git add -A && git commit -qm init && $J init >/dev/null && git add -A && git com
 msg="init: root holds only AGENTS.md, CLAUDE.md, ROADMAP.md (the roadmap's view) and .jig/"
 expect_pass test "$(ls -A | grep -v '^\.git$' | LC_ALL=C sort | tr '\n' ' ')" = ".jig AGENTS.md CLAUDE.md ROADMAP.md "
 
-msg="init: .jig/ holds jig.py, RULES.md, docs-page.md, config.json, jobs.json, decisions.md, ideas.md, roadmap.md, the five scripts, staging/.gitignore and inbox/.gitignore, nothing else"
-expect_pass test "$(find .jig -type f | LC_ALL=C sort | tr '\n' ' ')" = ".jig/RULES.md .jig/config.json .jig/decisions.md .jig/docs-page.md .jig/ideas.md .jig/inbox/.gitignore .jig/jig.py .jig/jobs.json .jig/roadmap.md .jig/scripts/check.sh .jig/scripts/derive.sh .jig/scripts/format.sh .jig/scripts/publish.sh .jig/scripts/release.sh .jig/scripts/setup.sh .jig/staging/.gitignore "
+msg="init: .jig/ holds jig.py, RULES.md, docs-page.md, config.json, docmap.json, jobs.json, decisions.md, ideas.md, roadmap.md, the five scripts, staging/.gitignore and inbox/.gitignore, nothing else"
+expect_pass test "$(find .jig -type f | LC_ALL=C sort | tr '\n' ' ')" = ".jig/RULES.md .jig/config.json .jig/decisions.md .jig/docmap.json .jig/docs-page.md .jig/ideas.md .jig/inbox/.gitignore .jig/jig.py .jig/jobs.json .jig/roadmap.md .jig/scripts/check.sh .jig/scripts/derive.sh .jig/scripts/format.sh .jig/scripts/publish.sh .jig/scripts/release.sh .jig/scripts/setup.sh .jig/staging/.gitignore "
 
 msg="init: the spec template and both ledgers stay in the plugin until first use"
 expect_pass sh -c "test ! -e .jig/specs -a ! -e .jig/ledgers -a ! -e '$P/jig/specs' -a ! -e '$P/jig/ledgers' && test -f '$P/specs/_template.md' -a -f '$P/ledgers/WORKAROUNDS.md' -a -f '$P/ledgers/DEFERRED.md'"
@@ -371,12 +378,7 @@ r = json.loads(subprocess.check_output(['python3', '.jig/jig.py', 'survey', '--j
 assert r['boards_unmapped'] == ['docs/devkit/devkit.md'], r['boards_unmapped']"
 
 # The system page comes first, so a docmap that stops at the first match hides the board page.
-python3 - <<'EOF'
-import json; b = json.load(open('.jig/config.json'))
-b['docmap'] = {'docs/gpio/gpio.md': ['main/**'],
-               'docs/devkit/devkit.md': ['main/**', 'sdkconfig*']}
-json.dump(b, open('.jig/config.json', 'w'), indent=2)
-EOF
+board "b['docmap'] = {'docs/gpio/gpio.md': ['main/**'], 'docs/devkit/devkit.md': ['main/**', 'sdkconfig*']}"
 git add -A && git commit -qm docmap
 msg="survey: a board page docmap names is not listed"
 expect_pass python3 -c "
@@ -416,14 +418,10 @@ printf '# W\n' > src/widgets/README.md && printf '# X\n' > plugin/skills/x/SKILL
 git add -A && git commit -qm init && $J init --no-hooks >/dev/null
 
 msg="init: a new config has an empty not_docs"
-expect_pass python3 -c "import json,sys; sys.exit(json.load(open('.jig/config.json'))['not_docs'] != [])"
+expect_pass python3 -c "import json,sys; sys.exit(json.load(open('.jig/docmap.json'))['not_docs'] != [])"
 
 msg="not_docs: survey skips declared globs, still flags the stray README"
-python3 - <<'EOF'
-import json; b = json.load(open('.jig/config.json'))
-b['not_docs'] = ['plugin/**']
-json.dump(b, open('.jig/config.json', 'w'), indent=2)
-EOF
+board "b['not_docs'] = ['plugin/**']"
 git add -A && git commit -qm board   # survey reads trunk's board, not the working tree
 expect_pass python3 -c "
 import json, subprocess
@@ -434,11 +432,7 @@ assert 'src/widgets/README.md' in homeless and 'plugin/skills/x/SKILL.md' not in
 assert r['not_docs_unmatched'] == [], r['not_docs_unmatched']"
 
 msg="not_docs: a directory-style glob that matches nothing is named"
-python3 - <<'EOF'
-import json; b = json.load(open('.jig/config.json'))
-b['not_docs'] = ['plugin/']
-json.dump(b, open('.jig/config.json', 'w'), indent=2)
-EOF
+board "b['not_docs'] = ['plugin/']"
 git add -A && git commit -qm board2
 expect_pass python3 -c "
 import json, subprocess
@@ -457,7 +451,7 @@ GLOBS='
 import importlib.util, json, subprocess, sys
 spec = importlib.util.spec_from_file_location("j", sys.argv[1]); j = importlib.util.module_from_spec(spec); spec.loader.exec_module(j)
 old = json.loads(subprocess.check_output(["git", "show", "HEAD:" + sys.argv[2]]))
-new = json.load(open(".jig/config.json"))
+new = {**json.load(open(".jig/config.json")), **json.load(open(".jig/docmap.json"))}
 before = subprocess.check_output(["git", "ls-tree", "-r", "--name-only", "HEAD"], text=True).split()
 after = subprocess.check_output(["git", "ls-files"], text=True).split()
 def lists(b):
@@ -503,7 +497,7 @@ for layout in "eaec973 dot" "66a044c dot" "62c8d9f jig" "eaec973 aidev" "5d955a2
 import subprocess
 allowed = {'$board', '.jig/config.json', '.jig/jobs.json', '.aidev/aidev.py', 'jig/jig.py', '.jig/jig.py',
            '.aidev/RULES.md', 'jig/RULES.md', '.jig/RULES.md', '.jig/docs-page.md', '.gitignore', '.jig/scripts/setup.sh', '.jig/scripts/derive.sh', '.jig/scripts/release.sh', '.jig/scripts/publish.sh', '.jig/staging/.gitignore', '.jig/inbox/.gitignore', '.jig/decisions.md', '.jig/ideas.md',
-           '.jig/roadmap.md', 'ROADMAP.md'}
+           '.jig/roadmap.md', 'ROADMAP.md', '.jig/docmap.json'}
 for line in subprocess.check_output(['git', 'diff', '--cached', '-M', '--name-status'], text=True).splitlines():
     status, *paths = line.split('\t')
     assert status == 'R100' or set(paths) <= allowed | {'AGENTS.md'}, line
@@ -522,8 +516,8 @@ assert all(j.squeeze(l) in j.RETIRED for l in gone), gone"
   msg="update $name: hooks read trunk's .jig/jig.py and none was kept as .local; .git/jig/enabled, no .git/aidev, no old ignore line"
   expect_pass sh -c "grep -q 'git show main:.jig/jig.py' .git/hooks/pre-commit && ! ls .git/hooks/*.local && test -f .git/jig/enabled && test ! -e .git/aidev && ! grep -q worktrees .gitignore"
 
-  msg="update $name: nothing tracked is left in jig/, .aidev/, specs/ or ledgers/; the config is stamped 12, with release.sh, publish.sh, an empty decision log and its ideas file added"
-  expect_pass sh -c "test -z \"\$(git ls-files jig .aidev specs ledgers .jig/lanes.json)\" && ! grep -q payload .jig/config.json && grep -q '\"version\": 12' .jig/config.json && git ls-files --error-unmatch .jig/scripts/release.sh .jig/scripts/publish.sh .jig/decisions.md .jig/ideas.md"
+  msg="update $name: nothing tracked is left in jig/, .aidev/, specs/ or ledgers/; the config is stamped 13, with release.sh, publish.sh, an empty decision log and its ideas file added"
+  expect_pass sh -c "test -z \"\$(git ls-files jig .aidev specs ledgers .jig/lanes.json)\" && ! grep -q payload .jig/config.json && grep -q '\"version\": 13' .jig/config.json && git ls-files --error-unmatch .jig/scripts/release.sh .jig/scripts/publish.sh .jig/decisions.md .jig/ideas.md"
 
   msg="update $name: publish.sh is added from the template, TODO line included, and staged"
   expect_pass sh -c "git diff --cached --name-status | grep -q '^A.\.jig/scripts/publish.sh$' && grep -q '^# TODO: publish steps\.' .jig/scripts/publish.sh && test -x .jig/scripts/publish.sh"
@@ -734,7 +728,7 @@ import subprocess, sys
 removed = set(sys.argv[1].split())
 jig = {'.jig/config.json', '.jig/jobs.json', '.jig/jig.py', '.jig/RULES.md', '.jig/docs-page.md', '.jig/scripts/setup.sh', '.jig/scripts/derive.sh', '.jig/scripts/release.sh', '.jig/scripts/publish.sh',
        '.jig/ledgers/DEFERRED.md', '.jig/staging/.gitignore', '.jig/inbox/.gitignore', '.gitignore', '.jig/decisions.md', '.jig/ideas.md',
-       '.jig/roadmap.md', 'ROADMAP.md'}
+       '.jig/roadmap.md', 'ROADMAP.md', '.jig/docmap.json'}
 for line in subprocess.check_output(['git', 'diff', '--cached', '-M', '--name-status'], text=True).splitlines():
     status, *paths = line.split('\t')
     assert status == 'R100' or (status == 'D' and paths[0] in removed) or paths[-1] in jig, line" "$removed $board"
@@ -744,13 +738,13 @@ for line in subprocess.check_output(['git', 'diff', '--cached', '-M', '--name-st
       msg="update $gen: REVIEW_LEDGER.md's untaken rows are DEFERRED.md; its taken rows are gone"
       expect_pass sh -c "grep -q L-001 .jig/ledgers/DEFERRED.md && grep -q L-003 .jig/ledgers/DEFERRED.md && grep -q L-005 .jig/ledgers/DEFERRED.md && ! grep -q 'L-00[24]' .jig/ledgers/DEFERRED.md && test ! -e docs/REVIEW_LEDGER.md"
       msg="update $gen: a root HARDWARE.md naming a board moves to docs/<board>.md, flat, byte for byte, and is registered in boards"
-      expect_pass sh -c "git diff --cached -M --name-status | grep -q '^R100.HARDWARE.md.docs/devkit-s3.md' && python3 -c \"import json; assert json.load(open('.jig/config.json'))['boards'] == ['docs/devkit-s3.md']\"";;
+      expect_pass sh -c "git diff --cached -M --name-status | grep -q '^R100.HARDWARE.md.docs/devkit-s3.md' && python3 -c \"import json; assert json.load(open('.jig/docmap.json'))['boards'] == ['docs/devkit-s3.md']\"";;
     claude-lane)
       msg="update $gen: board.json is the board, merged entries and claude-lane's own keys gone; the folder is gone"
       expect_pass sh -c "python3 -c \"import json; b = json.load(open('.jig/config.json')); assert b['trunk'] == 'main' and 'lanes' not in b and 'seen' not in b and 'main' not in b and 'next' not in b['reserve']['section'], b\" && test ! -e .claude/claude-lane && git diff --cached -M --name-status | grep -q '^R100.*old-2026-01-01.md'";;
     dot-jig-v7)
       msg="update $gen: the one-file board splits: config.json without jobs or log, an empty jobs.json, no lanes.json"
-      expect_pass sh -c "python3 -c \"import json; c = json.load(open('.jig/config.json')); assert c['version'] == 12 and not {'lanes', 'log'} & set(c) and json.load(open('.jig/jobs.json')) == {}, c\" && test ! -e .jig/lanes.json && echo \"\$0\" | grep -q 'board: lanes.old (merged)' && echo \"\$0\" | grep -q 'board: log'" "$out";;
+      expect_pass sh -c "python3 -c \"import json; c = json.load(open('.jig/config.json')); assert c['version'] == 13 and not {'lanes', 'log'} & set(c) and json.load(open('.jig/jobs.json')) == {}, c\" && test ! -e .jig/lanes.json && echo \"\$0\" | grep -q 'board: lanes.old (merged)' && echo \"\$0\" | grep -q 'board: log'" "$out";;
   esac
 
   msg="update $gen: a second update is up to date"
@@ -763,7 +757,7 @@ r = json.loads(subprocess.check_output(['python3', '.jig/jig.py', 'survey', '--j
 assert r['homeless'] == [], r['homeless']\""
   git ls-files .jig > "$T/fx-$gen.paths"
   # boards is the repo's content, not jig's layout: only ai-dev's fixture has a board.
-  python3 -c "import json; print(sorted(set(json.load(open('.jig/config.json'))) - {'boards'}), json.load(open('.jig/jobs.json')))" > "$T/fx-$gen.keys"
+  python3 -c "import json; print(sorted(json.load(open('.jig/config.json'))), sorted(set(json.load(open('.jig/docmap.json'))) - {'boards'}), json.load(open('.jig/jobs.json')))" > "$T/fx-$gen.keys"
 done
 msg="update: every generation ends with the same jig paths and board keys"
 expect_pass sh -c "cd '$T' && for n in ai-dev jig-0.2 dot-jig-v7; do cmp -s fx-claude-lane.paths fx-\$n.paths && cmp -s fx-claude-lane.keys fx-\$n.keys || exit 1; done"
@@ -799,8 +793,8 @@ git add -A && git commit -qm init && $J init >/dev/null
 msg="init: config.json holds the settings, no jobs and no log; jobs.json is empty"
 expect_pass python3 -c "
 import json; c = json.load(open('.jig/config.json')); j = json.load(open('.jig/jobs.json'))
-assert sorted(c) == sorted(['version', 'name', 'trunk', 'common', 'append_files', 'reserve', 'docmap', 'not_docs', 'release', 'reference_files']), c
-assert c['version'] == 12 and j == {}, (c, j)"
+assert sorted(c) == sorted(['version', 'name', 'trunk', 'common', 'append_files', 'reserve', 'release', 'reference_files']), c
+assert c['version'] == 13 and j == {}, (c, j)"
 python3 - <<'EOF'
 import json; c = json.load(open('.jig/config.json'))
 c['reserve'] = {'section': {'pattern': r'^## (\d+) ', 'files': ['docs/**']}, 'loose': {}}
@@ -878,6 +872,71 @@ git add -A && git commit -qm "open G"
 msg="no log: neither file has a log key, and jig log is not a command"
 expect_pass sh -c "! grep -q '\"log\"' .jig/config.json .jig/jobs.json && ! $J log 2>/dev/null"
 }
+
+# ---------------------------------------------------------------- docmap.json
+sec_docmap() {
+DM="$T/docmap"; mkdir -p "$DM" && cd "$DM" && git init -q -b main && git config user.email t@t && git config user.name t
+cp -r "$P/jig" .jig && cp "$P/AGENTS.md" "$P/CLAUDE.md" . && mkdir -p docs/net docs/watch src/net main
+printf '# Net\n\nNet is.\n' > docs/net/net.md && printf '# Watch\n\nThe board.\n' > docs/watch/watch.md
+printf 'x=1\n' > src/net/a.py && printf 'int x;\n' > main/app.c
+git add -A && git commit -qm init && $J init >/dev/null
+
+msg="docmap: init writes .jig/docmap.json with an empty docmap and not_docs, and config.json holds none of the four keys"
+expect_pass python3 -c "
+import json; d = json.load(open('.jig/docmap.json')); c = json.load(open('.jig/config.json'))
+assert d == {'docmap': {}, 'not_docs': []}, d
+assert not {'docmap', 'not_docs', 'boards', 'deep_subsystems'} & set(c), c"
+git add -A && git commit -qm init2
+
+msg="docmap: a commit adding a key docmap.json doesn't know is refused, naming the four"
+python3 -c "import json; d = json.load(open('.jig/docmap.json')); d['owners'] = {}; json.dump(d, open('.jig/docmap.json', 'w'))"
+git add -A; out=$(git commit -qm bad 2>&1); rc=$?; undo
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'owners. is not a docmap key; it holds only docmap, not_docs, deep_subsystems, boards'" "$out"
+msg="docmap: a docmap value of the wrong shape is refused (a page mapped to a string, not a list of globs)"
+python3 -c "import json; d = json.load(open('.jig/docmap.json')); d['docmap'] = {'docs/net/net.md': 'src/**'}; json.dump(d, open('.jig/docmap.json', 'w'))"
+git add -A; out=$(git commit -qm bad 2>&1); rc=$?; undo
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'docmap. must be an object mapping each page to a list of globs'" "$out"
+msg="docmap: boards as a string, not a list of pages, is refused"
+python3 -c "import json; d = json.load(open('.jig/docmap.json')); d['boards'] = 'docs/watch/watch.md'; json.dump(d, open('.jig/docmap.json', 'w'))"
+git add -A; expect_refuse git commit -qm bad; undo
+msg="docmap: a config.json commit carrying a docmap key is refused, saying where it lives now"
+python3 -c "import json; c = json.load(open('.jig/config.json')); c['not_docs'] = []; json.dump(c, open('.jig/config.json', 'w'), indent=2)"
+git add -A; out=$(git commit -qm bad 2>&1); rc=$?; undo
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'not_docs. lives in .jig/docmap.json now'" "$out"
+
+board "b['docmap'] = {'docs/net/net.md': ['src/net/**'], 'docs/watch/watch.md': ['main/**', 'src/net/a.py']}; b['boards'] = ['docs/watch/watch.md']; b['deep_subsystems'] = {'docs/net/x/y': 'own rig'}"
+msg="docmap: a well-formed docmap.json commits on trunk"
+git add -A; expect_pass git commit -qm docmap
+msg="docmap: jig docmap <page> prints its globs and that it is a board"
+out=$($J docmap docs/watch/watch.md 2>&1)
+expect_pass sh -c "echo \"\$0\" | head -1 | grep -qx 'docs/watch/watch.md: page (board)' && echo \"\$0\" | grep -qx '  main/\*\*' && echo \"\$0\" | grep -qx '  src/net/a.py'" "$out"
+msg="docmap: jig docmap <path> prints every page covering it, and no page above"
+out=$($J docmap src/net/a.py 2>&1)
+expect_pass sh -c "test \"\$0\" = 'src/net/a.py: covered by
+  docs/net/net.md
+  docs/watch/watch.md'" "$out"
+msg="docmap: a path no page covers says so"
+out=$($J docmap README.md 2>&1); expect_pass sh -c "echo \"\$0\" | grep -qx 'README.md: no page in .jig/docmap.json covers it'" "$out"
+
+msg="docmap: update --apply moves all four keys from config.json to docmap.json, values unchanged, and bumps the stamp"
+python3 - <<'PY'
+import json
+c = json.load(open('.jig/config.json')); d = json.load(open('.jig/docmap.json'))
+c.update(d); c['version'] = 12
+json.dump(c, open('.jig/config.json', 'w'), indent=2)
+PY
+git rm -q .jig/docmap.json && git add -A && git -c core.hooksPath=/dev/null commit -qm "the old layout"
+python3 -c "import json; c = json.load(open('.jig/config.json')); json.dump({k: c[k] for k in ('docmap', 'not_docs', 'boards', 'deep_subsystems')}, open('$T/dm-before.json', 'w'))"
+dry=$($UP 2>&1); $UP --apply >/dev/null 2>&1
+expect_pass sh -c "echo \"\$0\" | grep -q 'move docmap, boards, deep_subsystems and not_docs from .jig/config.json to .jig/docmap.json' && python3 -c \"
+import json; c = json.load(open('.jig/config.json')); d = json.load(open('.jig/docmap.json'))
+assert d == json.load(open('$T/dm-before.json')), d
+assert not {'docmap', 'not_docs', 'boards', 'deep_subsystems'} & set(c) and c['version'] == 13, c\" && git diff --cached --name-only | grep -qx .jig/docmap.json" "$dry"
+msg="docmap: a second update reports nothing to do"
+git commit -qm update --no-verify
+expect_pass test "$($UP 2>&1 | head -1)" = "up to date"
+}
+
 
 # ---------------------------------------------------------------- worktree setup
 sec_worktree_setup() {
@@ -2698,7 +2757,7 @@ expect_pass python3 -c "import json; assert json.load(open('.jig/config.json'))[
 msg="reference files: update adds reference_files to a config that lacks it, and no boards key"
 python3 - <<'PY'
 import json; b = json.load(open('.jig/config.json'))
-del b['reference_files']; del b['boards']; b['version'] = 8
+del b['reference_files']; b.pop('boards', None); b['version'] = 8
 json.dump(b, open('.jig/config.json', 'w'), indent=2)
 PY
 git add -A && git commit -qm "older config"
@@ -2772,7 +2831,7 @@ expect_pass sh -c "echo \"\$0\" | grep -qF 'docs/hardware/watch.md → docs/watc
 board "b['version'] = 8" && git add -A && git commit -qm older
 out=$($J update 2>&1)
 msg="old layout: update lists the moves for review with the docmap key, the stale reference and the boards lines"
-expect_pass sh -c "echo \"\$0\" | grep -q '^  docs/hardware/: board files in the old layout' && echo \"\$0\" | grep -qF 'git mv docs/hardware/watch.md docs/watch/watch.md' && echo \"\$0\" | grep -qF 'git mv docs/hardware/components/rtc/r.pdf docs/datasheets/r.pdf' && echo \"\$0\" | grep -qF '.jig/config.json docmap: docs/hardware/watch.md' && echo \"\$0\" | grep -qF 'README.md:1: See docs/hardware/watch.md' && echo \"\$0\" | grep -qF '.jig/config.json boards: + docs/watch/watch.md' && echo \"\$0\" | grep -q 'repoint it'" "$out"
+expect_pass sh -c "echo \"\$0\" | grep -q '^  docs/hardware/: board files in the old layout' && echo \"\$0\" | grep -qF 'git mv docs/hardware/watch.md docs/watch/watch.md' && echo \"\$0\" | grep -qF 'git mv docs/hardware/components/rtc/r.pdf docs/datasheets/r.pdf' && echo \"\$0\" | grep -qF '.jig/docmap.json docmap: docs/hardware/watch.md' && echo \"\$0\" | grep -qF 'README.md:1: See docs/hardware/watch.md' && echo \"\$0\" | grep -qF '.jig/docmap.json boards: + docs/watch/watch.md' && echo \"\$0\" | grep -q 'repoint it'" "$out"
 
 # The reserved name, an orphan datasheets/ folder, and not_docs.
 HN="$T/hwname"; pcnew "$HN" && mkdir -p docs/x/datasheets docs/datasheets docs/stuff/datasheets docs/site
@@ -4131,7 +4190,7 @@ assert 'docs/c/c.md' not in h and 'docs/c/d.md' not in h, h"
 behind
 msg="homes: the dry run lists the two moves, the docmap key and the AGENTS.md line naming the folder"
 out=$($UP 2>&1)
-expect_pass sh -c "for w in 'git mv docs/systems/a.md docs/a.md' 'git mv docs/systems/b.md docs/b.md' '.jig/config.json docmap: docs/systems/a.md' 'AGENTS.md:[0-9]*: - Pages live in .docs/systems/.'; do echo \"\$0\" | grep -q \"^      \$w\" || { echo \"missing \$w\"; exit 1; }; done" "$out"
+expect_pass sh -c "for w in 'git mv docs/systems/a.md docs/a.md' 'git mv docs/systems/b.md docs/b.md' '.jig/docmap.json docmap: docs/systems/a.md' 'AGENTS.md:[0-9]*: - Pages live in .docs/systems/.'; do echo \"\$0\" | grep -q \"^      \$w\" || { echo \"missing \$w\"; exit 1; }; done" "$out"
 $UP --apply >/dev/null 2>&1 && git commit -qm update
 git mv docs/systems/a.md docs/a.md && git mv docs/systems/b.md docs/b.md
 sed -i.bak 's|`docs/systems/`|`docs/`|' AGENTS.md && rm AGENTS.md.bak
@@ -4160,7 +4219,7 @@ expect_pass sh -c "echo \"\$0\" | grep -A2 '^Pages below a subsystem' | tail -1 
 behind
 msg="homes: the dry run lists the deep page to review; --apply writes no deep_subsystems key"
 out=$($UP 2>&1); $UP --apply >/dev/null 2>&1
-expect_pass sh -c "echo \"\$0\" | sed -n '/^Repo files to review/,/^\$/p' | grep -q '^  docs/a/b/c/c.md: below a subsystem' && ! grep -q deep_subsystems .jig/config.json" "$out"
+expect_pass sh -c "echo \"\$0\" | sed -n '/^Repo files to review/,/^\$/p' | grep -q '^  docs/a/b/c/c.md: below a subsystem' && ! grep -q deep_subsystems .jig/docmap.json" "$out"
 git add -A && git commit -qm update
 board "b['deep_subsystems'] = {'docs/a/b/c': 'own module; independent of b'}" && git add -A && git commit -qm approve
 msg="homes: with docs/a/b/c approved, survey doesn't list docs/a/b/c/c.md"
@@ -4168,7 +4227,7 @@ expect_pass homes "assert 'docs/a/b/c/c.md' not in h, h"
 behind
 msg="homes: update keeps the deep_subsystems entry and calls no key unknown"
 out=$($UP 2>&1); $UP --apply >/dev/null 2>&1
-expect_pass sh -c "! echo \"\$0\" | grep -q 'not one jig knows' && python3 -c \"import json; assert json.load(open('.jig/config.json'))['deep_subsystems'] == {'docs/a/b/c': 'own module; independent of b'}\"" "$out"
+expect_pass sh -c "! echo \"\$0\" | grep -q 'not one jig knows' && python3 -c \"import json; assert json.load(open('.jig/docmap.json'))['deep_subsystems'] == {'docs/a/b/c': 'own module; independent of b'}\"" "$out"
 git add -A && git commit -qm update
 board "b['deep_subsystems'] = {'docs/a/b/c': ''}" && git add -A && git commit -qm unreason
 msg="homes: an empty rationale approves nothing"
@@ -4191,7 +4250,7 @@ expect_pass sh -c "echo \"\$0\" | grep -q '^  docs/e/f/g/h/h.md: move it to docs
 behind
 msg="homes: update's deep row names the docmap key a fold touches"
 out=$($UP 2>&1)
-expect_pass sh -c "echo \"\$0\" | sed -n '/^  docs\/e\/f\/g\/g.md: below a subsystem/,/^  [^ ]/p' | grep -q '^      .jig/config.json docmap: docs/e/f/g/g.md'" "$out"
+expect_pass sh -c "echo \"\$0\" | sed -n '/^  docs\/e\/f\/g\/g.md: below a subsystem/,/^  [^ ]/p' | grep -q '^      .jig/docmap.json docmap: docs/e/f/g/g.md'" "$out"
 
 # What a citation is not: bytes in a binary, a longer name, the same path under another repo.
 HB="$T/homes-bytes"; pcnew "$HB" && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
@@ -4374,7 +4433,7 @@ expect_pass sh -c "echo \"\$0\" | sed -n '/^Pages outside the docs tree/,/^\$/p'
 behind
 msg="house: update proposes moving both, with their docmap keys"
 out=$($UP 2>&1)
-expect_pass sh -c "for w in 'git mv docs/crates/s/store.md docs/store.md' 'git mv docs/crates/s/lib.md docs/lib.md' '.jig/config.json docmap: docs/crates/s/store.md' '.jig/config.json docmap: docs/crates/s/lib.md'; do echo \"\$0\" | grep -q \"^      \$w\" || { echo \"missing \$w\"; exit 1; }; done" "$out"
+expect_pass sh -c "for w in 'git mv docs/crates/s/store.md docs/store.md' 'git mv docs/crates/s/lib.md docs/lib.md' '.jig/docmap.json docmap: docs/crates/s/store.md' '.jig/docmap.json docmap: docs/crates/s/lib.md'; do echo \"\$0\" | grep -q \"^      \$w\" || { echo \"missing \$w\"; exit 1; }; done" "$out"
 
 HL="$T/homes-nolead"; pcnew "$HL" && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
 mkdir -p docs/s && printf '# S\n\n## Part\n\nText.\n' > docs/s/s.md && git add -A && git commit -qm page
@@ -4492,7 +4551,7 @@ msg="form: a one-page edit in a tree of hundreds of pages is judged in seconds, 
 # 30 systems of 10 pages, each mapped to code of its own with a README beside it: a stray .md apiece.
 python3 -c "
 import json, os
-b = json.load(open('.jig/config.json'))
+b = json.load(open('.jig/docmap.json'))
 for i in range(30):
     os.makedirs(f'docs/t{i}', exist_ok=True)
     for j in range(10):
@@ -4502,7 +4561,7 @@ for i in range(30):
         open(f'src/t{i}/p{j}/a.py', 'w').write('x\\n')
         open(f'src/t{i}/p{j}/README.md', 'w').write('readme\\n')
         b['docmap'][page] = [f'src/t{i}/p{j}/**']
-json.dump(b, open('.jig/config.json', 'w'), indent=2)"
+json.dump(b, open('.jig/docmap.json', 'w'), indent=2)"
 git add -A && git -c core.hooksPath=/dev/null commit -qm many && printf -- '- e\n' >> docs/t1/p1.md && git add -A
 start=$(date +%s); out=$($J rules --staged 2>&1); took=$(( $(date +%s) - start ))
 expect_pass sh -c "test $took -lt 20 && test \"\$0\" = ok" "$out"
@@ -4598,10 +4657,10 @@ msg="meta docs: GLOSSARY.md is bound for docs/glossary.md, not a genre"
 expect_pass mhomes "assert h['GLOSSARY.md']['to'] == 'docs/glossary.md', h['GLOSSARY.md']"
 msg="meta docs: the Doc homes line gives the genre tree"
 out=$($J survey 2>&1); expect_pass sh -c "echo \"\$0\" | grep -q 'docs/<genre>/<name>.md each page'" "$out"
-python3 -c "import json; p='.jig/config.json'; d=json.load(open(p)); d['not_docs'] = ['features/**', 'DECISIONS.md']; json.dump(d, open(p, 'w'))"
+board "b['not_docs'] = ['features/**', 'DECISIONS.md']"
 msg="meta docs: a not_docs glob hiding pages is named, and survey still routes to /jig:redocument"
 out=$($J survey 2>&1); expect_pass sh -c "echo \"\$0\" | grep -q 'glob features/\*\* hides 2 pages' && ! echo \"\$0\" | grep -q 'glob DECISIONS.md' && echo \"\$0\" | tail -1 | grep -q '/jig:redocument'" "$out"
-python3 -c "import json; p='.jig/config.json'; d=json.load(open(p)); d['not_docs'] = []; json.dump(d, open(p, 'w'))"
+board "b['not_docs'] = []"
 git commit -qm docs --no-verify
 msg="meta docs: update proposes genres from the folders under docs/, and docs/**/*.md for entry_files"
 out=$($UP 2>&1); expect_pass sh -c "echo \"\$0\" | grep -q '\"genres\": \[\"products\"\]' && echo \"\$0\" | grep -q 'docs/\*\*/\*.md'" "$out"
@@ -11910,7 +11969,7 @@ msg="move: a repo outside the family is refused, naming the family"
 expect_pass sh -c "$J move D-001 --to X 2>&1 | grep -q \"X isn't of this repo's family\""
 }
 
-UNITS="rules merge_derived update board_split worktree_setup metarepo,staging pararepo release r6_takes,r6_ints merge_after_sync repos workflow init_old_board ledger_rows hardware update_per_file pararepo_commands entry_globs report_fixes sync_buffer buffer_answered pointers removals feedback slash_names homes structure meta_docs agents_lines page_contract roadmap labels family family_report roadmap_edit phase_types boundary decisions ideas ideas_fold ideas_meta ideas_labels supersede touches,touches_terms sweep staging_batches merge_log findings glossary headings check_levels role_line consolidate cheaper_rounds next svg update_roles holders rig rig_batch close versioning pin_bump moves move movein claims inbox rigger queue"
+UNITS="rules merge_derived update board_split docmap worktree_setup metarepo,staging pararepo release r6_takes,r6_ints merge_after_sync repos workflow init_old_board ledger_rows hardware update_per_file pararepo_commands entry_globs report_fixes sync_buffer buffer_answered pointers removals feedback slash_names homes structure meta_docs agents_lines page_contract roadmap labels family family_report roadmap_edit phase_types boundary decisions ideas ideas_fold ideas_meta ideas_labels supersede touches,touches_terms sweep staging_batches merge_log findings glossary headings check_levels role_line consolidate cheaper_rounds next svg update_roles holders rig rig_batch close versioning pin_bump moves move movein claims inbox rigger queue"
 
 if [ "${1:-}" = --list ]; then echo $UNITS | tr ' ,' '\n\n'; exit 0; fi
 if [ "${1:-}" = --unit ]; then        # --unit <run folder> <unit>: one unit, its output to a file

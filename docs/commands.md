@@ -83,6 +83,7 @@ Jobs, for anyone:
 - `python3 .jig/jig.py handoff` writes the handoff note.
 - `python3 .jig/jig.py queue -- <command>` runs a test or check in one of the machine's slots, so parallel jobs don't fight for cores.
 - `python3 .jig/jig.py reading-list <files>` lists the pages to read before touching those files, and the ideas still open on them.
+- `python3 .jig/jig.py docmap <page or path>` queries `.jig/docmap.json`: a page's globs and whether it is a board or a deep subsystem, or the pages covering a file.
 - `python3 .jig/jig.py ideas [--label <term>]` lists the ideas still to research, with their labels. In a metarepo it lists its pararepos' too.
 
 Records:

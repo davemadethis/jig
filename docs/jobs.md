@@ -12,7 +12,8 @@ every commit.
 
 The board is two files on [trunk](glossary.md#trunk). `.jig/config.json`
 holds the settings that rarely change. `.jig/jobs.json` holds the open jobs, and nothing else.
-Only the [hubnode](glossary.md#hubnode) edits either one, on trunk.
+Only the [hubnode](glossary.md#hubnode) edits either one, on trunk, and `.jig/docmap.json`,
+the map of which docs page covers which files, the same way.
 
 Each job on the board has:
 

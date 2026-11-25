@@ -27,11 +27,10 @@ identical; only the coordination disappears.
 ## The board
 
 Two files on trunk, written only by the hubnode. `.jig/config.json` holds what rarely
-changes: `name`, `trunk`, `common`, `append_files`, `reserve`, `docmap`, `not_docs`,
-`release`, `reference_files`, `roles` (optional; see Workflow), `deep_subsystems`,
-`boards` and `findings` (all optional; see Documentation), `derived_files` (optional; globs
-naming every file `.jig/scripts/derive.sh` writes, which `jig merge` commits) and the layout's
-`version`.
+changes: `name`, `trunk`, `common`, `append_files`, `reserve`, `release`,
+`reference_files`, `roles` (optional; see Workflow), `findings` (optional; see
+Documentation), `derived_files` (optional; globs naming every file `.jig/scripts/derive.sh`
+writes, which `jig merge` commits) and the layout's `version`.
 `.jig/jobs.json` holds the open jobs, nothing else. Per job:
 
 | Key | Meaning |
@@ -49,8 +48,14 @@ only the one that differs. The day it opened is the commit that added its entry.
 job deletes its entry in the merge commit, so git log of `jobs.json` is the board's history.
 
 `common` and `append_files` are repo-wide. A file new to the repo belongs to whoever makes it.
-`not_docs` lists globs where markdown ships as code (skills, templates, fixtures); `survey`
-does not look for a home for those files.
+
+The docs tree's map is not configuration, so it has its own file, `.jig/docmap.json`, written
+like the board on trunk only (R5). It holds `docmap` (each page's globs), `not_docs`, and the
+optional `deep_subsystems` and `boards` (see Documentation), and no other key: the hook refuses
+a key jig doesn't know or a value of another shape. `jig docmap <page>` prints a page's globs
+and whether it is a board or an approved deep subsystem; `jig docmap <path>` prints the pages
+covering a file. `not_docs` lists globs where markdown ships as code (skills, templates,
+fixtures); `survey` does not look for a home for those files.
 
 **Owns is narrow on purpose.** Before opening a job, `jig open` diffs every open job's
 branch against trunk and refuses an `owns` entry another live branch already touched. Those
@@ -91,7 +96,7 @@ a rename changes both of its paths: R3–R5, P1, P2 and P4 count each.
   supersedes it; but a log not folded yet keeps its open entries under `## Open`, where they
   change in place or leave (dropped, or moved to `.jig/ideas.md` by the fold), heading and all. It may add to `.jig/ideas.md` (Decision log, Ideas) and change it in place.
 - **R4** Another open job's `owns` is refused even if this job also lists it.
-- **R5** The board is the hubnode's: `config.json` and `jobs.json` are edited on trunk only.
+- **R5** The board is the hubnode's: `config.json`, `docmap.json` and `jobs.json` are edited on trunk only.
   So is the roadmap, the owner's: `.jig/roadmap.md`, and `ROADMAP.md` where trunk has a
   `.jig/roadmap.md` (Roadmap, below).
 - **R6** A scarce number belongs to the one job that reserved it. A change that makes a
@@ -190,7 +195,7 @@ a section, however long it gets.
 
 The tree is two levels deep: systems and their subsystems. A subsystem inside a subsystem needs
 the owner's word. It is proposed with a rationale: what it is independent of, and the files it
-has of its own. On a yes, it is recorded on trunk in `config.json`'s `deep_subsystems`, a map
+has of its own. On a yes, it is recorded on trunk in `docmap.json`'s `deep_subsystems`, a map
 from its folder to that rationale: `{"docs/power/battery/cells": "own firmware module and test
 rig; independent of pack thermal"}`. An entry with an empty rationale doesn't count, and each
 deeper level needs an entry of its own. `jig survey` lists any other deeper page to fold into
@@ -332,7 +337,7 @@ any other: `docs/<board>.md`, or `docs/<system>/<board>.md` where the board is p
 system, in a folder of its own once it holds files (a spec sheet makes a `datasheets/`), beside the code's pages, never under a genre folder. Every board has a
 page the repo builds, made from jig's board template (`/jig:hardware`) out of a hardware
 definition and checked against the code; a dev board gets one too, written from its vendor's
-spec sheet. It is a board page because `config.json`'s `boards` lists it, never because of where
+spec sheet. It is a board page because `docmap.json`'s `boards` lists it, never because of where
 it sits. A `docmap` entry ties each page to the code that targets its board, so every handoff
 that changes that code asks whether the page still matches. `jig gate` refuses:
 
@@ -558,7 +563,7 @@ is made (a merge that needs a hand is refused first): the spec's `Scope: No phas
 makes it read done. `jig gate` refuses while a line is unanswered; untouched and
 departed are answers.
 
-Ownership comes from `docmap` in `config.json`:
+Ownership comes from `docmap` in `.jig/docmap.json`:
 
 ```json
 "docmap": {"docs/storage/storage.md": ["server/storage.py", "server/migrations/**"]}

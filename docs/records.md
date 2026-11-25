@@ -34,7 +34,7 @@ out. A page also never names a plan, a [phase](glossary.md#phase) or a [handoff]
 
 ## Docs move with code
 
-The [board](glossary.md#board)'s `docmap` maps each page to the source files it covers. A handoff has to answer for
+`.jig/docmap.json`'s `docmap` maps each page to the source files it covers. A handoff has to answer for
 every page its change touched: still true, or updated. `python3 .jig/jig.py reading-list <files>`
 prints which pages to read before touching those files, including the system page above each.
 

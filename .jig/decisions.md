@@ -7,6 +7,16 @@ A breaking change is one that a reader taking the release must act on: a `**Brea
 
 ## Unreleased
 
+### Added
+- `jig docmap <page or path>…` queries the docs tree's map: a page's globs and whether it is a board or an approved deep subsystem, or the pages covering a file.
+
+### Changed
+- The docs tree's map has its own file, `.jig/docmap.json`: `docmap`, `boards`, `deep_subsystems` and `not_docs` move there from `.jig/config.json`, which keeps only configuration. It is trunk-only like the board (R5), and the hook refuses a key jig doesn't know or a value of another shape. `jig init` writes it, and `jig update --apply` moves the four keys with their values unchanged.
+- **Breaking:** a repo's own tool or script that reads `docmap`, `boards`, `deep_subsystems` or `not_docs` from `.jig/config.json` reads `.jig/docmap.json` instead, or runs `jig docmap`.
+
+### Removed
+- `docmap`, `boards`, `deep_subsystems` and `not_docs` as `.jig/config.json` keys: the hook refuses a config commit carrying one.
+
 ## v0.16.0 - 2026-11-24
 
 ### Added

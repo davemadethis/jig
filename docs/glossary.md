@@ -15,8 +15,9 @@ change. A job isn't a task list or a ticket. It opens on the board and closes wh
 ## Board
 
 The two files on trunk that say what's going on: `.jig/config.json` for the settings that
-rarely change, and `.jig/jobs.json` for the open jobs. Only the hubnode edits them. The board
-isn't a kanban view, and nobody ticks anything on it.
+rarely change, and `.jig/jobs.json` for the open jobs. Only the hubnode edits them, and
+`.jig/docmap.json`, the docs tree's map, the same way. The board isn't a kanban view, and
+nobody ticks anything on it.
 
 ## Owns and shares
 

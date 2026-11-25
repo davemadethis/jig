@@ -41,7 +41,7 @@ Each one gets exactly one job and one home:
 | `.jig/specs/` | a task in flight |
 | `.jig/ledgers/WORKAROUNDS.md` | patches that are in the code |
 | `.jig/ledgers/DEFERRED.md` | review findings that are not |
-| `docs/<board>.md` | one per board, a system or a subsystem like any other, in its folder once it holds files (`docs/<board>/<board>.md` beside its `datasheets/`), listed in `boards` in `.jig/config.json`: components, wiring, toolchain, flash |
+| `docs/<board>.md` | one per board, a system or a subsystem like any other, in its folder once it holds files (`docs/<board>/<board>.md` beside its `datasheets/`), listed in `boards` in `.jig/docmap.json`: components, wiring, toolchain, flash |
 | `docs/…/datasheets/` | the vendor documents a page leans on, in that page's folder; one two pages use, in the nearest folder both share |
 | `docs/datasheets/` | a vendor document two systems use: reference files only, never a page |
 | `.claude/skills/` | reusable know-how, loaded on demand |
@@ -192,7 +192,9 @@ predecessor's hooks running. Now fill `config.json` by hand, from the predecesso
 | `common` | files every job may touch |
 | `append_files` | files whose conflicts resolve by appending |
 | `reserve.<counter>` | each scarce number it allocates, as a `pattern` + `files` that find every number ever taken: jig hands out the next above those, and refuses a counter without them |
-| `docmap` | its file → documentation map, if it has one, less the repo's own tooling (build, CI, release, dev scripts), which maps to no page |
+
+And in `.jig/docmap.json`, `docmap`: its file → documentation map, if it has one, less the
+repo's own tooling (build, CI, release, dev scripts), which maps to no page.
 
 A counter's `files` must name every file its numbers live in — if the rules moved from
 `AGENTS.md` to `docs/**`, the pattern must cover both, or R6 enforces nothing.

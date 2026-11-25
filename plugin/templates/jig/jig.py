@@ -43,7 +43,7 @@ STATES = ["claimed", "building", "ready", "gated", "parked"]
 # LAYOUT row, a config default or an update STEP bumps it. Update branches on it twice: it
 # refuses to take a newer repo back to an older jig, and it folds `## Up next` only once trunk's
 # committed checker is ONE_LIST or newer (knows_one_list).
-STAMP = 12
+STAMP = 13
 # The first STAMP whose checker reads the one list, `## No phase` items naming pages included.
 ONE_LIST = 11
 BOARD_DEFAULTS = {
@@ -53,8 +53,6 @@ BOARD_DEFAULTS = {
     "common": ["AGENTS.md", "docs/**", f"{DIR}/**"],
     "append_files": ["AGENTS.md", f"{DIR}/ledgers/**", f"{DIR}/decisions.md"],
     "reserve": {},         # counter: {"pattern": regex with one group, "files": [globs], "unique": bool}
-    "docmap": {},
-    "not_docs": [],        # globs whose markdown ships as code; survey finds no home for it
     "release": {"artifacts": []},   # globs release.sh must produce; see `jig release`
     # Whether a board's datasheets are committed ("commit") or gitignored ("ignore"). Left
     # unset, the hardware skill asks once, the next time it writes a page: a public repo may
@@ -66,11 +64,22 @@ BOARD_DEFAULTS = {
 BOARD_OPTIONAL = (
     "derived_files",       # globs derive.sh writes; jig merge commits what they match
     "roles",               # overrides ROLES' tiers and efforts, each with a reason
-    "deep_subsystems",     # {"docs/<system>/<subsystem>/<folder>": rationale}: owner-approved deeper pages
-    "boards",              # ["docs/<board>/<board>.md", "docs/<system>/<board>/<board>.md"]: the pages that are boards, never inferred from a path
     "queue",               # {"width": N | "all", "slots": N, "max_load": X, "overflow": {"to": "github", "reason": ...}}: jig queue
     "findings",            # {"<kind>:<path>": "approved" | "deferred: <where>" | "exception: <reason>"}: the owner's answer to each finding
 )
+# The docs tree's map is not configuration: which page covers which files, which pages are
+# boards, which deeper pages the owner approved, and where markdown ships as code. Its own file,
+# trunk-only like the board (R5), read with the board so every reader finds the four keys there.
+DOCMAP = f"{DIR}/docmap.json"
+DOCMAP_DEFAULTS = {
+    "docmap": {},          # {"<page>": [globs]}: the files each page covers
+    "not_docs": [],        # globs whose markdown ships as code; survey finds no home for it
+}
+DOCMAP_OPTIONAL = (
+    "deep_subsystems",     # {"docs/<system>/<subsystem>/<folder>": rationale}: owner-approved deeper pages
+    "boards",              # ["docs/<board>/<board>.md", "docs/<system>/<board>/<board>.md"]: the pages that are boards, never inferred from a path
+)
+DOCMAP_KEYS = (*DOCMAP_DEFAULTS, *DOCMAP_OPTIONAL)
 # Who does each step. Every session is a node: the hubnode (the owner's) or a subnode, which
 # takes one role on one job. Settings are numbers the tool maps to its own models and efforts:
 # tier 1 is the tool's best model, a higher number a lesser one; effort 0 is its highest, each
@@ -239,6 +248,91 @@ def matches(path: str, patterns: list[str]) -> bool:
 
 # ---------------------------------------------------------------------- board
 
+def read_docmap_text(root: Path) -> str:
+    p = root / DOCMAP
+    return p.read_text(errors="replace") if p.is_file() else ""
+
+
+def with_docmap(config: dict, raw: str) -> dict:
+    """CONFIG with the docmap file's keys laid over it. A config.json still holding them, in a
+    repo `jig update --apply` hasn't moved yet, keeps working until it does."""
+    try:
+        dm = json.loads(raw) if raw.strip() else {}
+    except ValueError:
+        dm = {}
+    if isinstance(dm, dict):
+        config.update({k: v for k, v in dm.items() if k in DOCMAP_KEYS})
+    return config
+
+
+def docmap_json(data: dict) -> str:
+    """The docmap file as jig writes it: keys sorted, so two jobs' hand edits merge as text."""
+    return json.dumps({k: data[k] for k in sorted(data)}, indent=2, sort_keys=True) + "\n"
+
+
+def save_docmap(root: Path, data: dict) -> None:
+    """Write DATA's docmap keys to the docmap file, over what it holds."""
+    have = {}
+    try:
+        have = json.loads(read_docmap_text(root) or "{}")
+    except ValueError:
+        pass
+    have = have if isinstance(have, dict) else {}
+    have.update({k: data[k] for k in DOCMAP_KEYS if k in data})
+    (root / DOCMAP).write_text(docmap_json(have))
+
+
+def save_board(root: Path, data: dict) -> None:
+    """Write and stage the board's config and the docmap DATA holds, each in its own file."""
+    (root / CONFIG).parent.mkdir(parents=True, exist_ok=True)
+    (root / CONFIG).write_text(json.dumps(config_only(data), indent=2) + "\n")
+    save_docmap(root, data)
+    git("add", "--", CONFIG, DOCMAP, check=True)
+
+
+def docmap_in_config(root: Path) -> bool:
+    """Whether config.json still holds a key the docmap file holds now, or there is no docmap file."""
+    try:
+        cfg = json.loads((root / CONFIG).read_text())
+    except (OSError, ValueError):
+        return False
+    return not (root / DOCMAP).is_file() or any(k in cfg for k in DOCMAP_KEYS)
+
+
+def board_moves_docmap(root: Path) -> bool:
+    return (root / CONFIG).is_file() and docmap_in_config(root)
+
+
+def config_only(data: dict) -> dict:
+    """DATA without the docmap's keys: what config.json holds."""
+    return {k: v for k, v in data.items() if k not in DOCMAP_KEYS}
+
+
+def docmap_problems(raw: str) -> list[str]:
+    """Why the docmap file can't be committed: a key jig doesn't know (hand-made fields aren't
+    allowed), or a value of another shape than the one each key reads."""
+    try:
+        dm = json.loads(raw)
+    except ValueError as e:
+        return [f"{DOCMAP} is not JSON: {e}"]
+    if not isinstance(dm, dict):
+        return [f"{DOCMAP} is not a JSON object"]
+    out = [f"{DOCMAP}: `{k}` is not a docmap key; it holds only {', '.join(DOCMAP_KEYS)}"
+           for k in dm if k not in DOCMAP_KEYS]
+    strs = lambda v: isinstance(v, list) and all(isinstance(x, str) for x in v)
+    shape = {
+        "docmap": (lambda v: isinstance(v, dict) and all(strs(g) for g in v.values()),
+                   "an object mapping each page to a list of globs"),
+        "not_docs": (strs, "a list of globs"),
+        "deep_subsystems": (lambda v: isinstance(v, dict) and all(isinstance(x, str) for x in v.values()),
+                            "an object mapping each folder to its rationale"),
+        "boards": (strs, "a list of page paths"),
+    }
+    out += [f"{DOCMAP}: `{k}` must be {why}" for k, (ok, why) in shape.items()
+            if k in dm and not ok(dm[k])]
+    return out
+
+
 class Board:
     """The config and the open jobs, read together: every rule needs both."""
     def __init__(self, root: Path, data: dict, jobs: dict):
@@ -253,13 +347,14 @@ class Board:
             trunk = cls.trunk_name(base)
             raw = git("show", f"{trunk}:{CONFIG}")
             if raw:
-                return cls(base, json.loads(raw), json.loads(git("show", f"{trunk}:{JOBS}") or "{}"))
+                return cls(base, with_docmap(json.loads(raw), git("show", f"{trunk}:{DOCMAP}")),
+                           json.loads(git("show", f"{trunk}:{JOBS}") or "{}"))
         if not (base / CONFIG).exists():
             old = old_board(base)
             die(f"an older jig's board is at {old}: run /jig:update first" if old
                 else f"no board at {CONFIG}. Run: jig init", 2)
         jobs = base / JOBS
-        return cls(base, json.loads((base / CONFIG).read_text()),
+        return cls(base, with_docmap(json.loads((base / CONFIG).read_text()), read_docmap_text(base)),
                    json.loads(jobs.read_text()) if jobs.exists() else {})
 
     @staticmethod
@@ -586,7 +681,7 @@ def check_rules(root: Path, board: Board, *, staged: bool) -> list[str]:
         )
 
     # R5 the board is the hubnode's
-    for f in (CONFIG, JOBS):
+    for f in (CONFIG, DOCMAP, JOBS):
         if f in guarded and branch != trunk:
             out.append(f"R5 the board is the hubnode's: {f} is edited on {trunk} only")
     # A phase or a scope is the owner's decision, and a branch regenerating the view would
@@ -621,15 +716,19 @@ def check_rules(root: Path, board: Board, *, staged: bool) -> list[str]:
                 out.append(f"{CONFIG}: `workflow` is the pre-roles key, and jig doesn't read it: "
                            "remove it (`jig update --apply` does), and write an override the owner "
                            "says is standing under `roles`, with its reason")
+            out += [f"{CONFIG}: `{k}` lives in {DOCMAP} now: move it there "
+                    "(`jig update --apply` does)" for k in DOCMAP_KEYS if k in new_cfg]
         except ValueError as e:
             out.append(f"{CONFIG} is not JSON: {e}")
+    if DOCMAP in paths and (raw := in_index(DOCMAP, staged)):
+        out += docmap_problems(raw)
     # A remap that keeps a page where survey moves it overrides jig's rule: the owner's
     # exception must be on record first, or one line of prose approves it unseen.
     if REMAP in paths and (raw := in_index(REMAP, staged)):
         cfg = board.data
-        if CONFIG in paths and branch == trunk:
+        if (CONFIG in paths or DOCMAP in paths) and branch == trunk:
             try:
-                cfg = json.loads(in_index(CONFIG, staged))
+                cfg = with_docmap(json.loads(in_index(CONFIG, staged)), in_index(DOCMAP, staged))
             except ValueError:
                 pass
         out += [f"the remap contradicts survey: {contradiction_fix(c, trunk)}"
@@ -898,6 +997,9 @@ def cmd_init(root: Path, args) -> int:
     if not (root / JOBS).exists():
         (root / JOBS).write_text("{}\n")
         print(f"wrote {JOBS}")
+    if not (root / DOCMAP).exists():
+        (root / DOCMAP).write_text(docmap_json(json.loads(json.dumps(DOCMAP_DEFAULTS))))
+        print(f"wrote {DOCMAP}")
     if not (root / LOG).exists() and old_log_files(root):
         # A seed here would leave nothing for the merge to fill: the old files go in first.
         print(f"{LOG} not written: {', '.join(f for f, _ in old_log_files(root))} merge into it "
@@ -3253,6 +3355,34 @@ def print_claims(root: Path, claims: list[str]) -> int:
     return 0
 
 
+def cmd_docmap(root: Path, args) -> int:
+    """`jig docmap <page or path>…`: a page docmap names prints its globs and whether it is a
+    board or an approved deep subsystem; any other path prints the pages covering it. Only the
+    map: `reading-list` adds the pages above and what to read first."""
+    data = Board.load(root).data
+    docmap = data.get("docmap") if isinstance(data.get("docmap"), dict) else {}
+    deep = data.get("deep_subsystems") if isinstance(data.get("deep_subsystems"), dict) else {}
+    boards = board_pages(data)
+    for i, arg in enumerate(args.paths):
+        if i:
+            print()
+        keys = [k for k in docmap if same_page(arg, k)]
+        if keys:
+            kinds = [w for w, yes in (("board", any(same_page(arg, b) for b in boards)),
+                                      ("deep subsystem", any(os.path.dirname(f).rstrip("/") in
+                                                             {d.rstrip("/") for d in deep}
+                                                             for f in page_forms(arg)))) if yes]
+            print(f"{arg}: page" + (f" ({', '.join(kinds)})" if kinds else ""))
+            for g in page_globs(docmap, arg):
+                print(f"  {g}")
+            continue
+        pages = [p for p, globs in docmap.items() if isinstance(globs, list) and matches(arg, globs)]
+        print(f"{arg}: " + ("covered by" if pages else f"no page in {DOCMAP} covers it"))
+        for p in pages:
+            print(f"  {p}")
+    return 0
+
+
 def cmd_reading_list(root: Path, args) -> int:
     """Given the files a task will touch, print the docmap pages to read first."""
     if args.claims:
@@ -3612,7 +3742,7 @@ DOC_HOMES = {
     "CLAUDE.md": "pointer to AGENTS.md",
     "README.md": "for people outside",
     "ROADMAP.md": f"with a {DIR}/roadmap.md, its view, generated by `jig roadmap --write`",
-    "docs/": f"what the code is now: docs/<system>.md each system, a board as much as any, docs/<system>/<subsystem>.md its subsystems one level down (deeper only where {CONFIG} deep_subsystems approves it); a page holding other files moves into a folder named for it, docs/<system>/<system>.md, beside the files it links; any other file there has no home",
+    "docs/": f"what the code is now: docs/<system>.md each system, a board as much as any, docs/<system>/<subsystem>.md its subsystems one level down (deeper only where {DOCMAP} deep_subsystems approves it); a page holding other files moves into a folder named for it, docs/<system>/<system>.md, beside the files it links; any other file there has no home",
     f"docs/…/{DATASHEETS}/": "the vendor documents a page leans on, in that page's folder; one two pages use, in the nearest folder both share",
     f"docs/{DATASHEETS}/": "a vendor document two systems use: reference files only, never a page",
     f"{DIR}/specs/": "a task in flight",
@@ -3645,7 +3775,7 @@ def naming(root: Path, path: str, files: list[str]) -> dict[str, list[int]]:
     out: dict[str, list[int]] = {}
     for f, line, text in grep_hits("-I", "-F", *[a for p in pats for a in ("-e", p)], "--", ".", cwd=root):
         if (not line.isdigit() or f == path or "/handoffs/" in f"/{f}"
-                or f in (*TOOL_FILES, CONFIG, JOBS) or not bound.search(text)):
+                or f in (*TOOL_FILES, CONFIG, DOCMAP, JOBS) or not bound.search(text)):
             continue
         out.setdefault(f, []).append(int(line))
     return out
@@ -3962,7 +4092,7 @@ def folder_owner(d: str, have: set[str]) -> str:
 def page_forms(path: str) -> tuple[str, ...]:
     """A docs page's two forms, flat and in its folder: one page, whichever the tree holds.
     docmap keys and boards entries name it in either, so a branch can grow the folder with a
-    git mv alone, since config.json is trunk's (R5)."""
+    git mv alone, since docmap.json is trunk's (R5)."""
     if not (path.startswith("docs/") and path.endswith(".md")) or reference_file(path):
         return (path,)
     d = page_folder(path)
@@ -4010,7 +4140,7 @@ def pages_above(page: str, have: set[str], deep: dict,
 
 def depth_ok(folder: str, deep: dict) -> bool:
     """A docs folder may hold a page: docs/<system> and docs/<system>/<subsystem> always, each
-    level below that only with the owner's rationale in config.json's deep_subsystems. The key
+    level below that only with the owner's rationale in docmap.json's deep_subsystems. The key
     is trunk-only (R5), so the agent proposing a level can't approve it. Every level needs its
     own entry: approving docs/a/b/c says nothing about docs/a/b/c/d."""
     return not unapproved(folder, deep)
@@ -4041,7 +4171,7 @@ def deep_fix(h: dict, deep: dict, level: dict | None = None) -> str:
     ask = " and ".join(unapproved(page_folder(h["path"]), deep))
     have = (f", naming the files it has of its own ({', '.join(own[:3])}{' …' if len(own) > 3 else ''})"
             if own else "")
-    return f"{move}, or ask the owner to approve {ask} in {CONFIG} deep_subsystems, with its rationale{have}"
+    return f"{move}, or ask the owner to approve {ask} in {DOCMAP} deep_subsystems, with its rationale{have}"
 
 
 def at_home(path: str, registers: list[str], deep: dict, have: set[str] = frozenset()) -> bool:
@@ -4729,7 +4859,7 @@ def entry_problem(i: str, v) -> str:
     v = v.strip()
     if i.startswith("deep:") and v.startswith("exception:"):
         # One exception record per finding: the homes check reads deep_subsystems.
-        return f"a deep page's exception is its folder in {CONFIG} deep_subsystems, with its rationale"
+        return f"a deep page's exception is its folder in {DOCMAP} deep_subsystems, with its rationale"
     if v == "approved" or any(v.startswith(p) and v[len(p):].strip() for p in ("deferred:", "exception:")):
         return ""
     if any(v.startswith(p) for p in ("deferred:", "exception:")):
@@ -5101,7 +5231,7 @@ def board_like_json(root: Path, files: list[str]) -> list[str]:
     dirs — ai-dev kept its board in .aidev/, and a narrower check missed it."""
     out = []
     for f in files:
-        if f.endswith(".json") and f.startswith(".") and "/" in f and f not in (CONFIG, JOBS):
+        if f.endswith(".json") and f.startswith(".") and "/" in f and f not in (CONFIG, DOCMAP, JOBS):
             try:
                 txt = (root / f).read_text(errors="replace")
             except OSError:
@@ -5128,8 +5258,8 @@ def unpaged_build(board: dict, files: list[str]) -> list[tuple[str, str]]:
 
 def unpaged_fix(f: str, page: str) -> str:
     if page:
-        return f"docmap maps {f} to {page}, which {CONFIG} boards doesn't list: add it to boards"
-    return (f"write the board's page with /jig:hardware, list it in {CONFIG} boards, and map "
+        return f"docmap maps {f} to {page}, which {DOCMAP} boards doesn't list: add it to boards"
+    return (f"write the board's page with /jig:hardware, list it in {DOCMAP} boards, and map "
             f"{f} to it in docmap")
 
 
@@ -5148,14 +5278,14 @@ def board_refusals(board: dict, trunk: str, at: str) -> list[str]:
                    "--diff-filter=D", rng).splitlines())
     # Flat to folder or back is the same page: boards names it in either form.
     there = set(git("-c", "core.quotePath=false", "ls-tree", "-r", "--name-only", at).splitlines())
-    out += [f"{p} is a board page {CONFIG} boards lists, and this branch deletes or moves it: "
+    out += [f"{p} is a board page {DOCMAP} boards lists, and this branch deletes or moves it: "
             "keep it, or move its boards and docmap entries with it on trunk first"
             for p in board_pages(board) if set(page_forms(p)) & gone and not set(page_forms(p)) & there]
     return out
 
 
 def board_pages(board: dict) -> list[str]:
-    """The pages config.json's boards names: a board is what a page is, never where it sits."""
+    """The pages docmap.json's boards names: a board is what a page is, never where it sits."""
     boards = board.get("boards")
     return [b for b in boards if isinstance(b, str)] if isinstance(boards, list) else []
 
@@ -5272,7 +5402,7 @@ def cmd_survey(root: Path, args) -> int:
 
     # The spec template and the ledgers are made on first use, so their absence is no gap.
     for name in ("AGENTS.md", "CLAUDE.md", f"{DIR}/scripts/check.sh", f"{DIR}/scripts/setup.sh",
-                 f"{DIR}/jig.py", f"{DIR}/RULES.md", CONFIG, JOBS):
+                 f"{DIR}/jig.py", f"{DIR}/RULES.md", CONFIG, DOCMAP, JOBS):
         report["present"][name] = (root / name).exists()
     common = Path(git("rev-parse", "--path-format=absolute", "--git-common-dir"))
     hook = common / "hooks" / "pre-commit"
@@ -5430,7 +5560,7 @@ def cmd_survey(root: Path, args) -> int:
     below = [e for e in report["homeless"] if e["kind"] == "deep"]
     if below:
         print(f"\nPages below a subsystem ({DIR}/RULES.md, Documentation). Each line says what to do; "
-              f"only a page\nwith files of its own may be proposed to the owner for {CONFIG} deep_subsystems:")
+              f"only a page\nwith files of its own may be proposed to the owner for {DOCMAP} deep_subsystems:")
         levels = {e["path"]: e for e in report["levels"]}
         for e in below:
             print(f"  {e['path']}: {deep_fix(e, deep, levels.get(e['path']))}{state_tag(e, rec)}")
@@ -5473,10 +5603,10 @@ def cmd_survey(root: Path, args) -> int:
                   "\nGive each a job or let git keep it:")
             for e in cold:
                 print(f"  {e['path']:<44} {e['lines']:>5} lines  last {e['last_commit'] or '?'}")
-        print(f"\nIf a directory ships markdown as code, list it under `not_docs` in {CONFIG}"
+        print(f"\nIf a directory ships markdown as code, list it under `not_docs` in {DOCMAP}"
               " as a glob such as `dir/**`.")
     if report["deep_unmatched"]:
-        print(f"\n{CONFIG} deep_subsystems keys that name no tracked folder (no trailing /, "
+        print(f"\n{DOCMAP} deep_subsystems keys that name no tracked folder (no trailing /, "
               "and the path starts at docs/):")
         for k in report["deep_unmatched"]:
             print(f"  {k}")
@@ -5485,10 +5615,10 @@ def cmd_survey(root: Path, args) -> int:
         for g in report["not_docs_unmatched"]:
             print(f"  {g}")
     if src and not report["docmap_present"]:
-        print("\nNo docmap on the board: handoff cannot tell which docs page a change touches."
-              f"\nMap pages to globs in {CONFIG} (see Fold-in in {DIR}/RULES.md).")
+        print("\nNo docmap: handoff cannot tell which docs page a change touches."
+              f"\nMap pages to globs in {DOCMAP} (see Fold-in in {DIR}/RULES.md).")
     if report["boards_missing"]:
-        print(f"\n{CONFIG} boards entries that name no tracked page:")
+        print(f"\n{DOCMAP} boards entries that name no tracked page:")
         for f in report["boards_missing"]:
             print(f"  {f}")
     if report["boards_unpaged"]:
@@ -13952,6 +14082,10 @@ def has_up_next(root: Path) -> bool:
 
 
 STEPS: list = [
+    # save_board writes the split: the step names it, so the plan says what moves where.
+    (f"move docmap, boards, deep_subsystems and not_docs from {CONFIG} to {DOCMAP}, each value "
+     "unchanged: the docs tree's map is not configuration",
+     lambda root, after: board_moves_docmap(root), lambda root, here: None),
     (f"fold {ROADMAP}'s ## {UP_NEXT} into ## {NO_PHASE}, ids and text kept: one list for work with "
      f"no phase, its items taken by a spec's `Scope: {NO_PHASE}/<id>`; the hook then refuses ## {UP_NEXT}",
      lambda root, after: has_up_next(root) and knows_one_list(root), fold_roadmap),
@@ -14272,12 +14406,14 @@ def rewrite_board(data: dict, files: list[str], plan: dict) -> tuple[dict, list[
             new[key] = main_root().name if key == "name" else json.loads(json.dumps(default))
             if key != "version":
                 edits.append(f"{key}: added, {json.dumps(default)}")
+    for key, default in DOCMAP_DEFAULTS.items():
+        new.setdefault(key, json.loads(json.dumps(default)))
     if new.get("version") != STAMP:
         edits.append(f"version: {data.get('version', 'none')} → {STAMP}")
         new["version"] = STAMP
     for key in data:
         if key not in BOARD_DEFAULTS and key not in BOARD_OPTIONAL \
-                and key not in RETIRED_BOARD_KEYS:
+                and key not in RETIRED_BOARD_KEYS and key not in DOCMAP_KEYS:
             warn.append(f"board key `{key}` is not one jig knows: kept, and the checker ignores it")
     return new, edits, warn, gone
 
@@ -14310,7 +14446,7 @@ def stale_references(root: Path, plan: dict, board_at: str) -> dict[str, list[tu
         inside = ref if ref.endswith("/") else ref + "/"
         return not any(f.startswith(inside) for f in there)
     back = {n: o for o, n in plan["moves"].items()}
-    skip = {CONFIG, JOBS, board_at, *TOOL_FILES}
+    skip = {CONFIG, DOCMAP, JOBS, board_at, *TOOL_FILES}
     # update rewrites these .gitignore lines itself.
     own_ignores = {*OLD_IGNORES, "jig/meta-cache/"}
     out: dict[str, list[tuple[int, str]]] = {}
@@ -14474,6 +14610,8 @@ RETIRED_LINES = {
         "- derive:",
     "- derive: `.jig/scripts/derive.sh` (writes the files derived from the whole tree; `jig merge` runs it and commits what `derived_files` in `.jig/config.json` lists; branches don't commit them)":
         "- derive:",
+    "- Each board this repo builds for gets its page, `docs/<board>.md` (a subsystem's page in a larger system; in a folder of its own, `docs/<board>/<board>.md`, once it holds files), listed in `boards` in `.jig/config.json`, before code for it passes the gate (/jig:hardware). Where one exists, read it before touching a pin, bus, or peripheral, and load the skills it lists.":
+        "- Each board this repo builds for",
 }
 
 
@@ -14753,7 +14891,7 @@ def move_lines(root: Path, board: dict, board_at: str, after: list[str], para: d
     lines = [f"{'fold' if h['fold'] else 'git mv'} {h['path']} {'into ' if h['fold'] else ''}{h['to']}"
              + state_tag(h, rec) for h in group]
     lines += [f"git mv {p} {to}" for p, to in reforms(after, left, [x for h in group for x in (h["path"], h["to"])])]
-    lines += [f"{CONFIG} docmap: {o}" for o in moves if o in (board.get("docmap") or {})]
+    lines += [f"{DOCMAP} docmap: {o}" for o in moves if o in (board.get("docmap") or {})]
     lines += [f"{PARA} contract_paths: {g}" for g in para.get("contract_paths", [])
               if any(matches(o, [g]) and not matches(n, [g]) for o, n in moves.items())]
     stale = stale_references(root, {"rows": [*moves.items(), *[(d, "") for d in emptied]],
@@ -14821,7 +14959,7 @@ def home_findings(root: Path, plan: dict, board: dict, board_at: str,
     old = [r for r in old_board_rows(after, read) if r["to"]]
     if old:
         lines = commit_lines(OLD_BOARDS, old)
-        lines += [f"{CONFIG} boards: + {r['to']}" for r in old if r["board"]]
+        lines += [f"{DOCMAP} boards: + {r['to']}" for r in old if r["board"]]
         if any(f"/{DATASHEETS}/" in r["to"] for r in old):
             lines.append(f"each link into a moved part or a {DATASHEETS}/ folder: repoint it; a PDF "
                          f"the repo wrote (a schematic) goes back beside the page, not in {DATASHEETS}/")
@@ -14862,7 +15000,7 @@ def home_findings(root: Path, plan: dict, board: dict, board_at: str,
             continue
         # docmap and boards name a page in either form, so the move needs no config edit.
         lines = [l for l in commit_lines(os.path.dirname(e["path"]) + "/", [e])
-                 if not l.startswith(f"{CONFIG} docmap:")]
+                 if not l.startswith(f"{DOCMAP} docmap:")]
         out.append((e["path"], f"{shape_fix(e)} ({DIR}/RULES.md, Documentation). "
                     "On the owner's yes, in one commit:" + "".join(f"\n      {l}" for l in lines)))
     # A page at home but off the contract is fixed where it sits; redocument only converts.
@@ -14998,6 +15136,8 @@ def cmd_update(root: Path, args) -> int:
     board_gone: list[str] = []
     if board_at.startswith(CLAUDE_LANE):
         data, board_gone = from_claude_lane(data)
+    # Read as one, written as two: config.json's own keys, and the docmap's in DOCMAP.
+    data = with_docmap(data, read_docmap_text(root))
 
     refused = []
     version = data.get("version") if isinstance(data.get("version"), int) else 0
@@ -15180,7 +15320,7 @@ def cmd_update(root: Path, args) -> int:
     left = [l for e in carried
             for l in move_lines(root, new_board, board_at, plan["after"], para, cached,
                                 os.path.dirname(e["path"]) + "/", [e], {})
-            if not l.startswith(("git mv ", "fold ", f"{CONFIG} docmap:"))]
+            if not l.startswith(("git mv ", "fold ", f"{DOCMAP} docmap:"))]
 
     recorded = new_board.get("findings") if isinstance(new_board.get("findings"), dict) else {}
     # What --apply will leave at its old id, said before it runs.
@@ -15246,8 +15386,7 @@ def cmd_update(root: Path, args) -> int:
             carried_report(False)
             return 0
         kept_ids[:] = carry_out(root, data, carried, gone_ids)
-        (root / CONFIG).write_text(json.dumps(data, indent=2) + "\n")
-        git("add", "--", CONFIG, check=True)
+        save_board(root, data)
         carried_report(True)
         print("\nApplied and staged; nothing is committed. Repoint what names a moved page, "
               "then commit on trunk.")
@@ -15348,8 +15487,7 @@ def cmd_update(root: Path, args) -> int:
         (root / n).parent.mkdir(parents=True, exist_ok=True)
         git("mv", o, n, check=True)
     kept_ids[:] = carry_out(root, new_board, carried, gone_ids)
-    (root / CONFIG).parent.mkdir(parents=True, exist_ok=True)
-    (root / CONFIG).write_text(json.dumps(new_board, indent=2) + "\n")
+    save_board(root, new_board)
     if not (root / JOBS).exists():
         (root / JOBS).write_text("{}\n")
     blobs = {dest: sources[dest].read_bytes() for dest in replace}
@@ -15374,7 +15512,7 @@ def cmd_update(root: Path, args) -> int:
         ignore.write_bytes(re.sub(r"(?m)^[ \t]*jig/meta-cache/[ \t]*$", f"{CACHE}/", raw).encode())
     if retired:
         apply_retired(root, retired)
-    git("add", "--", CONFIG, JOBS, *replace, *(["AGENTS.md"] if retired else []),
+    git("add", "--", CONFIG, DOCMAP, JOBS, *replace, *(["AGENTS.md"] if retired else []),
         *([".gitignore"] if ignore_lines or cache_line or ref_line else []), check=True)
     # git mv leaves a flattened note's subfolder behind, empty.
     for folder in ({o for o, _ in plan["rows"] if o.endswith("/")} | flat
@@ -18761,6 +18899,8 @@ def main(argv: list[str] | None = None) -> int:
                                   "entries touching labelled work, two names for one thing")
     ie = sub.add_parser("ideas", help=f"the research list: each idea in {IDEAS}, and in a metarepo its pararepos'")
     ie.add_argument("--label", action="append", default=[], metavar="LABEL", help="only ideas carrying this label; repeatable")
+    dm = sub.add_parser("docmap", help=f"query {DOCMAP}: a page's globs, or the pages covering a path")
+    dm.add_argument("paths", nargs="+", metavar="page-or-path")
     rl = sub.add_parser("reading-list", help="what to read before touching these files")
     rl.add_argument("paths", nargs="+", metavar="path")
     rl.add_argument("--claims", action="store_true",
@@ -18849,7 +18989,7 @@ def main(argv: list[str] | None = None) -> int:
         "job": cmd_job, "sync": cmd_sync, "reviewed": cmd_reviewed,
         "handoff": cmd_handoff, "gate": cmd_gate, "hook": cmd_hook,
         "workflow": cmd_workflow, "roles": cmd_roles, "flows": cmd_flows, "next": cmd_next,
-        "survey": cmd_survey, "reading-list": cmd_reading_list, "update": cmd_update, "repos": cmd_repos, "staging": cmd_staging,
+        "survey": cmd_survey, "reading-list": cmd_reading_list, "docmap": cmd_docmap, "update": cmd_update, "repos": cmd_repos, "staging": cmd_staging,
         "release": cmd_release, "propose": cmd_propose, "roadmap": cmd_roadmap, "family": cmd_family,
         "rig": cmd_rig, "inbox": cmd_inbox, "move-in": cmd_move_in, "move": cmd_move,
     }[args.cmd]

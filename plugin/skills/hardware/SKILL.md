@@ -75,7 +75,7 @@ the code always matches it, and the check at the gate would catch nothing.
 5. **Install.** Copy each listed skill that jig ships and `.claude/skills/` lacks to
    `.claude/skills/<name>/`. Never overwrite one that is there; once installed it is the
    repo's.
-6. **Register it and tie it to the code.** Add the page to `boards` in `.jig/config.json`
+6. **Register it and tie it to the code.** Add the page to `boards` in `.jig/docmap.json`
    (`"boards": ["<home><board>.md"]`, appending to the list when there is one): that is
    what makes it a board page. Then propose the `docmap` entry for the page, naming the code
    that targets this board, its build files among it: `"<home><board>.md": ["main/**",
@@ -94,7 +94,7 @@ settled, the code to change, the skills listed and installed, and the `boards`,
 
 Asked to install hardware skills ("install the ESP-IDF skill"), no definition is needed.
 Install the named skill from `${CLAUDE_PLUGIN_ROOT}/templates/skills/`, or, with none named,
-every skill the board pages (the pages `boards` in `.jig/config.json` lists) list that
+every skill the board pages (the pages `boards` in `.jig/docmap.json` lists) list that
 `.claude/skills/` lacks. Never
 overwrite. If a skill fits a board whose page doesn't list it, offer to add it to that
 page's Skills.

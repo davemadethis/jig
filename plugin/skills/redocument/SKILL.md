@@ -115,7 +115,7 @@ Otherwise:
    other files; one that does (subsystem pages, files it links, `datasheets/`) is
    `docs/<system>/<system>.md` or `docs/<system>/<subsystem>/<subsystem>.md`. A
    subsystem inside a subsystem is asked of the owner with its rationale, as `.jig/RULES.md`
-   (Documentation) says, and lands as a `deep_subsystems` entry in `.jig/config.json` on trunk
+   (Documentation) says, and lands as a `deep_subsystems` entry in `.jig/docmap.json` on trunk
    on a yes. Name the cleanup route in
    the pointers branch (step 6).
 
@@ -196,7 +196,7 @@ Otherwise:
      per-job `.jig/specs/redocument-<page>.md` specs, and `.jig/specs/redocument-pointers.md`
      in a pararepo; git history keeps them, and the pointers branch is the live record until
      the pin holds it;
-   - removes every old path's `docmap` key from `.jig/config.json`, `drop` rows included, and
+   - removes every old path's `docmap` key from `.jig/docmap.json`, `drop` rows included, and
      every `findings` entry naming a path the remap moved or removed, its exceptions recorded
      again at the new page in step 2 (on trunk, by the hubnode, either route);
    - in a metarepo, rewrites `meta.json`'s `entry_files` to the new paths (`docs/<genre>/**/*.md`
