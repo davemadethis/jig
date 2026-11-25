@@ -6072,7 +6072,7 @@ expect_pass sh -c "! $J roadmap | grep -q stale && grep -q '\*\*p\*\*' ROADMAP.m
 git -C "$R" show 485c13e:plugin/templates/jig/jig.py > "$T/jig-485c13e.py"
 msg="migration: an older plugin's update refuses the folded repo, so it can't reinstall the old checker"
 out=$(python3 "$T/jig-485c13e.py" update --apply 2>&1); rc=$?
-expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'this jig writes 10' && grep -q '^STAMP = 12' .jig/jig.py && git diff --quiet" "$out"
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'this jig writes 10' && grep -q '^STAMP = 13' .jig/jig.py && git diff --quiet" "$out"
 
 # The one list's waits: a spec on a blocked item, and a scope waiting on a page-less item.
 pcnew "$T/rl20" && mkdir -p docs && printf '# X\n\nX is.\n' > docs/x.md && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
@@ -8511,7 +8511,8 @@ renamed docs/a/b/b.md docs/a/b.md; mv_rc=$?
 expect_pass sh -c "test $mv_rc = 0 && test -f docs/a/c/c.md && python3 -c \"
 import json; b = json.load(open('.jig/config.json'))
 assert b['findings'] == {'contract:docs/a/b.md': 'exception: the lead is the table', 'shape:docs/a/c/c.md': 'deferred: redocument'}, b['findings']
-assert 'docs/a/b.md' in b['docmap'] and 'docs/a/b/b.md' not in b['docmap'], b['docmap']\"" "$out"
+d = json.load(open('.jig/docmap.json'))
+assert 'docs/a/b.md' in d['docmap'] and 'docs/a/b/b.md' not in d['docmap'], d['docmap']\"" "$out"
 msg="findings: what the move leaves for the session is printed: README.md names the old path"
 expect_pass sh -c "echo \"\$0\" | sed -n '/^Left for the session/,/^\$/p' | grep -q '^  README.md:3: '" "$out"
 git commit -qm "update: b moved"
