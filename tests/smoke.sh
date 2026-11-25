@@ -12159,6 +12159,24 @@ gnew PP && git add -A && git commit -qm init && $J init >/dev/null && git add -A
 $J init --para M --location "$GM" >/dev/null 2>&1 && git add -A && git commit -qm para-init
 mkdir -p docs && printf '# Own\n\nOwn is.\n' > docs/own.md && printf '# Glossary\n\n## Spinner\n\nThe spinner.\n' > docs/glossary.md
 git rm -q --ignore-unmatch .jig/roadmap.json && printf '# Roadmap\n\n## Kite alpha\nScopes:\n- `s`: a scope (labels spinner) (touches docs/own.md)\n' > .jig/roadmap.md && gplant "PP's own old roadmap"
+python3 .jig/jig.py repos add para "$T/PP" --name PP >/dev/null
+( cd "$GM" && python3 -c "import json; f='.jig/meta.json'; d=json.load(open(f)); d['pararepos'].append('PP'); json.dump(d, open(f,'w'), indent=2)" \
+  && printf '\n## Pod\n\nThe pod.\n\nOwner: `PP`.\n' >> docs/glossary.md && gplant "PP joins, owning Pod" )
+msg="move (item plan): M gives PP, unconverted, no section of its roadmap, and a move's items to PP go by a staged change, as to one keeping its own"
+expect_pass sh -c "cd '$GM' && python3 -c \"
+import sys; from pathlib import Path; sys.path.insert(0, '.jig'); import jig
+f = jig.family(); assert f.section_of('PP') == '', f.section_of('PP')
+r = jig.receiver_plan(f, 'PP', jig.repo_path('PP'), Path('.').resolve()); assert r == ('own', ''), r\""
+msg="move (sweep): in PP, unconverted, the sweep is refused, saying to convert first, and writes no roadmap.json"
+printf '# Own\n\nOwn is.\n\n## Undefined\n\n- a parked thing\n' > docs/own.md && gplant "an Undefined entry"
+out=$($J update --apply --sweep 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'roadmap.md is the roadmap in jig.s old form: .jig update --apply. converts it' && test ! -e .jig/roadmap.json && test -z \"\$(git status --porcelain)\"" "$out"
+git reset -q --hard
+msg="move (jig roadmap): in PP, unconverted, jig roadmap says jig update --apply converts it"
+expect_pass sh -c "$J roadmap 2>&1 | grep -q 'roadmap.md is the roadmap in jig.s old form: .jig update --apply. converts it'"
+msg="move (move-in): in PP, unconverted, jig move-in is refused, saying to convert first"
+out=$($J move-in --product Pod 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'old form: .jig update --apply. converts it to .jig/roadmap.json first, then move it in'" "$out"
 msg="move: before its conversion, a pararepo with its own old roadmap reads none of M's roadmap as its own"
 expect_pass sh -c "! $J roadmap 2>&1 | grep -q \"is M's\" && ! $J roadmap 2>&1 | grep -q 'Walyt alpha'"
 msg="move: a pararepo with its own old roadmap converts it by its own pages and glossary, with no product though M's glossary has Kite, and the commit passes"
