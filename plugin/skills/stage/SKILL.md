@@ -105,7 +105,7 @@ that spec carries the mark.
 - **Roles.** Leave a spec's `## Roles` empty: you can't run `jig roles` against the
   target's config, and `resolve` fills it.
 - **A sweep** that skips work the target already has must read its `.jig/specs/`,
-  `.jig/roadmap.md` and `.jig/decisions.md`. Request read access to each; if you can't get it,
+  `.jig/roadmap.json` and `.jig/decisions.md`. Request read access to each; if you can't get it,
   say the skip step wasn't done, so the resolving session checks for duplicates.
 
 ## Resolving
@@ -139,7 +139,7 @@ For each file, with the user:
   apply those with the user, delete them from the staged file, resolve again. An `update`
   changes an idea in `.jig/ideas.md` in place, or supersedes an accepted one with a new accepted
   entry that removes it in the same commit; write it, then `resolve`. The entry is the change's line, so M3 needs no other.
-- **roadmap**: `destination: .jig/roadmap.md`, `change: update`; the body says what to add,
+- **roadmap**: `destination: .jig/roadmap.json`, `change: update`; the body says what to add,
   rename, reorder or drop (a phase, a scope, an exit box) and why. It is the owner's decision,
   made on trunk: the hubnode applies it and commits with the file's `Source:` line in the
   message (its skill, "A roadmap change"), then `resolve` finds that commit. Any other

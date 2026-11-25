@@ -31,8 +31,7 @@ We'll walk one small job from start to finish, in a repo with a `src/app.py` and
 **1. Set up.** You run `/jig:init` in the repo. It writes a hidden `.jig/` folder (the checker,
 the rulebook, the [board](docs/glossary.md#board), an empty [roadmap](docs/glossary.md#roadmap)
 and an [ideas log](docs/glossary.md#ideas-log)) and installs the git hooks. Your root gets a
-short `AGENTS.md`, a one-line `CLAUDE.md` and `ROADMAP.md`, the roadmap's view. Commit what it
-wrote.
+short `AGENTS.md` and a one-line `CLAUDE.md`. Commit what it wrote.
 
 **2. Write the spec.** You run `/jig:spec greeting`, and describe the task. It writes
 `.jig/specs/greeting.md`: what the task is, the files it touches, and how you'll know it's done.

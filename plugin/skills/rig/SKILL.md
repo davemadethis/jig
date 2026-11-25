@@ -28,7 +28,7 @@ ended with still staged is stored `concluded` (that skill says when): it waits o
 
 For each item whose `judged` is null: each staged file, and the next-step item whose `state`
 is `open` (a next-step item whose `state` is `taken` is already under way, and one whose
-`state` is `blocked` is a roadmap scope waiting on the refs its `(after …)` names: each is
+`state` is `blocked` is a roadmap scope waiting on the refs its `after` names: each is
 listed under Waiting on, and gets no judgment and no question):
 
 - **A staged file:** read it whole. Call it `ready` when a spec can be written from it as it
@@ -41,7 +41,7 @@ listed under Waiting on, and gets no judgment and no question):
   file whose every question its owner's words answer is `ready`. A ready file gets its
   recommendation: the spec it becomes, in one line. A judgment handed to a subagent gets this
   paragraph and Is it open? in its brief.
-- **The next step** (the open one): a `## No phase` item naming pages, or a roadmap scope. Its
+- **The next step** (the open one): a No phase item naming pages, or a roadmap scope. Its
   question: take it now (a spec for it, whose `Scope:` line takes it, `No phase/<id>` for an
   item, so it reads done once built), or leave it where it is, with one recommended and why.
 
@@ -63,7 +63,7 @@ inline visual, it may; the sections and their contents stay these.
    after, and each overlapping pair the group's `overlaps` names.
 3. **Waiting on:** each item and what it waits for: a job, a spec or a staged file. A taken
    staged file waits on the spec or job that carries it. A blocked scope waits on the scopes
-   or phases its `(after …)` names: work, not an answer. In a pararepo the roadmap is the
+   or phases its `after` names: work, not an answer. In a pararepo the roadmap is the
    metarepo's: only the products this repo owns give it steps, and a line naming a repo rig
    couldn't reach says so.
 4. **Waiting on you:** the open staged files, each `noted` file with the note that carried it
@@ -116,9 +116,9 @@ in this order:
    opens as a job, it waits on that job.
 6. Each dependency cycle named under Waiting on: which item goes first?
 7. Each unconfirmed cross-product wait (`unconfirmed`, a metarepo's): keep it, the waited-on
-   product's repo confirming it with `(needed by <waiter>)` on the scope or phase it names
+   product's repo confirming it with `needed_by` naming the waiter on the scope or phase it names
    (recommended when the work really is needed), or drop it, the waiter's repo removing its
-   `(after …)`. It blocks nothing meanwhile: the wait itself still blocks as any does.
+   `after` entry. It blocks nothing meanwhile: the wait itself still blocks as any does.
 8. No block for a `noted` file: it is the hubnode's step (`/jig:hubnode`, Merging), done here
    in § 4 as that step says, and drawn under Waiting on you until it is.
 9. Each `concluded` feedback report: drop it (`jig staging drop`), or keep it staged for more
@@ -159,7 +159,7 @@ Nothing is ever dropped for it.
   from its own `after:` header, as `/jig:stage` breaks a cycle: `jig rig` and `jig staging`
   read only the header, so nothing else breaks it.
 - **An unconfirmed wait's ruling:** show it; rig changes no roadmap. Keep: the waited-on
-  product's repo adds `(needed by <waiter>)`; drop: the waiter's repo removes its `(after …)`.
+  product's repo adds the waiter to its `needed_by`; drop: the waiter's repo removes it from its `after`.
   The repo whose section changes proposes it, as any change to a product's section goes: a
   `BUFFER.md` row and `jig propose --buffer` there, the change on the `propose/` branch it
   makes, merged in the metarepo at the next sync the owner calls. For the metarepo's own

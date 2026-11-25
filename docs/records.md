@@ -71,17 +71,18 @@ Each phase has a type, read from its name: a Greek letter (`alpha`, `beta`) is P
 types run Prototype, then Pilot, then Production, and the hook refuses a roadmap on trunk that
 puts them out of order.
 
+The roadmap is `.jig/roadmap.json`, records nobody reads by hand: `jig roadmap --draft` writes
+it as a draft to edit, and `--edit` checks it and writes it. `python3 .jig/jig.py roadmap show`
+draws it as a chart, each scope in the column one past what it waits on.
 `python3 .jig/jig.py roadmap` can show part of the roadmap: `--product Widget --phase alpha` is
-what's in Widget alpha, and `--type`, `--state` and `--owner` narrow it the same way. Add
-`--view` to print that part as the view's Markdown. `ROADMAP.md` itself is always the whole
-roadmap.
+what's in Widget alpha, and `--type`, `--state` and `--owner` narrow it the same way, with or
+without `show`.
 
-Work you've named but haven't placed in a phase yet is an item under the roadmap's `## No phase`
-section. Each merge rewrites a kanban view of the roadmap at the root, which any forge renders.
+Work you've named but haven't placed in a phase yet is an item in the roadmap's `no_phase` list.
 `python3 .jig/jig.py roadmap` prints the roadmap's states.
 
-A scope or a `## No phase` item can name the features it touches as [labels](glossary.md#label),
-`(labels teleport, wallet-compatibility)`, each a term of the glossary (the metarepo's, in a
+A scope or a No phase item can name the features it touches as [labels](glossary.md#label),
+its `labels` list (`["teleport", "wallet-compatibility"]`), each a term of the glossary (the metarepo's, in a
 family). A misspelt label is refused, and a label orders nothing. `roadmap --label <term>` lists
 the work carrying one, across every product.
 

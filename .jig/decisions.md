@@ -9,13 +9,17 @@ A breaking change is one that a reader taking the release must act on: a `**Brea
 
 ### Added
 - `jig docmap <page or path>…` queries the docs tree's map: a page's globs and whether it is a board or an approved deep subsystem, or the pages covering a file.
+- `jig roadmap show [filters] [--width N]` prints the roadmap as a text chart with no dates: a box per phase as wide as its scopes, each scope in the column one past what it waits on, a box per product where there is more than one, each product's No phase items last, and one band per phase past 100 columns. The agent instructions template's Commands carry a `roadmap:` line for it, and `jig update --apply` adds that line where it is missing.
 
 ### Changed
 - The docs tree's map has its own file, `.jig/docmap.json`: `docmap`, `boards`, `deep_subsystems` and `not_docs` move there from `.jig/config.json`, which keeps only configuration. It is trunk-only like the board (R5), and the hook refuses a key jig doesn't know or a value of another shape. `jig init` writes it, and `jig update --apply` moves the four keys with their values unchanged.
 - **Breaking:** a repo's own tool or script that reads `docmap`, `boards`, `deep_subsystems` or `not_docs` from `.jig/config.json` reads `.jig/docmap.json` instead, or runs `jig docmap`.
+- The roadmap is a JSON file, `roadmap.json` in jig's folder: `products` (the glossary's product terms it includes), `phases` (each `product` where it has one, `name`, `note`, `exit` checks, `after`, `needed_by`, `scopes`) and `no_phase` items (a scope's fields plus `product`, `stopped_at`, `parked`). States and blocked stay derived, and a phase's type is still read from its name. The hook refuses a field or a type the records don't have, and a product `products` doesn't include or the glossary doesn't hold, and runs every check it ran on the Markdown roadmap. `jig roadmap --draft` writes a JSON draft, and `--edit` checks and writes it. `jig init` writes the empty roadmap, and `jig update --apply` converts the Markdown roadmap, every phase, scope, item, suffix, note and exit check with its text unchanged, once trunk's checker reads JSON.
+- **Breaking:** the Markdown roadmap is gone: edit the roadmap with `jig roadmap --draft` and `--edit`, and read it with `jig roadmap` or `jig roadmap show`. A tool reading `ROADMAP.md` reads `jig roadmap show` instead.
 
 ### Removed
-- `docmap`, `boards`, `deep_subsystems` and `not_docs` as `.jig/config.json` keys: the hook refuses a config commit carrying one.
+- `docmap`, `boards`, `deep_subsystems` and `not_docs` as `.jig/config.json` keys: the hook refuses a config commit adding one.
+- `ROADMAP.md`, the generated view, with `jig roadmap --view` and `--write`: no command writes it, and `jig update --apply` removes one jig generated. A repo's own `ROADMAP.md` is left alone.
 
 ## v0.16.0 - 2026-11-24
 

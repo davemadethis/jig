@@ -109,9 +109,9 @@ decision id and can carry labels. Deciding one moves it into the decision log.
 ## Roadmap
 
 The owner's plan for a repo: its phases in order, each phase's scopes, and work named but not
-yet placed. Every stand-alone repo and metarepo keeps one, and a pararepo plans from its
-metarepo's. Progress on it is worked out from merged work, and it isn't a task tracker anyone
-ticks.
+yet placed. It is `.jig/roadmap.json`, and `jig roadmap show` draws it. Every stand-alone repo
+and metarepo keeps one, and a pararepo plans from its metarepo's. Progress on it is worked out
+from merged work, and it isn't a task tracker anyone ticks.
 
 ## Phase
 
@@ -127,7 +127,7 @@ is done when every spec taking it has landed. A scope isn't a ticket, and nobody
 
 ## Label
 
-A feature a scope or a `No phase` item touches, written `(labels <term>, …)` at its end. Each
+A feature a scope or a `No phase` item touches, listed in its `labels`. Each
 label is a glossary term, matched in any case and spacing, so work can be read by feature. A
 label isn't a dependency and orders nothing.
 

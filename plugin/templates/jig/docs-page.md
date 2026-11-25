@@ -5,7 +5,7 @@
 ## <Section>
 
 <What this section's code is and does on trunk today, in present tense: never when or in what order it
-will change, and no spec, phase or scope, which are .jig/roadmap.md's. Name each section for what
+will change, and no spec, phase or scope, which are .jig/roadmap.json's. Name each section for what
 the code has (Schema, Renderer, Sync), never Overview, Notes or Changes. A section whose code has files of
 its own, which the rest of the system reaches only through its interfaces, is a subsystem. It
 gets a page of its own once it has something to say that whoever works on it

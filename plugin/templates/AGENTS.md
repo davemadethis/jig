@@ -18,6 +18,7 @@ Risk: R0 — personal prototype, single user, nothing shipped. Optimize for spee
 - check:  `.jig/scripts/check.sh` (the quick part: runs on every stop; must pass before you're done). `check.sh --full` adds the complete suite: the check step's, once per gate or batch
 - setup:  `.jig/scripts/setup.sh` (runs itself in new worktrees and after merges; run it after changing dependencies)
 - derive: `.jig/scripts/derive.sh` (writes the files built from several sources that separate jobs change; `jig merge` runs it and commits what `derived_files` in `.jig/config.json` lists; branches don't commit them)
+- roadmap: `python3 .jig/jig.py roadmap show` (the roadmap as a chart; run it when asked to show the roadmap)
 
 ## Workflow
 - Task bigger than a one-sentence diff → write `.jig/specs/<task>.md` first (see /jig:spec). Plan before editing.

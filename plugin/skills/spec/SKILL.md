@@ -31,7 +31,7 @@ Before anything is built:
 3. Replace the template's comments under `Source:` with a
    `Scope:` line naming the scopes this task takes, as `<phase>/<scope>` from it
    (`Scope: alpha/screen, alpha/battery`), or `<list>/<id>` for an item of a list
-   (`No phase/pay`). A pararepo with no `.jig/roadmap.md` of its own plans from its metarepo's
+   (`No phase/pay`). A pararepo with no `.jig/roadmap.json` of its own plans from its metarepo's
    (`jig roadmap` prints it): its ids carry the product, `App alpha/pairing` or
    `App No phase/pay`, and the hook checks them against the metarepo's trunk. A task that
    takes none (a bug fix, say) leaves the line out: delete the comment either way.
@@ -52,13 +52,13 @@ Before anything is built:
    it writes: `AGENTS.md`, a skill, a script, or a section of `.jig/process.md`.
 5. Read the pages `jig reading-list <those files>` prints. A page describes
    the code; where it disagrees, the code on trunk is reality and the page is stale. For each
-   roadmap item it lists under a page (a `## No phase` item or a scope), say in the spec which
+   roadmap item it lists under a page (a No phase item or a scope), say in the spec which
    it is: **adopt** (this task builds it; its content goes into the page's body, and the spec
    takes it with its `Scope:` line, `No phase/<id>` for an item, so it reads done when the job
    lands), **depart** (the task goes another way, and why), or **leave** (out of scope). Work
-   with no phase yet, parked mid-build (naming its pages) or not started, is a `## No phase`
+   with no phase yet, parked mid-build (naming its pages) or not started, is a No phase
    item, added on the owner's word as a roadmap change (`/jig:stage`), never written on a page.
-   An item's or a scope's labels, `(labels <term>, …)`, are the features it touches, each a
+   An item's or a scope's `labels` are the features it touches, each a
    glossary term. The spec is where project
    meets product: of each decision entry and page change it plans, ask is this about the product, about when and in what order we build it, or about how the
    repository is worked? What is the project stays in the spec or the roadmap, and how the repo is

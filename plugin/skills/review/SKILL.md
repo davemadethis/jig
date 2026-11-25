@@ -84,7 +84,7 @@ Its job is to find the reason this change is wrong. Its questions:
    review, jig's `.jig/` files, build, CI or release steps, not what the product does with them)
    is blocking: it goes to its home by the test in `.jig/RULES.md` (Homes), often `.jig/process.md`. An entry or a page
    line that is the project (a priority order, a delivery queue, a phase, build status, "not
-   built yet", parked work) is blocking: it goes to `.jig/roadmap.md` (`## No phase` for work
+   built yet", parked work) is blocking: it goes to `.jig/roadmap.json` (No phase for work
    with no phase yet, parked mid-build naming its pages or not started), and the
    page or entry keeps only what the product does today
    (`.jig/RULES.md`, Documentation, Product and project). Judge by what it says, never by a

@@ -115,11 +115,11 @@ pages and out of decisions, one item at a time, each only on a yes. jig lists on
 never product text, and searches no words: a heading like `## Status`, "phase 3" or "launch" in
 old text is left alone unless the owner raises it.
 
-- An **`## Undefined` entry** is listed as the `## No phase` item it would become. Ask per entry:
-  parked work goes to `## No phase` (the default); an open product question becomes an idea in
+- An **`## Undefined` entry** is listed as the No phase item it would become. Ask per entry:
+  parked work goes to No phase (the default); an open product question becomes an idea in
   `.jig/ideas.md` that the page cites; a present-tense product fact goes into the page body,
   undated. Make the second and third by hand first. Then `jig update --apply --sweep` moves the
-  rest to `## No phase` in `.jig/roadmap.md`, creating it when absent, and removes the emptied
+  rest to `no_phase` in `.jig/roadmap.json`, creating it when absent, and removes the emptied
   sections; a section holding other text stays, to move by hand. In a pararepo with no roadmap
   of its own it writes nothing and refuses: propose the product to the metarepo first (a
   glossary term with an `Owner:` line naming this repo), then `jig move-in`, then sweep again. The roadmap is trunk's (R5), so
@@ -128,7 +128,7 @@ old text is left alone unless the owner raises it.
   entries trunk's roadmap holds. A clean tree is required.
 - A **page line** naming a spec, a handoff, the roadmap or a scope id in code quotes: propose
   the rewrite that drops the reference and keeps the product fact. A sentence that is all project leaves the
-  page, and if its work is still live it becomes a `## No phase` item.
+  page, and if its work is still live it becomes a No phase item.
 - A **decision entry** the owner names as project scope (none is listed): sort it with them. **Strike**, the
   whole entry is project: remove it, and add under `## Unreleased` `### Removed` the line
   `- D-040: project scope, not a product decision.` in the same commit (that line is what lets
@@ -140,7 +140,7 @@ old text is left alone unless the owner raises it.
   a struck row supersedes is struck too, or the merge refuses: it would come back accepted. A
   register section that is a delivery queue goes to the roadmap or is deleted before the merge.
 - A **plan or register file** is listed with where its content goes: `TODO.md`, `BACKLOG.md`,
-  `STATUS.md`, `PLAN.md` or a hand-written `ROADMAP.md` to `.jig/roadmap.md`; `FEATURES.md` to its
+  `STATUS.md`, `PLAN.md` or a hand-written `ROADMAP.md` to `.jig/roadmap.json`; `FEATURES.md` to its
   systems' pages, each row's who and why to a decision entry; `RULES.md`, `CONVENTIONS.md`,
   `CONTRIBUTING.md` sorted line by line by the test in `.jig/RULES.md` (Homes), its overflow past
   `AGENTS.md`'s 40 lines to `.jig/process.md`. Propose each conversion;
@@ -227,11 +227,11 @@ with nothing answering them. Each offers one `BUFFER.md` row: add it only on a y
    anything in the repo that already does its job by hand — a check script that borrows the
    main checkout's environment, `ln -s` steps in a skill — and offer to remove each once
    `setup.sh` covers it.
-   If it added `.jig/roadmap.md` and `ROADMAP.md`, the roadmap's empty structure and its view,
-   as a new `jig init` writes them, say so in one line and ask nothing: every stand-alone repo
-   and metarepo keeps one, phases and items added later on the owner's word. A hand-written
-   root `ROADMAP.md` holds it back: it is listed under the files to review, its content to move
-   into `.jig/roadmap.md` first. A pararepo gets none: it plans from its metarepo's.
+   If it added `.jig/roadmap.json`, the roadmap's empty structure, as a new `jig init` writes
+   it, say so in one line and ask nothing: every stand-alone repo and metarepo keeps one,
+   phases and items added later on the owner's word. A hand-written root `ROADMAP.md` holds it
+   back: it is listed under the files to review, its content to move into `.jig/roadmap.json`
+   first. A pararepo gets none: it plans from its metarepo's.
    If it added `.jig/scripts/release.sh`, leave the TODO: `/jig:release` fills it on the first
    release. If it added `.jig/scripts/publish.sh`, leave its TODO too: `/jig:release` asks what
    a release publishes on the next release.
@@ -255,10 +255,11 @@ with nothing answering them. Each offers one `BUFFER.md` row: add it only on a y
    refuses the new `jig.py` under R7, because that copy checks jig's own file: if R7 on
    `.jig/jig.py` is its only refusal, commit this one with `--no-verify` and say why. The
    next commit is checked by the new copy.
-4. If the Steps listed `## Up next` as waiting to fold into `## No phase`, run `/jig:update`
-   again now: with step 3's commit on trunk the new checker judges the fold, which an older
-   one would refuse. That run folds it and rewrites `ROADMAP.md`; show the diff, and commit on
-   the owner's yes.
+4. If the Steps listed `.jig/roadmap.md` as waiting to convert to `.jig/roadmap.json`, run
+   `/jig:update` again now: with step 3's commit on trunk the new checker judges the
+   conversion, which an older one refuses. That run writes `.jig/roadmap.json`, removes
+   `.jig/roadmap.md` and a `ROADMAP.md` jig generated, and adds the `roadmap:` line to
+   AGENTS.md's Commands; show `jig roadmap show` and the diff, and commit on the owner's yes.
 5. In a pararepo (`.jig/para.json`), then run `jig init --para` and commit only what it
    changed (`AGENTS.md`, and `.jig/para.json` if it rewrote it). Its header is generated by
    the new checker, which judges it only once step 3's commit is on trunk.

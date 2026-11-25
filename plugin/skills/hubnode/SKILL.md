@@ -155,7 +155,7 @@ when a workflow or the owner calls it.
 A review with no blocking findings ends the fixing: the job hands off, as `jig next` says.
 Should-fix and optional findings get one round per part; what is left after it gets DEFERRED
 rows. A finding that needs behavior the spec never names is a spec change before it is built
-(an `Interpreted:` line the hubnode accepts, or the owner's answer), or a `## No phase` item.
+(an `Interpreted:` line the hubnode accepts, or the owner's answer), or a No phase item.
 
 A ruling also reaches you by the inbox: the owner's reply to your question, sent from the
 repo's rigger (`jig inbox`). The quoted owner words, with their date, are the owner's ruling, as
@@ -290,22 +290,22 @@ or why not.
 
 ## A roadmap change
 
-A staged `kind: roadmap` file proposes changes to `.jig/roadmap.md`: a phase, a scope or an
+A staged `kind: roadmap` file proposes changes to `.jig/roadmap.json`: a phase, a scope or an
 exit box to add, rename, reorder or drop, and why. Nothing in it is decided. Show the owner
-the exact diff to `.jig/roadmap.md`; on a yes, apply it on trunk with `jig roadmap --draft`,
-the change made in the draft it writes, then `jig roadmap --edit`, run `jig roadmap --write`,
-and commit both with the staged file's `Source: … (staged as <file>)` line in the message.
+the exact diff to `.jig/roadmap.json`; on a yes, apply it on trunk with `jig roadmap --draft`,
+the change made in the JSON draft it writes, then `jig roadmap --edit`, and commit it with the
+staged file's `Source: … (staged as <file>)` line in the message.
 A scope a spec still takes is re-pointed in that commit: the hook names the specs. Then
 `jig staging resolve <file>`, which looks for that line in a trunk commit to the roadmap.
 
-In a pararepo that plans from its metarepo's roadmap (no `.jig/roadmap.md` of its own), a change
+In a pararepo that plans from its metarepo's roadmap (no `.jig/roadmap.json` of its own), a change
 to its products' sections is never made here or on the metarepo's trunk: on the owner's yes,
 `jig roadmap --draft`, make the change in the draft, and `jig roadmap --edit`. It writes the
 `BUFFER.md` row and the change on this repo's open roadmap proposal in the metarepo, and stages
 a label the metarepo's glossary lacks there; commit the spec and `BUFFER.md` it names. It
 merges in the metarepo at the next sync the owner calls. In a metarepo, merging such a branch
 is a roadmap change like any other: show the diff, and merge on the owner's yes. Rig there lists
-each cross-product wait no section confirms with `(needed by …)`: put it to the owner.
+each cross-product wait no section confirms in its `needed_by`: put it to the owner.
 
 A pararepo with a roadmap of its own moves it in by `jig move-in --product <Name>` in its trunk
 checkout, on the owner's yes, one step per `--apply`: its run with no flag says which step is
@@ -333,15 +333,15 @@ file step 2 stages for a receiver keeping its own roadmap waits in staging: afte
 `jig staging resolve` forwards it.
 
 Work with no phase yet, parked mid-build (naming the pages it will touch) or not started, is
-an item under `## No phase` in `.jig/roadmap.md`, proposed the same way. Work a spec leaves for
+a No phase item in `.jig/roadmap.json`, proposed the same way. Work a spec leaves for
 later is one too: its `Later:` id must be on trunk's roadmap before the spec commits, so put
 each as its own roadmap change, one line per item, never inside another question. The owner's
 yes to the line is the yes to the deferral. A roadmap change asks
 for no decision entry and no change line. A built item stays, read done from the spec that
 took it, until a roadmap change of the owner's removes it.
 
-`jig merge` rewrites `ROADMAP.md` in the merge commit. After solo work on trunk, `jig roadmap` says
-when it is stale: `jig roadmap --write` and commit it.
+Asked to show the roadmap, run `jig roadmap show` (with any filter): a chart, each scope in the
+column its waits put it in. Nothing writes a view file: states are read live.
 
 ## Never
 

@@ -236,8 +236,8 @@ Your spec carries the job's remap rows and the Sources. You write only your page
      what is seen on screen; review is no holder) → `## Invariants`,
      as `- <fact> — <why>; held by <holder>.`;
    - **a parked intent, a status or a plan** (an `## Undefined`, `## Status` or `## Roadmap`
-     section, "phase 3", a priority order) → a `## No phase` candidate in the report, naming
-     this page, added to `.jig/roadmap.md` on trunk only once the owner confirms it; never on
+     section, "phase 3", a priority order) → a No phase candidate in the report, naming
+     this page, added to `.jig/roadmap.json` on trunk only once the owner confirms it; never on
      the page, which says what the product does today;
    - **an open product question** → an idea candidate for `.jig/ideas.md`;
    - **how the repository is worked** (a reading order, commands, code style, review and
