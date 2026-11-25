@@ -290,6 +290,26 @@ def save_board(root: Path, data: dict) -> None:
     git("add", "--", CONFIG, DOCMAP, check=True)
 
 
+def config_docmap_keys(root: Path) -> list[str]:
+    """The docmap keys config.json still holds, in a repo `jig update --apply` hasn't moved."""
+    try:
+        cfg = json.loads((root / CONFIG).read_text())
+    except (OSError, ValueError):
+        return []
+    return [k for k in DOCMAP_KEYS if isinstance(cfg, dict) and k in cfg]
+
+
+def docmap_conflicts(root: Path) -> list[str]:
+    """Each key config.json and the docmap file both hold with different values: moving one
+    over the other would lose a map, so the owner says which stands."""
+    try:
+        cfg = json.loads((root / CONFIG).read_text())
+        dm = json.loads(read_docmap_text(root) or "{}")
+    except (OSError, ValueError):
+        return []
+    return [k for k in DOCMAP_KEYS if k in cfg and k in dm and cfg[k] != dm[k]]
+
+
 def docmap_in_config(root: Path) -> bool:
     """Whether config.json still holds a key the docmap file holds now, or there is no docmap file."""
     try:
@@ -997,7 +1017,11 @@ def cmd_init(root: Path, args) -> int:
     if not (root / JOBS).exists():
         (root / JOBS).write_text("{}\n")
         print(f"wrote {JOBS}")
-    if not (root / DOCMAP).exists():
+    if not (root / DOCMAP).exists() and (held := config_docmap_keys(root)):
+        # Written now, its defaults would stand over the map config.json still holds.
+        print(f"{DOCMAP} not written: {CONFIG} still holds {', '.join(held)}; "
+              "`jig update --apply` moves them there")
+    elif not (root / DOCMAP).exists():
         (root / DOCMAP).write_text(docmap_json(json.loads(json.dumps(DOCMAP_DEFAULTS))))
         print(f"wrote {DOCMAP}")
     if not (root / LOG).exists() and old_log_files(root):
@@ -2878,7 +2902,7 @@ Spec: {spec}
      pages (a No phase item not done, or a taken scope) has its own line: keep one answer,
      built, untouched or departed: <why>. An item stays in the roadmap, read done once a
      spec taking it is complete. The gate refuses an unanswered line. An UNOWNED file has no page
-     covering it: add it to docmap in the board, or say why it needs none. A pair line
+     covering it: add it to docmap in .jig/docmap.json, or say why it needs none. A pair line
      (`<id> vs <log> § <ids> (<page>): ___`) is answered after its colon, once for every id
      on it: agrees, narrows: <how>, or conflicts: <resolution>; on a line of several ids,
      narrows and conflicts name at least one of them. jig reads the rest of the line, so it
@@ -3366,15 +3390,18 @@ def cmd_docmap(root: Path, args) -> int:
     for i, arg in enumerate(args.paths):
         if i:
             print()
-        keys = [k for k in docmap if same_page(arg, k)]
-        if keys:
-            kinds = [w for w, yes in (("board", any(same_page(arg, b) for b in boards)),
-                                      ("deep subsystem", any(os.path.dirname(f).rstrip("/") in
-                                                             {d.rstrip("/") for d in deep}
-                                                             for f in page_forms(arg)))) if yes]
+        kinds = [w for w, yes in (("board", any(same_page(arg, b) for b in boards)),
+                                  ("deep subsystem", any(os.path.dirname(f).rstrip("/") in
+                                                         {d.rstrip("/") for d in deep}
+                                                         for f in page_forms(arg)))) if yes]
+        # A page boards or deep_subsystems names is a page whether or not docmap maps it yet.
+        if kinds or any(same_page(arg, k) for k in docmap):
             print(f"{arg}: page" + (f" ({', '.join(kinds)})" if kinds else ""))
-            for g in page_globs(docmap, arg):
+            globs = page_globs(docmap, arg)
+            for g in globs:
                 print(f"  {g}")
+            if not globs:
+                print(f"  no globs: {DOCMAP} maps no files to it")
             continue
         pages = [p for p, globs in docmap.items() if isinstance(globs, list) and matches(arg, globs)]
         print(f"{arg}: " + ("covered by" if pages else f"no page in {DOCMAP} covers it"))
@@ -5541,7 +5568,7 @@ def cmd_survey(root: Path, args) -> int:
     if report["old_boards"]:
         print(f"\nBoard files in the old {OLD_BOARDS} layout ({DIR}/RULES.md, Documentation): each "
               "board is a\nsystem now. Move each file (/jig:redocument carries the moves), and list "
-              f"each page\nunder boards in {CONFIG}:")
+              f"each page\nunder boards in {DOCMAP}:")
         for e in report["old_boards"]:
             print(f"  {e['path']} → {e['to'] or '? (' + e['why'] + ')'}"
                   + (f"   + boards: {e['to']}" if e["board"] else ""))
@@ -14526,7 +14553,7 @@ def files_to_review(root: Path, plan: dict, template: Path | None = None,
             out.append(("docs/HARDWARE.md", "still the template's TODOs: remove it"))
         else:
             out.append(("docs/HARDWARE.md", f"holds a board: rename it to "
-                        f"{board_home(root, slug)}, list it under boards in {CONFIG}, one page per "
+                        f"{board_home(root, slug)}, list it under boards in {DOCMAP}, one page per "
                         f"board as {DIR}/RULES.md "
                         "(Documentation) says, then check it against the code"))
     if "HARDWARE.md" in plan["after"] and (root / "HARDWARE.md").exists():
@@ -15144,6 +15171,10 @@ def cmd_update(root: Path, args) -> int:
     if version > STAMP:
         refused.append(f"repo is ahead; update the plugin ({board_at} is at version {version}, "
                        f"this jig writes {STAMP})")
+    if board_at == CONFIG and (both := docmap_conflicts(root)):
+        refused.append(f"{CONFIG} and {DOCMAP} both hold {', '.join(both)}, with different values: "
+                       f"keep the one that stands, remove the key from the other, and commit, then run "
+                       "update again")
     if refused:
         print(f"refused: {refused[0]}", file=sys.stderr)
         return 2

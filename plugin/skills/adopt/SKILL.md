@@ -183,7 +183,7 @@ Then:
 python3 .jig/jig.py init --no-hooks
 ```
 
-That writes an empty board (`.jig/config.json`, `.jig/jobs.json`) and leaves the
+That writes an empty board (`.jig/config.json`, `.jig/jobs.json`) and docs map (`.jig/docmap.json`), and leaves the
 predecessor's hooks running. Now fill `config.json` by hand, from the predecessor's board:
 
 | `config.json` | from the predecessor |

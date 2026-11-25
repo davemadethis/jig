@@ -899,12 +899,20 @@ expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'docmap. must be an o
 msg="docmap: boards as a string, not a list of pages, is refused"
 python3 -c "import json; d = json.load(open('.jig/docmap.json')); d['boards'] = 'docs/watch/watch.md'; json.dump(d, open('.jig/docmap.json', 'w'))"
 git add -A; expect_refuse git commit -qm bad; undo
+msg="docmap: not_docs as a string, not a list of globs, is refused"
+python3 -c "import json; d = json.load(open('.jig/docmap.json')); d['not_docs'] = 'vendor/**'; json.dump(d, open('.jig/docmap.json', 'w'))"
+git add -A; out=$(git commit -qm bad 2>&1); rc=$?; undo
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'not_docs. must be a list of globs'" "$out"
+msg="docmap: deep_subsystems as a list, not a folder → rationale map, is refused"
+python3 -c "import json; d = json.load(open('.jig/docmap.json')); d['deep_subsystems'] = ['docs/net/x/y']; json.dump(d, open('.jig/docmap.json', 'w'))"
+git add -A; out=$(git commit -qm bad 2>&1); rc=$?; undo
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'deep_subsystems. must be an object mapping each folder to its rationale'" "$out"
 msg="docmap: a config.json commit carrying a docmap key is refused, saying where it lives now"
 python3 -c "import json; c = json.load(open('.jig/config.json')); c['not_docs'] = []; json.dump(c, open('.jig/config.json', 'w'), indent=2)"
 git add -A; out=$(git commit -qm bad 2>&1); rc=$?; undo
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'not_docs. lives in .jig/docmap.json now'" "$out"
 
-board "b['docmap'] = {'docs/net/net.md': ['src/net/**'], 'docs/watch/watch.md': ['main/**', 'src/net/a.py']}; b['boards'] = ['docs/watch/watch.md']; b['deep_subsystems'] = {'docs/net/x/y': 'own rig'}"
+board "b['docmap'] = {'docs/net/net.md': ['src/net/**'], 'docs/watch/watch.md': ['main/**', 'src/net/a.py']}; b['boards'] = ['docs/watch/watch.md', 'docs/pi/pi.md']; b['deep_subsystems'] = {'docs/net/x/y': 'own rig'}"
 msg="docmap: a well-formed docmap.json commits on trunk"
 git add -A; expect_pass git commit -qm docmap
 msg="docmap: jig docmap <page> prints its globs and that it is a board"
@@ -917,8 +925,12 @@ expect_pass sh -c "test \"\$0\" = 'src/net/a.py: covered by
   docs/watch/watch.md'" "$out"
 msg="docmap: a path no page covers says so"
 out=$($J docmap README.md 2>&1); expect_pass sh -c "echo \"\$0\" | grep -qx 'README.md: no page in .jig/docmap.json covers it'" "$out"
+msg="docmap: a board page with no docmap entry is still named a board, mapping no files"
+out=$($J docmap docs/pi/pi.md 2>&1)
+expect_pass sh -c "echo \"\$0\" | head -1 | grep -qx 'docs/pi/pi.md: page (board)' && echo \"\$0\" | grep -q 'no globs'" "$out"
+msg="docmap: a page in an approved deep folder is named a deep subsystem, in either form"
+out=$($J docmap docs/net/x/y.md 2>&1); expect_pass sh -c "echo \"\$0\" | head -1 | grep -qx 'docs/net/x/y.md: page (deep subsystem)'" "$out"
 
-msg="docmap: update --apply moves all four keys from config.json to docmap.json, values unchanged, and bumps the stamp"
 python3 - <<'PY'
 import json
 c = json.load(open('.jig/config.json')); d = json.load(open('.jig/docmap.json'))
@@ -926,6 +938,14 @@ c.update(d); c['version'] = 12
 json.dump(c, open('.jig/config.json', 'w'), indent=2)
 PY
 git rm -q .jig/docmap.json && git add -A && git -c core.hooksPath=/dev/null commit -qm "the old layout"
+msg="docmap: init in a repo whose config.json still holds the keys writes no docmap.json, saying update moves them"
+out=$($J init 2>&1); expect_pass sh -c "test ! -e .jig/docmap.json && echo \"\$0\" | grep -q 'docmap.json not written: .jig/config.json still holds docmap, not_docs, deep_subsystems, boards'" "$out"
+msg="docmap: update refuses while config.json and a docmap.json hold one key with different values, naming it, and changes nothing"
+printf '{"docmap": {}, "not_docs": []}\n' > .jig/docmap.json; before=$(git status --porcelain; shasum .jig/config.json)
+out=$($UP --apply 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'both hold docmap, with different values' && test \"\$1\" = \"\$(git status --porcelain; shasum .jig/config.json)\"" "$out" "$before"
+rm .jig/docmap.json
+msg="docmap: update --apply moves all four keys from config.json to docmap.json, values unchanged, and bumps the stamp"
 python3 -c "import json; c = json.load(open('.jig/config.json')); json.dump({k: c[k] for k in ('docmap', 'not_docs', 'boards', 'deep_subsystems')}, open('$T/dm-before.json', 'w'))"
 dry=$($UP 2>&1); $UP --apply >/dev/null 2>&1
 expect_pass sh -c "echo \"\$0\" | grep -q 'move docmap, boards, deep_subsystems and not_docs from .jig/config.json to .jig/docmap.json' && python3 -c \"
