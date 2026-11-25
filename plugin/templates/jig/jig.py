@@ -3390,8 +3390,10 @@ def cmd_docmap(root: Path, args) -> int:
     for i, arg in enumerate(args.paths):
         if i:
             print()
-        kinds = [w for w, yes in (("board", any(same_page(arg, b) for b in boards)),
-                                  ("deep subsystem", any(os.path.dirname(f).rstrip("/") in
+        # Only a page is a board or a deep subsystem: a figure in a deep folder is a covered file.
+        is_page = arg.endswith(".md") or page_forms(arg) != (arg,)
+        kinds = [w for w, yes in (("board", is_page and any(same_page(arg, b) for b in boards)),
+                                  ("deep subsystem", is_page and any(os.path.dirname(f).rstrip("/") in
                                                          {d.rstrip("/") for d in deep}
                                                          for f in page_forms(arg)))) if yes]
         # A page boards or deep_subsystems names is a page whether or not docmap maps it yet.

@@ -930,6 +930,11 @@ out=$($J docmap docs/pi/pi.md 2>&1)
 expect_pass sh -c "echo \"\$0\" | head -1 | grep -qx 'docs/pi/pi.md: page (board)' && echo \"\$0\" | grep -q 'no globs'" "$out"
 msg="docmap: a page in an approved deep folder is named a deep subsystem, in either form"
 out=$($J docmap docs/net/x/y.md 2>&1); expect_pass sh -c "echo \"\$0\" | head -1 | grep -qx 'docs/net/x/y.md: page (deep subsystem)'" "$out"
+msg="docmap: a file that isn't a page, in a deep folder, is a covered path, not a deep subsystem page"
+board "b['docmap']['docs/net/x/y.md'] = ['docs/net/x/y/**']" && git add -A && git commit -qm "y's figures"
+out=$($J docmap docs/net/x/y/fig.png 2>&1)
+expect_pass sh -c "test \"\$0\" = 'docs/net/x/y/fig.png: covered by
+  docs/net/x/y.md'" "$out"
 
 python3 - <<'PY'
 import json
@@ -944,6 +949,10 @@ msg="docmap: update refuses while config.json and a docmap.json hold one key wit
 printf '{"docmap": {}, "not_docs": []}\n' > .jig/docmap.json; before=$(git status --porcelain; shasum .jig/config.json)
 out=$($UP --apply 2>&1); rc=$?
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'both hold docmap, with different values' && test \"\$1\" = \"\$(git status --porcelain; shasum .jig/config.json)\"" "$out" "$before"
+msg="docmap: a docmap.json holding a key with the value config.json holds is no conflict: the dry run goes on"
+python3 -c "import json; c = json.load(open('.jig/config.json')); json.dump({'not_docs': c['not_docs']}, open('.jig/docmap.json', 'w'))"
+out=$($UP 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && ! echo \"\$0\" | grep -q 'both hold' && echo \"\$0\" | grep -q 'move docmap, boards, deep_subsystems and not_docs'" "$out"
 rm .jig/docmap.json
 msg="docmap: update --apply moves all four keys from config.json to docmap.json, values unchanged, and bumps the stamp"
 python3 -c "import json; c = json.load(open('.jig/config.json')); json.dump({k: c[k] for k in ('docmap', 'not_docs', 'boards', 'deep_subsystems')}, open('$T/dm-before.json', 'w'))"
