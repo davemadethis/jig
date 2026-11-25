@@ -74,6 +74,8 @@ A correction. `cmd_repos` gets one rule linking the listed name to the board, an
 `remove`. A warning that the names differ would leave the hand edit in place, which is the
 symptom the owner rejects.
 
+Kept separate from layout-and-formats: a small bug fix that ships without waiting on the layout rework (hubnode's plan, 2026-11-24, unchanged by the owner).
+
 ## Intent
 The board's `name` follows the name a repo is registered under. When `jig repos add` (either
 form) or `jig repos rename` leaves an entry with a listed name different from its checkout's board
