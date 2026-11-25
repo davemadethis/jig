@@ -229,9 +229,39 @@ Part B: the conversion is the one place the old parser runs.
 - [ ] tests/smoke.sh:5885 and 6146 assert the opposite. A text ending `(after …)` (or the
   others) commits as text. An old item with a nested `  - detail (touches docs/a.md)` line
   converts with that line in its `text` and no `touches`.
+- [ ] One query: `jig roadmap --json [filters] [--id <id>…]` prints only the records asked for,
+  as JSON: one scope or item by its id (`Widget alpha/s`, `Widget No phase/q`), a phase by its
+  key, or what the existing filters (`--product`, `--phase`, `--type`, `--state`, `--owner`,
+  `--label`) choose. Each record carries its key and its derived state, and nothing it wasn't
+  asked for is printed. An id the roadmap lacks is refused, naming it. The skills that read
+  the roadmap ask jig this way, and none says to read `roadmap.json` (smoke: by id, by each
+  filter, an unknown id).
+- [ ] One load: a command reads the roadmap file of each source (a rev, the index, the work
+  tree, a metarepo's trunk) once, and every reader in it shares the records. `tests/roadmap.py
+  loads <jig args>` runs jig in-process, counting the parses of each source: `jig roadmap`,
+  `jig rig`, `jig roadmap --json --id …` and a trunk commit's hook each parse trunk's roadmap
+  once (smoke).
 - [ ] Part 2's Done when sections pass on JSON fixtures, and so does `check`:
   `python3 .jig/jig.py queue -- bash tests/smoke.sh roadmap roadmap_edit phase_types labels family boundary move movein close sweep rig`
   and `python3 .jig/jig.py queue -- .jig/scripts/check.sh`. The complete smoke is the gate's.
+
+## Decisions
+- The owner, 2026-11-25, on which fix: "build the full fix and make sure it can query so it
+  doesn't have to read the whole json every time". Part A, the records as the
+  representation, with a query that prints only the records asked for and one load of the
+  file per command.
+- The owner, 2026-11-25, on "text unchanged": "I disagree with that rule in-so-far as a scope
+  is probably a less specific definition than a spec, a scope's text should be treated more
+  like a staged document when turned into a spec. The parts that come out dont have to stay
+  unchanged, the parts that dont get built yet stay in the scope unchanged. That way homeless
+  lines don't get pushed into odd places, too." For the conversion this is the reading above:
+  no line is pushed into a neighbouring field; each old line comes over where it belongs, or
+  is named and waits for the owner. (The scope-to-spec half is layout-and-formats' part 3.)
+- Interpreted: the query is `--json` on `jig roadmap`, with `--id` added beside the existing
+  filters, so one reader serves the listing, the chart and the query.
+- Interpreted: "loaded once" is per source within one command (trunk, the index, the work
+  tree, a metarepo's trunk are different files), cached by source, and never a cache across
+  commands.
 
 ## Out of scope
 - `jig roadmap show`'s chart and its fixture: it already draws from records (`render_show`),

@@ -64,8 +64,9 @@ From part 3 (`Later:` retired):
 - [ ] A commit that adds or changes a spec carrying a `Later:` line is refused. The refusal says the work stays on the roadmap, unspecced, and to delete the line (smoke).
 - [ ] `jig update --apply` deletes the `Later:` line from each spec on trunk and reports each one. Each id is already on the roadmap, so nothing is lost. Handoff notes are history and are left as they are (smoke).
 - [ ] RULES, the spec template, and the spec, review, work and hubnode skills carry the two rules:
-      1. A spec takes only what it builds. When only part of a scope gets built, the scope is first split in a roadmap change on the owner's yes, and the spec takes only its part.
+      1. A spec takes only what it builds. Taking from a scope works like resolving a staged document: the spec takes the parts it builds and may restate them in its own words. The parts not built stay in the scope's text, unchanged, and the scope stays open for them, still later without any line saying so. A spec taking part of a scope names it `Scope: <id> (part)`, and the roadmap change cutting the built parts from the scope's text, on the owner's yes, lands with the spec.
       2. Out of scope never defers. Work worth building later goes onto the roadmap as a scope or `No phase` item on the owner's word, and review blocks a deferral written as prose.
+- [ ] A scope that only `(part)` takers hold reads `open`, with `part built by <spec>` beside it in `jig roadmap`, and rig still offers it. It reads `taken` while a spec takes it whole and isn't complete, and `done` when every whole taker is complete. A `(part)` taker never makes it `done`. The hook checks a `(part)` id as it checks any `Scope:` id (smoke: `sec_roadmap`).
 - [ ] The spec template's `Later:` comment is gone, and its `## Out of scope` comment states rule 2. A grep of `plugin` and `docs` for `Later:` finds only the refusal's rule and update's step.
 
 From part 4 (the glossary):
@@ -224,6 +225,7 @@ Every part:
 - The owner, 2026-11-24, replacing the later ledger, said "yes to all" to two rules:
   1. A spec takes only what it builds. When only part of a scope gets built, the scope is first split in a roadmap change on the owner's yes, and the spec takes only its part.
   2. Out of scope never defers. Work worth building later goes onto the roadmap as a scope or `No phase` item on the owner's word, and review blocks a deferral written as prose.
+- The owner, 2026-11-25, amending rule 1: "I disagree with that rule in-so-far as a scope is probably a less specific definition than a spec, a scope's text should be treated more like a staged document when turned into a spec. The parts that come out dont have to stay unchanged, the parts that dont get built yet stay in the scope unchanged. That way homeless lines don't get pushed into odd places, too." This replaces "split the scope first in a roadmap change": the spec takes the parts it builds, in its own words if it likes, and the parts not built stay in the scope's text, unchanged, with the scope open for them.
 - The owner, 2026-11-24, on table glossaries: "stop reading table rows as terms at once".
 - The owner, 2026-11-24, on `Basic terms`: control goes to "the repo whose glossary holds it".
 - The owner, 2026-11-24, on the JSON fields: "once in jig.py, the template a copy".
@@ -239,6 +241,7 @@ Every part:
 - Interpreted: a repo's own `ROADMAP.md` still holds the seed back, as now. Its content is a roadmap for the owner to move in.
 - Interpreted: `Later:` lines already on trunk go in `jig update --apply`, which deletes each from its spec and reports it. Every id a `Later:` line names is already on the roadmap, so the work stays there, unspecced, as the owner's rule wants. This repo's specs and notes carry none. Landed handoff notes keep theirs as history, and nothing reads them. A job's branch gets trunk's spec at its next sync.
 - Interpreted: rule 1 (a spec takes only what it builds) is a rule for the spec role and for review, not a hook check. Nothing in a commit shows whether a job built all of a scope.
+- Interpreted: a spec taking part of a scope marks it `Scope: <id> (part)`. A `(part)` taker leaves the scope `open`, shown `part built by <spec>`, so rig still offers what is left; only a whole taker makes it `taken` or `done`. The roadmap change that cuts the built parts from the scope's text lands with the spec, on the owner's yes, so the scope's text always says what is left. The alternative was a field on the scope (`"built": [...]`), which would put spec history in the roadmap.
 - Interpreted: the terms under `Basic terms` are H3. A product's own terms are H3 directly under its H1, before its first H2. A product's or a feature's own definition is the paragraph directly under its heading (the stager's reading).
 - Interpreted: in a stand-alone repo, the H1s are its software product and any hardware it runs on, and the H2s are its features. In a pararepo, a product H1 is one from the metarepo's glossary. `jig init` seeds a stand-alone repo's software product H1, named for the board's `name`, so control and `--owner` work from the start.
 - Interpreted: `Binds:` is one line under a term, written only where the term applies beyond its own product, and only in a metarepo's glossary (the stager's reading).
