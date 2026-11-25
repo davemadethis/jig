@@ -1,0 +1,25 @@
+{
+  "products": [],
+  "phases": [
+    {
+      "name": "alpha",
+      "scopes": [
+        {"id": "a1", "text": "screen", "labels": ["ui"]},
+        {"id": "a2", "text": "radio", "labels": ["net"]},
+        {"id": "a3", "text": "menu", "labels": ["ui"]},
+        {"id": "a4", "text": "settings", "after": ["alpha/a1"]}
+      ]
+    },
+    {
+      "name": "beta",
+      "after": ["alpha"],
+      "scopes": [
+        {"id": "b1", "text": "pairing"},
+        {"id": "b2", "text": "sync", "after": ["beta/b1"]}
+      ]
+    }
+  ],
+  "no_phase": [
+    {"id": "pay", "text": "payments"}
+  ]
+}

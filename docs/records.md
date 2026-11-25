@@ -71,7 +71,7 @@ Each phase has a type, read from its name: a Greek letter (`alpha`, `beta`) is P
 types run Prototype, then Pilot, then Production, and the hook refuses a roadmap on trunk that
 puts them out of order.
 
-The roadmap is `.jig/roadmap.json`, records nobody reads by hand: `jig roadmap --draft` writes
+The roadmap is a JSON file in jig's folder, records nobody reads by hand: `jig roadmap --draft` writes
 it as a draft to edit, and `--edit` checks it and writes it. `python3 .jig/jig.py roadmap show`
 draws it as a chart, each scope in the column one past what it waits on.
 `python3 .jig/jig.py roadmap` can show part of the roadmap: `--product Widget --phase alpha` is

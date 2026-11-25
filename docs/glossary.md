@@ -109,7 +109,7 @@ decision id and can carry labels. Deciding one moves it into the decision log.
 ## Roadmap
 
 The owner's plan for a repo: its phases in order, each phase's scopes, and work named but not
-yet placed. It is `.jig/roadmap.json`, and `jig roadmap show` draws it. Every stand-alone repo
+yet placed. It is a JSON file in jig's folder, and `jig roadmap show` draws it. Every stand-alone repo
 and metarepo keeps one, and a pararepo plans from its metarepo's. Progress on it is worked out
 from merged work, and it isn't a task tracker anyone ticks.
 

@@ -967,12 +967,17 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
   "touches", "after", "needed_by"}`, the id with no space or `/`; a scope's ref is
   `<phase>/<id>`, the phase named `<product> <name>` where it has a product. `no_phase`: items,
   each what a scope holds plus `product`, `stopped_at` and `parked` (`YYYY-MM-DD`). `products`:
-  the glossary's product terms the roadmap includes. A field left empty is left out; nothing
+  the glossary's product terms the roadmap includes. A phase carries `exit`, `scopes` or both,
+  either of them maybe empty. A field left empty is left out; nothing
   else is written, since states and blocked are derived and a phase's type is read from its
   name. The fields and their types come from one example record of each kind in `jig.py`; `jig
   update` writes those as the repo's templates. The hook refuses a field or a type they don't
-  have, a product `products` doesn't include or the glossary doesn't hold, a duplicate phase or
-  scope id, and every problem below, and `jig roadmap` reports them. "Every scope is done" is
+  have (each exit check's too), a key written twice in one object, a phase with neither `exit`
+  nor `scopes`, a product `products` doesn't include or the glossary doesn't hold, a duplicate
+  phase or scope id, a value jig would read back as something else (a text ending in what reads
+  as `touches`, an item's text holding `; stops at` or `; parked`), and every problem below, and
+  `jig roadmap` reports them. A note or a text is otherwise kept as written, lists and line
+  breaks included. "Every scope is done" is
   implied, never written as a box. A scope's `touches` are the pages it will change.
 - **Dependencies**: a scope's `after` names what it waits on; a phase's `after` applies to each
   of its scopes. A ref is `<phase>/<scope>`, `<phase>` or `No phase/<id>` in the same roadmap.
@@ -1029,9 +1034,12 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
   drop.
 - **The old form.** `jig update --apply` converts a `.jig/roadmap.md` to `roadmap.json` on trunk
   on the owner's yes: every phase, scope, item, suffix, note and exit check with its text
-  unchanged, each phase under the product its heading's `Owner:` term named, an old
+  unchanged, a note whole (its lists and the prose after them), lines nested under an item as
+  its text, each phase under the product its heading's `Owner:` term named, an old
   `## Up next` folded into No phase, and a parked item's text split into `text`, `stopped_at`
-  and `parked` where it has that form. It removes `roadmap.md`, and a `ROADMAP.md` jig
+  and `parked` where it has that form. A line `roadmap.json` has no place for (prose above the
+  first heading, or among a phase's `Exit when:` boxes) is listed, and the conversion waits
+  until the owner moves it into the note or deletes it. It removes `roadmap.md`, and a `ROADMAP.md` jig
   generated (a repo's own is left). It runs in two runs: the hook runs trunk's committed
   checker, and an older one refuses a commit removing `roadmap.md`, so the first run installs
   the checker and names the conversion as waiting on it, and the run after that commit
