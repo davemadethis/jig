@@ -12788,10 +12788,13 @@ def roadmap_withheld(here: Path, trunk: str = "") -> str:
     """Why no roadmap is written here, or "": a pararepo plans from its metarepo's, an old
     roadmap.md converts instead, and a root ROADMAP.md that is the repo's own is a roadmap for
     the owner to move in first."""
-    home = roadmap_home(lambda p: (here / p).exists() or bool(trunk and at_rev(trunk, p)))
+    # Trunk's, as every site asking roadmap_home reads it; the checkout's where no trunk is named.
+    home = roadmap_home((lambda p: at_rev(trunk, p)) if trunk else (lambda p: (here / p).exists()))
     if ((here / PARA).is_file() or trunk and load_para(trunk) is not None) and home != "unconverted":
         return "para"
     if home == "unconverted":
+        if trunk and (here / ROADMAP).exists() and not (here / OLD_ROADMAP).exists():
+            return f"{OLD_ROADMAP} is converted to {ROADMAP} here, and not committed: commit the conversion on {trunk}"
         return f"{OLD_ROADMAP} is the roadmap in jig's old form: `jig update --apply` converts it to {ROADMAP}"
     if not (here / ROADMAP).exists() and ((here / OLD_ROADMAP_VIEW).is_file() or trunk and at_rev(trunk, OLD_ROADMAP_VIEW)):
         return (f"{OLD_ROADMAP_VIEW} is the repo's own: move what it holds into {ROADMAP} first, "
@@ -14003,10 +14006,11 @@ def proposed_branch(branch: str, trunk: str) -> bool:
     return bool(first) and opening_commit(main_root(), first)
 
 
-def moving_in(para: dict, staged: bool) -> list[str]:
-    """The pararepo's commit removing its own roadmap, once its phases and lists are the
-    metarepo's: every `Scope:` line it keeps names the metarepo's ids, read on its trunk."""
-    removed = at_rev(Board.trunk_name(main_root()), ROADMAP)
+def moving_in(para: dict, staged: bool, removed: str | None = None, old_form: bool = False) -> list[str]:
+    """The pararepo's commit removing its own roadmap (REMOVED, as JSON: trunk's roadmap.json, or
+    OLD_FORM, its old roadmap.md converted), once its phases and lists are the metarepo's: every
+    `Scope:` line it keeps names the metarepo's ids, read on its trunk."""
+    removed = at_rev(Board.trunk_name(main_root()), ROADMAP) if removed is None else removed
     if empty_roadmap(removed):
         # The empty structure an init wrote before `init --para`: nothing in it moves in.
         return []
@@ -14022,6 +14026,9 @@ def moving_in(para: dict, staged: bool) -> list[str]:
                                                        for i in roadmap_list_items(text)]
     mine = {pr for pr in {product_of(h, owners) for h in heads} - {""}
             if (o := owners[pr]) != THIS_REPO and (l := repo_path(o)) is not None and l.resolve() == here}
+    if not mine and old_form:
+        return [f"{OLD_ROADMAP} still holds phases or items: `jig update --apply` converts it, or "
+                f"`jig move-in` moves them to the metarepo"]
     if not mine:
         return [f"{ROADMAP}: this commit removes it, but {para['meta']}'s roadmap holds none of this repo's "
                 f"products yet, so its phases would be on no trunk: name the product in {para['meta']}'s "
@@ -14180,6 +14187,18 @@ def roadmap_rules(board: "Board", branch: str, staged: bool, paths: list[str],
         # would have no home again.
         return [f"{ROADMAP}: this commit removes it, but every stand-alone repo and metarepo keeps a "
                 f"roadmap ({DIR}/RULES.md, Roadmap): change it, don't remove it"]
+    if on_trunk and (old_md := at_rev(trunk, OLD_ROADMAP)) and not in_index(OLD_ROADMAP, staged) \
+            and not in_index(ROADMAP, staged):
+        # The old form removed with no roadmap.json beside it: judged as the roadmap is (the
+        # owner, 2026-11-25, "Works for me"). The conversion stages the JSON in the same commit.
+        para = load_para(trunk) or json_or_none(in_index(PARA, staged))
+        converted = roadmap_dumps(roadmap_data(old_md, {}))
+        if para is None:
+            return [f"{OLD_ROADMAP}: this commit removes it with no {ROADMAP} in its place, but every "
+                    f"stand-alone repo and metarepo keeps a roadmap: `jig update --apply` converts it"]
+        if empty_roadmap(converted):
+            return []
+        return moving_in(para, staged, converted, old_form=True)
     if load_meta(trunk) is not None and proposed_branch(branch, trunk) and ROADMAP in paths:
         # A pararepo's proposal: its merge is judged on trunk; what it says is checked here too,
         # as `jig roadmap --edit` checks it: only the proposing repo's sections change.
@@ -17542,6 +17561,10 @@ def cmd_sweep(root: Path, apply: bool) -> int:
                     "roadmap this repo keeps); then sweep again. Nothing is written here")
     if not apply and homeless:
         print(f"\nDry run: nothing changed. {homeless_why}.")
+        return 0
+    if not apply and new and not roadmap and (why := roadmap_withheld(root)) and why != "para":
+        # --apply refuses this, so the dry run promises no write.
+        print(f"\nDry run: nothing changed. {why} first; then sweep again.")
         return 0
     if not apply:
         print("\nDry run: nothing changed. On the owner's yes: jig update --apply --sweep"

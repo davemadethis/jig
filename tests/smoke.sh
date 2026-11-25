@@ -6214,10 +6214,13 @@ out="$(loads roadmap) $(loads rig) $(loads roadmap --id 'Widget alpha/s') $(load
 expect_pass sh -c "test \"\$0\" = 'most parses of one roadmap: 1 most parses of one roadmap: 1 most parses of one roadmap: 1 most parses of one roadmap: 1'" "$out"
 git reset -q --hard
 cd "$here"
-msg="bug: in a stand-alone repo a Widget heading stays a phase named Widget alpha, with no product, and commits"
 pcnew "$T/splace" && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
 mkdir -p docs && printf '# Glossary\n\n## Widget\n\nThe widget.\n\nOwner: `this repo`.\n' > docs/glossary.md && git rm -q .jig/roadmap.json
 printf '# Roadmap\n\n## Widget alpha\nScopes:\n- `s`: a scope\n' > .jig/roadmap.md && git add -A && git -c core.hooksPath=/dev/null commit -qm old
+msg="bug: in a stand-alone repo, removing the old roadmap.md with no roadmap.json in its place is refused, naming update"
+git rm -q .jig/roadmap.md; out=$(git commit -qm "drop the old roadmap" 2>&1); rc=$?; git reset -q --hard
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'every stand-alone repo and metarepo keeps a roadmap: .jig update --apply. converts it'" "$out"
+msg="bug: in a stand-alone repo a Widget heading stays a phase named Widget alpha, with no product, and commits"
 $J update --apply >/dev/null 2>&1
 expect_pass sh -c "python3 -c \"import json; d = json.load(open('.jig/roadmap.json')); assert d['products'] == [] and d['phases'] == [{'name': 'Widget alpha', 'scopes': [{'id': 's', 'text': 'a scope'}]}], d\" && git commit -qm converted && $J roadmap | grep -qE '^  Widget alpha/s '"
 msg="bug: a fenced (after …), (needed by …) and (labels …) in a note stay note text, byte for byte, and wait on nothing"
@@ -12169,6 +12172,10 @@ f = jig.family(); assert f.section_of('PP') == '', f.section_of('PP')
 r = jig.receiver_plan(f, 'PP', jig.repo_path('PP'), Path('.').resolve()); assert r == ('own', ''), r\""
 msg="move (sweep): in PP, unconverted, the sweep is refused, saying to convert first, and writes no roadmap.json"
 printf '# Own\n\nOwn is.\n\n## Undefined\n\n- a parked thing\n' > docs/own.md && gplant "an Undefined entry"
+msg="move (sweep): in PP, unconverted, the sweep's dry run says to convert first, promising no write"
+out=$($J update --sweep 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -q 'Dry run: nothing changed. .jig/roadmap.md is the roadmap in jig.s old form: .jig update --apply. converts it to .jig/roadmap.json first' && ! echo \"\$0\" | grep -q 'On the owner.s yes'" "$out"
+msg="move (sweep): in PP, unconverted, the sweep is refused, saying to convert first, and writes no roadmap.json"
 out=$($J update --apply --sweep 2>&1); rc=$?
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'roadmap.md is the roadmap in jig.s old form: .jig update --apply. converts it' && test ! -e .jig/roadmap.json && test -z \"\$(git status --porcelain)\"" "$out"
 git reset -q --hard
@@ -12179,9 +12186,24 @@ out=$($J move-in --product Pod 2>&1); rc=$?
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'old form: .jig update --apply. converts it to .jig/roadmap.json first, then move it in'" "$out"
 msg="move: before its conversion, a pararepo with its own old roadmap reads none of M's roadmap as its own"
 expect_pass sh -c "! $J roadmap 2>&1 | grep -q \"is M's\" && ! $J roadmap 2>&1 | grep -q 'Walyt alpha'"
-msg="move: a pararepo with its own old roadmap converts it by its own pages and glossary, with no product though M's glossary has Kite, and the commit passes"
+msg="move (removal): in PP, removing its old roadmap.md, which holds phases, with nothing in its place is refused, naming update and move-in"
+git rm -q .jig/roadmap.md; out=$(git commit -qm "drop the old roadmap" 2>&1); rc=$?; git reset -q --hard
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '.jig/roadmap.md still holds phases or items: .jig update --apply. converts it, or .jig move-in. moves them to the metarepo'" "$out"
+msg="move (removal): in PP, an old roadmap.md with no phases or items is removable"
+printf '# Roadmap\n\n## No phase\n' > .jig/roadmap.md && gplant "emptied" && git rm -q .jig/roadmap.md
+expect_pass git commit -qm "drop the empty old roadmap"; git reset -q --hard HEAD~2
+msg="move (removal): in PP, once M's trunk holds Pod's phase, removing the old roadmap.md is moving in, and passes"
+( cd "$GM" && rmd && printf '\n## Pod alpha\nScopes:\n- `p1`: the pod\n' >> .jig/roadmap.md && rj && gplant "Pod alpha" )
+git rm -q .jig/roadmap.md; out=$(git commit -qm "moved in by hand" 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0" "$out"; [ $rc = 0 ] && git reset -q --hard HEAD~1; git reset -q --hard
+( cd "$GM" && git reset -q --hard HEAD~1 )
+msg="move: a pararepo with its own old roadmap converts it by its own pages and glossary, with no product though M's glossary has Kite"
 out=$($J update --apply 2>&1)
-expect_pass sh -c "python3 -c \"import json; d = json.load(open('.jig/roadmap.json')); assert d['products'] == [] and d['phases'] == [{'name': 'Kite alpha', 'scopes': [{'id': 's', 'text': 'a scope', 'labels': ['spinner'], 'touches': ['docs/own.md']}]}], d\" && git add -A && git commit -qm 'jig update: convert'" "$out"
+expect_pass sh -c "python3 -c \"import json; d = json.load(open('.jig/roadmap.json')); assert d['products'] == [] and d['phases'] == [{'name': 'Kite alpha', 'scopes': [{'id': 's', 'text': 'a scope', 'labels': ['spinner'], 'touches': ['docs/own.md']}]}], d\"" "$out"
+msg="move: mid-conversion, staged and not committed, jig roadmap in PP says to commit the conversion"
+expect_pass sh -c "$J roadmap 2>&1 | grep -q 'roadmap.md is converted to .jig/roadmap.json here, and not committed: commit the conversion on main'"
+msg="move: the conversion commit, roadmap.md removed with roadmap.json in its place, passes"
+expect_pass git commit -qm "jig update: convert"
 msg="move: once converted, jig roadmap in the pararepo lists its own phases, not M's"
 expect_pass sh -c "$J roadmap | grep -qE '^  Kite alpha/s +open' && ! $J roadmap 2>&1 | grep -q \"is M's\""
 }
