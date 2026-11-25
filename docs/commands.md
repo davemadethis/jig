@@ -89,7 +89,7 @@ Jobs, for anyone:
 Records:
 
 - `python3 .jig/jig.py decision <id>` prints a decision and what it replaced.
-- `python3 .jig/jig.py roadmap` prints the [roadmap](glossary.md#roadmap)'s states, each phase with its type (Prototype, Pilot or Production). `--product`, `--phase`, `--type`, `--state`, `--owner` and `--label` narrow what it prints, each repeatable. `jig roadmap show` prints what they choose as a chart with no dates, each scope one column past what it waits on, one band per phase past 100 columns (`--width`). `--draft` and `--edit` change it: a JSON draft, checked and written. Run in the trunk checkout on a trunk with no roadmap, it commits the roadmap's empty structure first, as the other commands that read the roadmap do.
+- `python3 .jig/jig.py roadmap` prints the [roadmap](glossary.md#roadmap)'s states, each phase with its type (Prototype, Pilot or Production). `--product`, `--phase`, `--type`, `--state`, `--owner` and `--label` narrow what it prints, each repeatable. `jig roadmap show` prints what they choose as a chart with no dates, each scope one column past what it waits on, one band per phase past 100 columns (`--width`). `--json` prints the records they choose as JSON, each with its key and state, and `--id <id>` only the phase, scope or item named. `--draft` and `--edit` change it: a JSON draft, checked and written. Run in the trunk checkout on a trunk with no roadmap, it commits the roadmap's empty structure first, as the other commands that read the roadmap do.
   `--label <term>` keeps the scopes and items carrying that [label](glossary.md#label), across every product,
   headed by the term's owner.
 - `python3 .jig/jig.py roadmap --draft` writes the roadmap this repo plans from to a draft outside the tree, and

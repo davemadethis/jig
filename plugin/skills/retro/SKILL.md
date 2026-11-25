@@ -20,7 +20,7 @@ Then read `.jig/ledgers/DEFERRED.md` (likewise):
 - Deferred rows for a scope that has closed → re-rank together; take, or reject with a reason.
 - Rejected with `[assumed]` → can it be converted now? A wrong assumption puts the finding back.
 
-Then read the No phase items in `.jig/roadmap.json` (a pararepo's is its metarepo's):
+Then read the No phase items, `jig roadmap --json --phase "No phase"` (a pararepo's are its metarepo's):
 - An item read done → its spec built it: propose removing the item (the roadmap changes on trunk, on the owner's word).
 - An item the code now does but no spec took → it was built without its fold-in: put its content in the body of the pages it touches, and propose removing the item (the roadmap changes on trunk, on the owner's word).
 - An item that has sat unclaimed for months → a delete candidate. Propose it; delete only on the owner's word, as it was written on the owner's word.

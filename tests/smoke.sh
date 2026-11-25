@@ -1800,7 +1800,7 @@ expect_pass sh -c "! echo \"\$0\" | grep -q 'specs/r.md:3'" "$out"
 msg="para sync: a roadmap cite of a missing heading names the metarepo's trunk, not the pin"
 expect_pass sh -c "echo \"\$0\" | grep -qF '.jig/specs/r.md:4 cites mm/.jig/roadmap.json § Nowhere, which mm main has no heading for' && ! echo \"\$0\" | grep 'r.md' | grep -q \"doesn't have\"" "$out"
 msg="para sync: the heading committed on the metarepo's trunk, with no release, clears it"
-(cd mmclone && rmd && printf '\n## Nowhere\n' >> .jig/roadmap.md && rj && git -c core.hooksPath=/dev/null commit -qam "roadmap: nowhere") >/dev/null 2>&1
+(cd mmclone && rmd && printf '\n## Nowhere\nScopes:\n' >> .jig/roadmap.md && rj && git -c core.hooksPath=/dev/null commit -qam "roadmap: nowhere") >/dev/null 2>&1
 expect_pass sh -c "! $J sync 2>&1 | grep -q 'specs/r.md:[34]'"
 git rm -q .jig/specs/r.md && git commit -qm "specs: r done" >/dev/null 2>&1 && git -C mmclone reset -q --hard origin/main
 
@@ -5880,18 +5880,15 @@ expect_pass git commit -qm "empty zz"; git reset -q --hard HEAD~1
 msg="roadmap: a phase with only an empty exit list commits, as one with only an empty scopes list does"
 python3 -c "import json; p='.jig/roadmap.json'; d=json.load(open(p)); d['phases'].append({'name': 'zz', 'exit': []}); open(p,'w').write(json.dumps(d, indent=2) + '\n')" && git add -A
 expect_pass git commit -qm "exit-only zz"; git reset -q --hard HEAD~1
-msg="roadmap: a text ending the Markdown way, in (after …), (labels …), (needed by …) or (touches …), is refused, naming the field it reads as"
-rbad '{"products": [], "phases": [{"name": "a", "scopes": [{"id": "w", "text": "w (after a/x)"}, {"id": "x", "text": "x (labels ui)"}, {"id": "y", "text": "y (needed by a/w)"}, {"id": "z", "text": "z (touches docs/a.md)"}]}], "no_phase": []}'
-expect_pass sh -c "test $rc != 0 && for f in w:after x:labels y:needed_by z:touches; do echo \"\$0\" | grep -q \"scope \${f%%:*}'s .text. ends in what reads as .\${f#*:}.: put it in .\${f#*:}.\" || exit 1; done" "$out"
+msg="roadmap: a text ending the Markdown way, in (after …), (labels …), (needed by …) or (touches …), commits as text: nothing is read from it"
+printf '%s\n' '{"products": [], "phases": [{"name": "zz", "scopes": [{"id": "w", "text": "w (after a/x)"}, {"id": "x", "text": "x (labels ui)"}, {"id": "y", "text": "y (needed by a/w)"}, {"id": "z", "text": "z (touches docs/nope.md)"}]}], "no_phase": []}' | python3 -c "import json, sys; p='.jig/roadmap.json'; d=json.load(open(p)); d['phases'] += json.load(sys.stdin)['phases']; open(p,'w').write(json.dumps(d, indent=2) + '\\n')" && git add -A
+expect_pass sh -c "git commit -qm 'texts' && $J roadmap | grep -E '^  zz/' | grep -qvE 'after|labels' && test \"\$($J roadmap | grep -cE '^  zz/[wxyz] +open\$')\" = 4"; git reset -q --hard HEAD~1
 msg="roadmap: the hook checks each exit check's fields: a field it lacks, one missing, and done not true or false"
 rbad '{"products": [], "phases": [{"name": "a", "exit": [{"txt": "boots", "done": "no", "extra": 1}]}], "no_phase": []}'
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'phase a.s .exit. check 1 has .txt., which an exit check doesn.t' && echo \"\$0\" | grep -q 'check 1 has .extra.' && echo \"\$0\" | grep -q 'check 1 has no .text.' && echo \"\$0\" | grep -q 'check 1.s .done. must be true or false'" "$out"
 msg="roadmap: the hook refuses a product the glossary lacks, a record naming a product products doesn't include, and a scope carrying product"
 rbad '{"products": ["Gadget"], "phases": [{"product": "Widget", "name": "alpha", "scopes": [{"id": "x", "product": "Gadget"}]}], "no_phase": []}'
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'product Gadget is no product of docs/glossary.md' && echo \"\$0\" | grep -q 'phase alpha names product Widget, which .products. doesn.t include' && echo \"\$0\" | grep -q 'scope x has .product., which a scope record doesn.t'" "$out"
-msg="roadmap: a text jig would read back as something else is refused, naming the field and the reading"
-rbad '{"products": [], "phases": [{"name": "a", "scopes": [{"id": "x", "text": "see"}]}], "no_phase": [{"id": "p", "text": "pay; parked 2026-01-01"}]}'
-expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'No phase item p.s .text. can.t be kept as written: jig would read it as \"pay\"'" "$out"
 msg="roadmap: jig roadmap reports the same problems and exits 1"
 printf '{"products": [], "phases": [{"name": "a", "scopes": [{"id": "two words"}]}], "no_phase": []}\n' > .jig/roadmap.json && git add -A && git -c core.hooksPath=/dev/null commit -qm planted
 out=$($J roadmap 2>&1); rc=$?; git reset -q --hard HEAD~1
@@ -6049,7 +6046,7 @@ msg="no phase: an item's after is read as a scope's: a wait on nothing is refuse
 rbad '## a\nScopes:\n- `x`: y\n\n## No phase\n- `p`: pay (after a/nope) (touches docs/a.md)\n'
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'No phase/p waits on a/nope'" "$out"
 msg="no phase: a duplicate item id is refused"
-rbad '## a\nScopes:\n- `x`: y\n\n## No phase\n- `p`: pay\n- `p`: again\n'
+rbadj '{"products": [], "phases": [{"name": "a", "scopes": [{"id": "x", "text": "y"}]}], "no_phase": [{"id": "p", "text": "pay"}, {"id": "p", "text": "again"}]}'
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'No phase item p appears twice'" "$out"
 msg="no phase: an item with no id is refused"
 rbadj '{"products": [], "phases": [{"name": "a", "scopes": [{"id": "x"}]}], "no_phase": [{"text": "pay"}]}'
@@ -6076,6 +6073,8 @@ expect_pass sh -c "$J roadmap | grep -A3 '^a  Production, current' | grep -qx ' 
 msg="no phase: jig update --apply converts an old .jig/roadmap.md, folding its ## Up next into No phase, ids and text kept"
 mkdir -p docs && printf '# A\n\nA is.\n' > docs/a.md && git rm -q .jig/roadmap.json && printf '## a\nThe a note.\n\nExit when:\n- [ ] boots\nScopes:\n- `s`: x (labels nope) (after a/t) (touches docs/a.md)\n- `t`: y\n\n## Up next\n- `p`: offline; stops at cache; parked 2026-11-13 (touches docs/a.md)\n\n## No phase\n- `q`: payments\n' > .jig/roadmap.md
 printf '# Roadmap\n\n_Generated by `jig roadmap --write` from .jig/roadmap.md_\n' > ROADMAP.md
+# The conversion runs the hook's checks on what it writes: the label is a glossary term.
+printf '\n## nope\n\nA label.\n' >> docs/glossary.md
 git add -A && git -c core.hooksPath=/dev/null commit -qm old
 out=$($J update 2>&1)
 expect_pass sh -c "echo \"\$0\" | grep -q 'convert .jig/roadmap.md to .jig/roadmap.json'" "$out"
@@ -6142,8 +6141,10 @@ msg="no phase: a line nested under a scope, which the parser refuses, is named"
 oldwait '# Roadmap\n\n## a\nScopes:\n- `s`: x\n  - detail\n' 'not a scope (- `<scope>`: <what it is>, unindented'
 msg="no phase: unindented prose in No phase, which the parser refuses, is named"
 oldwait '# Roadmap\n\n## No phase\n- `q`: x\nloose prose\n' 'not a No phase item'
-msg="no phase: a nested line ending in (touches …) is named, not turned into the item's touches"
-oldwait '# Roadmap\n\n## No phase\n- `q`: thing\n  - detail (touches docs/a.md)\n' "No phase item q's \`text\` ends in what reads as \`touches\`"
+msg="no phase: a nested line ending in (touches …) converts into the item's text, never its touches"
+printf '# Roadmap\n\n## No phase\n- `q`: thing\n  - detail (touches docs/a.md)\n' > .jig/roadmap.md && git add -A && git -c core.hooksPath=/dev/null commit -qm "old shape" && $J update --apply >/dev/null 2>&1
+expect_pass python3 -c "import json; d = json.load(open('.jig/roadmap.json')); assert d['no_phase'] == [{'id': 'q', 'text': 'thing\\n  - detail (touches docs/a.md)'}], d"
+git reset -q --hard HEAD~1
 msg="no phase: jig's seed comment, word for word, converts with nothing named"
 printf '# Roadmap\n\n%s\n\n## No phase\n- `q`: x\n' "<!-- The owner's plan, changed on trunk only and on the owner's word (.jig/RULES.md, Roadmap).
 Phases are level-two headings, in order, each with an \`Exit when:\` checklist, a \`Scopes:\` list
@@ -6154,6 +6155,82 @@ git add -A && git -c core.hooksPath=/dev/null commit -qm "seeded"
 $J update --apply >/dev/null 2>&1
 expect_pass sh -c "test ! -e .jig/roadmap.md && test -f .jig/roadmap.json && git commit -qm converted"
 git reset -q --hard HEAD~2
+# bug-roadmap-read-as-markdown: the records are what jig reads, and the conversion is judged by
+# its output.
+here=$PWD; pcnew "$T/mplace" && git add -A && git commit -qm init && $J init --meta --name mp >/dev/null && git add -A && git commit -qm board
+printf '\n## Widget\n\nThe widget.\n\nOwner: `this repo`.\n\n## ui\n\nThe screens.\n' >> docs/glossary.md && git add -A && git -c core.hooksPath=/dev/null commit -qm glossary
+git rm -q .jig/roadmap.json && git -c core.hooksPath=/dev/null commit -qm "no json"
+mold() { printf '%b' "$1" > .jig/roadmap.md && git add -A && git -c core.hooksPath=/dev/null commit -qm "old shape"; }
+msg="bug: a line before a second list's first item is named, not joined to the first list's last item, and nothing converts"
+mold '# Roadmap\n\n## Widget alpha\nScopes:\n- `s`: a scope\n\n## No phase\n- `q`: x\n\n## Widget No phase\n  lead in\n- `w`: y\n'
+out=$($J update 2>&1); $J update --apply >/dev/null 2>&1
+expect_pass sh -c "echo \"\$0\" | grep -qF 'under ## Widget No phase: lead in' && test -f .jig/roadmap.md && test ! -e .jig/roadmap.json" "$out"
+git reset -q --hard
+msg="bug: a line before a folded Up next's first item, after No phase's items, is named, not joined to them"
+mold '# Roadmap\n\n## Widget alpha\nScopes:\n- `s`: a scope\n\n## No phase\n- `q`: x\n\n## Up next\n  up lead\n- `u`: z\n'
+out=$($J update 2>&1); $J update --apply >/dev/null 2>&1
+expect_pass sh -c "echo \"\$0\" | grep -qF 'under ## No phase: up lead' && test -f .jig/roadmap.md && test ! -e .jig/roadmap.json" "$out"
+git reset -q --hard
+msg="bug: in a metarepo, update names nothing, and --apply places Widget alpha and Widget No phase/w under Widget, q's text as written"
+mold '# Roadmap\n\n## Widget alpha\nScopes:\n- `s`: a scope\n\n## No phase\n- `q`: x\n\n## Widget No phase\n- `w`: y\n'
+out=$($J update 2>&1); $J update --apply >/dev/null 2>&1
+expect_pass sh -c "! echo \"\$0\" | grep -q 'waits to convert' && python3 -c \"
+import json; d = json.load(open('.jig/roadmap.json'))
+assert d['products'] == ['Widget'] and d['phases'] == [{'product': 'Widget', 'name': 'alpha', 'scopes': [{'id': 's', 'text': 'a scope'}]}], d
+assert d['no_phase'] == [{'id': 'q', 'text': 'x'}, {'id': 'w', 'text': 'y', 'product': 'Widget'}], d\"" "$out"
+msg="bug: the converted metarepo roadmap commits, and --product Widget lists Widget alpha/s and Widget No phase/w"
+expect_pass sh -c "git commit -qm 'GLOSSARY: roadmap converted' && $J roadmap --product Widget | grep -qE '^  Widget alpha/s ' && $J roadmap --product Widget | grep -qE '^  Widget No phase/w '"
+msg="bug: texts, notes and exit texts holding what the old form read as syntax commit, with No phase interleaved by product"
+python3 "$R/tests/roadmap.py" values && git add -A && expect_pass git commit -qm "GLOSSARY: values"
+msg="bug: --draft then --edit with no change leaves roadmap.json byte for byte"
+$J roadmap --draft >/dev/null 2>&1; out=$($J roadmap --edit 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && git diff --quiet" "$out"
+msg="bug: jig roadmap reads each as text: no wait, label or touches read from it, and --json gives each back as written"
+expect_pass sh -c "! $J roadmap | grep -E '^  Widget v[0-9]+/s ' | grep -qE 'after|labels' && $J roadmap --json --product Widget 2>/dev/null | python3 '$R/tests/roadmap.py' checkvalues"
+msg="bug: jig roadmap --id prints only the record asked for, with its key and state"
+out=$($J roadmap --id 'Widget alpha/s' 2>/dev/null)
+expect_pass python3 -c "
+import json, sys; d = json.loads(sys.argv[1])
+assert [p['key'] for p in d['phases']] == ['Widget alpha'] and [s['id'] for s in d['phases'][0]['scopes']] == ['Widget alpha/s'], d
+assert d['phases'][0]['scopes'][0] == {'id': 'Widget alpha/s', 'state': 'open', 'record': {'id': 's', 'text': 'a scope'}} and d['no_phase'] == [], d" "$out"
+msg="bug: --id takes a No phase item by its id, and a phase by its key"
+out=$($J roadmap --id 'Widget No phase/w' --id 'Widget v1' 2>/dev/null)
+expect_pass python3 -c "
+import json, sys; d = json.loads(sys.argv[1])
+assert [i['id'] for i in d['no_phase']] == ['Widget No phase/w'] and d['no_phase'][0]['record']['text'] == 'y', d
+assert [p['key'] for p in d['phases']] == ['Widget v1'] and len(d['phases'][0]['scopes']) == 1, d" "$out"
+msg="bug: --json with a filter prints only what the filter chooses"
+out=$($J roadmap --json --phase alpha 2>/dev/null)
+expect_pass python3 -c "
+import json, sys; d = json.loads(sys.argv[1])
+assert [p['key'] for p in d['phases']] == ['Widget alpha'] and d['no_phase'] == [], d" "$out"
+msg="bug: --id naming nothing the roadmap has is refused, naming it"
+out=$($J roadmap --id 'Widget alpha/nope' 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'the roadmap has no Widget alpha/nope'" "$out"
+msg="bug: one load: jig roadmap, rig, the query and a trunk commit's hook each parse trunk's roadmap once"
+printf '\n' >> docs/glossary.md && git add docs/glossary.md
+loads() { python3 "$R/tests/roadmap.py" loads "$@" 2>&1 >/dev/null | grep -x 'most parses of one roadmap: .*'; }
+out="$(loads roadmap) $(loads rig) $(loads roadmap --id 'Widget alpha/s') $(loads hook pre-commit)"
+expect_pass sh -c "test \"\$0\" = 'most parses of one roadmap: 1 most parses of one roadmap: 1 most parses of one roadmap: 1 most parses of one roadmap: 1'" "$out"
+git reset -q --hard
+cd "$here"
+msg="bug: in a stand-alone repo a Widget heading stays a phase named Widget alpha, with no product, and commits"
+pcnew "$T/splace" && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
+mkdir -p docs && printf '# Glossary\n\n## Widget\n\nThe widget.\n\nOwner: `this repo`.\n' > docs/glossary.md && git rm -q .jig/roadmap.json
+printf '# Roadmap\n\n## Widget alpha\nScopes:\n- `s`: a scope\n' > .jig/roadmap.md && git add -A && git -c core.hooksPath=/dev/null commit -qm old
+$J update --apply >/dev/null 2>&1
+expect_pass sh -c "python3 -c \"import json; d = json.load(open('.jig/roadmap.json')); assert d['products'] == [] and d['phases'] == [{'name': 'Widget alpha', 'scopes': [{'id': 's', 'text': 'a scope'}]}], d\" && git commit -qm converted && $J roadmap | grep -qE '^  Widget alpha/s '"
+msg="bug: a fenced (after …), (needed by …) and (labels …) in a note stay note text, byte for byte, and wait on nothing"
+git rm -q .jig/roadmap.json && printf '# Roadmap\n\n## a\nSee:\n```\n(after b)\n(needed by c)\n(labels ui)\n```\n\nScopes:\n- `s`: x\n\n## b\nScopes:\n- `t`: y\n' > .jig/roadmap.md
+git add -A && git -c core.hooksPath=/dev/null commit -qm old2 && $J update --apply >/dev/null 2>&1
+expect_pass sh -c "python3 -c \"import json; a = json.load(open('.jig/roadmap.json'))['phases'][0]; f = chr(96) * 3; assert a['note'] == '\\n'.join(['See:', f, '(after b)', '(needed by c)', '(labels ui)', f]) and 'after' not in a and 'needed_by' not in a, a\" && git commit -qm converted2 && $J roadmap | grep -qE '^  a/s +open\$'"
+msg="bug: the conversion's check fires on its output: a record losing a note line is named, with that line"
+expect_pass python3 "$R/tests/roadmap.py" lossy
+msg="bug: the class is closed, conversion side: each line inserted anywhere in a rich old roadmap is named, or held under its heading"
+expect_pass python3 "$R/tests/roadmap.py" sweep
+msg="bug: no reader parses Markdown: the internal form's patches are gone from jig.py"
+expect_pass sh -c "! grep -nwE 'HOLD|_HEADS|unkept|roadmap_md_of|roadmap_json_of|tail_field' '$P/jig/jig.py'"
+cd "$here"
 # The one list in rig and the readers.
 RB="$T/rb"; pcnew "$RB" && mkdir -p docs src && printf '# X\n\nX is.\n' > docs/x.md && printf 'x = 1\n' > src/x.py
 git add -A && git commit -qm init && $J init >/dev/null && board "b['docmap'] = {'docs/x.md': ['src/**']}" && git add -A && git commit -qm board
@@ -11553,14 +11630,14 @@ out=$(cd "$MM" && git switch -q -c noowner && sed -i.bak '/^Owner: `pd`.$/d' doc
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '## Delta has no .Owner:. line here, though HEAD gives it one, and .jig/roadmap.json heads ## Delta alpha'" "$out"
 # The product renamed at the merge, the old term kept: step 2 reads the name M's roadmap holds the
 # phases under.
-mpara pr '# Roadmap\n\nThe plan for rex.\n- `z`: not a scope\n\n## alpha\nScopes:\n- `r`: the r\n'
+mpara pr '# Roadmap\n\n## alpha\nThe plan for rex.\n- `z`: not a scope\n\nScopes:\n- `r`: the r\n'
 mspec sr alpha/r && mplant "sr"
 $J move-in --product Rex --definition "The rex." --apply >/dev/null 2>&1 && git commit -qm "specs: move-in" >/dev/null 2>&1
 ( cd "$MM" && git branch -q behind main )   # cut before the merge below brings in Rex and Rover
 ( cd "$MM" && git switch -q propose/pr-move-in && printf '\n## Rover\n\nThe rex, renamed.\n\nOwner: `pr`.\n' >> docs/glossary.md && rmd && sed -i.bak 's/^## Rex alpha$/## Rover alpha/' .jig/roadmap.md && rj \
   && rm -f .jig/*.bak && git add -A && git commit -qm "GLOSSARY: Rex is Rover" && $J reviewed >/dev/null \
   && git switch -q main && git merge -q --no-ff --no-edit propose/pr-move-in ) >/dev/null 2>&1
-msg="movein: M keeps Rex and adds Rover at the merge; the item-shaped preamble line is no scope in M's roadmap"
+msg="movein: M keeps Rex and adds Rover at the merge; the item-shaped note line is no scope in M's roadmap"
 expect_pass sh -c "cd '$MM' && grep -qx '## Rex' docs/glossary.md && $RMAP md .jig/roadmap.json | grep -qx '## Rover alpha' && ! $J roadmap | grep -q 'alpha/z'"
 msg="movein: step 2 with no --product reads Rex from its record and is refused, naming ## Rex alpha missing, Rex and Rover, and --product; nothing staged"
 out=$($J move-in --apply 2>&1); rc=$?
