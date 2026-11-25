@@ -13,14 +13,14 @@ Five changes to where jig keeps things and in what format, built as one job:
 2. The roadmap becomes queryable JSON with a chart command.
 3. The spec's `Later:` line retires: work not built stays on the roadmap.
 4. The glossary takes one form, in which product headings carry `Repo:` and `Kind:`, and which jig checks and sorts.
-5. The rulebook becomes a folder of rulesets. Every record gets a template, `.jig/` names are lowercase, and jig's text says "the owner" throughout.
+5. The rulebook becomes a folder of rulesets. Every record gets a template, `.jig/` names are lowercase, jig's text says "the owner" throughout, and the rigger is the designer.
 
 In more detail:
 1. `docmap`, `boards`, `deep_subsystems` and `not_docs` move from `.jig/config.json` to `.jig/docmap.json` and are queried through `jig docmap`.
 2. `.jig/roadmap.json` replaces `.jig/roadmap.md`. It names the products it includes by their glossary terms. `jig roadmap show` prints a dependency-ordered chart in place of `ROADMAP.md`.
 3. `Later:` is retired. A spec takes only what it builds, and work not built stays on the roadmap as unspecced work.
 4. `docs/glossary.md` takes one form, `# Basic terms` then product H1, feature H2 and term H3. Product H1s carry `Repo:` and `Kind:`, and a term's controlling repo is its product's `Repo:`. The form is checked at commit and sorted at merge, and two commands query it.
-5. The rulebook becomes `.jig/rules/rules-<ruleset>.md`, with metarepo and pararepo rules only in those repos. Every record gets a template in `.jig/templates/`. Names under `.jig/` are lowercase, and jig's text says "the owner" throughout.
+5. The rulebook becomes `.jig/rules/rules-<ruleset>.md`, with metarepo and pararepo rules only in those repos. Every record gets a template in `.jig/templates/`. Names under `.jig/` are lowercase, and jig's text says "the owner" throughout. The rigger, the regular chat session once called the app manager, is the designer everywhere: `/jig:designer` and `jig designer <repo>`. `/jig:rig` and `jig rig` stay as they are.
 
 ## Done when
 
@@ -114,6 +114,9 @@ From part 5 (rules, templates, names, wording):
 - [ ] The ledgers are `.jig/ledgers/deferred.md`, `workarounds.md` and `buffer.md`, and the templates are renamed to match. `jig update --apply` renames each with `git mv`, and re-points the lines jig wrote that cite them, in AGENTS.md and jig's own files. It rewrites the deferred ledger's header cell `Lane / handoff` to `Job / handoff` and changes no row (smoke).
 - [ ] `find plugin/templates/jig plugin/templates/ledgers -name '*[A-Z]*'` finds nothing, and no path jig writes under `.jig/` has a capital.
 - [ ] Skills, rules, templates and jig.py's messages and comments say "the owner" where they said "the user". There are 44, 2, 0 and 5 today. `grep -rni 'the user' plugin` finds nothing. RULES' `Accepted (Dave, 2026-11-10)` example (L1238) and the docstring at L6116 say `the owner`.
+- [ ] The rigger is the designer everywhere. `plugin/skills/rigger/` becomes `plugin/skills/designer/` (`/jig:designer`), and `jig rigger <repo>` becomes `jig designer <repo>`. The code names follow: `cmd_rigger`, `RIGGER_PARTS`, the argparse entry and its help, and the `handoff.md` header. RULES' § Riggers becomes § Designers, and the glossary's `## Rigger` becomes `## Designer`. Every mention changes in the skills (relay, send, hubnode, stage, fix, adopt, update, redocument, retro), `docs/commands.md`, `docs/metarepos.md` and smoke.
+- [ ] The per-machine repos list's `rigger` key (a designer's folder) is written as `designer`. jig reads the old key until a save rewrites it, so an existing folder keeps working (smoke).
+- [ ] `/jig:rig`, `jig rig`, "rig" in rig's own sense, and the substring in "trigger" stay unchanged. `grep -rnw 'rigger\|riggers\|Rigger\|Riggers' plugin docs tests` finds only the old-key read and its smoke case.
 
 Every part:
 - [ ] `.jig/decisions.md` `## Unreleased` has Added, Changed and Removed lines for each part. `**Breaking:**` lines cover:
@@ -168,6 +171,7 @@ Every part:
     - The re-sort in `cmd_merge` L2044.
     - `cmd_decision` L7074, `entry_touches` L7199, argparse `decision` and a new `glossary`.
   - **Part 5:**
+    - The rigger: `cmd_rigger` and its argparse entry (L8540), `RIGGER_PARTS`, the repos list's `rigger` key (L8271, L8409, L8451-8452, L8555), the `handoff.md` header.
     - RULES.md as a path: `cmd_reading_list` L3275, `RETIRED_RULES` L4119, `doc_homes` L4139, L5048, survey's presence check L5275, `LAYOUT` L13446, `TOOL_FILES` L13461, the `.gitignore` text L13504/13522, `RETIRED_LINES` and the AGENTS.md checks L14456-14471 and L14688-14702, update's `sources` L15081, L16199.
     - RULES.md cited in messages (about 68), and the kickoff L1301.
     - Ledger names: `WORKAROUNDS` L36, `DEFERRED` L39, `BUFFER` L7999, `BUFFER_HEAD` L12520, `BUFFER_SEED` L17564.
@@ -182,6 +186,7 @@ Every part:
   - the Decision log example L1238.
 - `plugin/templates/jig/docs-page.md` → `.jig/templates/page.md`'s source, beside new templates for the handoff note, glossary term, glossary product, phase, scope and no-phase item. The work role picks their folder in `plugin/templates/`.
 - `plugin/templates/ledgers/DEFERRED.md`, `WORKAROUNDS.md`, `BUFFER.md` → lowercase
+- `plugin/skills/rigger/` → `plugin/skills/designer/`, and every skill naming the rigger: relay, send, hubnode, stage, fix, adopt, update, redocument, retro.
 - `plugin/templates/specs/_template.md` (L6, L19), `plugin/templates/process.md`, `plugin/templates/hardware.md`, `plugin/templates/skills/_template/SKILL.md`, `plugin/templates/AGENTS.md`
 - `plugin/skills/*/SKILL.md`: every skill, for the rulesets it reads and for "the owner". In particular:
   - hardware L78, L97; adopt L44; work L49, L82-84; retro L8, L14-30; redocument L118, L199; survey L28;
@@ -190,7 +195,7 @@ Every part:
   - bug L64; rig L79; review L50; stage.
 - `tests/smoke.sh`, and a chart fixture under `tests/fixtures/`
 - `README.md` (L32-34, L96-97)
-- `docs/records.md`, `docs/metarepos.md`, `docs/commands.md`, `docs/hooks.md`, `docs/jobs.md`, `docs/workflows.md`
+- `docs/records.md`, `docs/metarepos.md` and `docs/commands.md` (the designer, too), `docs/hooks.md`, `docs/jobs.md`, `docs/workflows.md`
 - `docs/glossary.md`: § Board, § Roadmap, § Phase, § Scope, § Label (`reading-list --claims` lists each copy, and each is updated or made a pointer)
 - `.jig/decisions.md`
 - Process homes (RULES.md, Homes): the two spec rules and the rulesets are the rulebook's. Which ruleset a role reads is the role's skill.
@@ -227,6 +232,8 @@ Every part:
   2. Out of scope never defers. Work worth building later goes onto the roadmap as a scope or `No phase` item on the owner's word, and review blocks a deferral written as prose.
 - The owner, 2026-11-25, amending rule 1: "I disagree with that rule in-so-far as a scope is probably a less specific definition than a spec, a scope's text should be treated more like a staged document when turned into a spec. The parts that come out dont have to stay unchanged, the parts that dont get built yet stay in the scope unchanged. That way homeless lines don't get pushed into odd places, too." This replaces "split the scope first in a roadmap change": the spec takes the parts it builds, in its own words if it likes, and the parts not built stay in the scope's text, unchanged, with the scope open for them.
 - The owner, 2026-11-25, choosing how part of a scope is taken: "Splitting the scope in a roadmap change is a fine approach. Which one is easier and more reliable?", then "Splitting it is". A roadmap change on the owner's yes splits the scope: the built part becomes a new scope the spec takes whole, in its own words if it likes, and the parts not built stay in the original scope, its id and their text unchanged, so a wait on that id holds until the rest is built.
+- The owner, 2026-11-25, renaming the rigger: "I think we should change the name of "rigger" that runs in a regular cowork session, what was once "app manager". Let's change it to "designer"." Asked where it goes, the owner folded it into part 5, which already standardizes names and sweeps every skill, and kept `/jig:rig` as it is: only the rigger is renamed.
+- Interpreted: the repos list's `rigger` key is read as the old name of `designer` until a save rewrites it, so a designer folder set before the rename keeps working with no step of the owner's.
 - The owner, 2026-11-24, on table glossaries: "stop reading table rows as terms at once".
 - The owner, 2026-11-24, on `Basic terms`: control goes to "the repo whose glossary holds it".
 - The owner, 2026-11-24, on the JSON fields: "once in jig.py, the template a copy".
