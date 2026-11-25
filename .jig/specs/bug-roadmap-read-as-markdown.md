@@ -223,7 +223,7 @@ Part B: the conversion is the one place the old parser runs.
   It also has No phase items interleaved by product. Each one commits through the hook,
   survives `jig roadmap --draft` then `--edit` with no change byte-identical, and is listed by
   `jig roadmap` as text, with no waits, labels or touches read from it.
-- [ ] `grep -nE 'HOLD|_HEADS|unkept|roadmap_md_of|roadmap_json_of|tail_field' plugin/templates/jig/jig.py`
+- [ ] `grep -nwE 'HOLD|_HEADS|unkept|roadmap_md_of|roadmap_json_of|tail_field' plugin/templates/jig/jig.py`
   finds nothing. `parse_roadmap(`, `parse_section(` and `parse_no_phase(` are called only from
   the conversion's functions and `tests/roadmap.py`.
 - [ ] tests/smoke.sh:5885 and 6146 assert the opposite. A text ending `(after …)` (or the

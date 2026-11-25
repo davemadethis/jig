@@ -105,7 +105,9 @@ that spec carries the mark.
 - **Roles.** Leave a spec's `## Roles` empty: you can't run `jig roles` against the
   target's config, and `resolve` fills it.
 - **A sweep** that skips work the target already has must read its `.jig/specs/`,
-  `.jig/roadmap.json` and `.jig/decisions.md`. Request read access to each; if you can't get it,
+  `.jig/roadmap.json` and `.jig/decisions.md`: this runs in a chat with no jig to ask, so the
+  roadmap file is read as it is, where a repo session asks `jig roadmap --json`. Request read
+  access to each; if you can't get it,
   say the skip step wasn't done, so the resolving session checks for duplicates.
 
 ## Resolving

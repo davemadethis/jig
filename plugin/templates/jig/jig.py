@@ -12009,12 +12009,21 @@ def uncarried(md: str, owners: dict[str, str], check=None) -> list[str]:
     return out
 
 
+def roadmap_owners(fam: "Family", glossary: str | None = None) -> dict[str, str]:
+    """The owners a roadmap file's products are placed and judged by: a metarepo's glossary
+    (GLOSSARY's text where given, else Family's), and none in any other repo, a pararepo keeping
+    its own roadmap included. The hook and the conversion both ask it, so they can't differ."""
+    if fam.kind != "meta":
+        return {}
+    return term_owners(glossary) if glossary is not None else fam.owners
+
+
 def convert_roadmap(root: Path, here: Path) -> None:
     """`jig update --apply`: .jig/roadmap.md as roadmap.json, then the old file and a ROADMAP.md
     jig generated removed. Products are placed as Family places them: by the glossary in a
     metarepo, nowhere else, as the hook and every reader read them."""
     md = read_raw(root / OLD_ROADMAP)
-    (root / ROADMAP).write_text(roadmap_dumps(roadmap_data(md, family(root).owners)))
+    (root / ROADMAP).write_text(roadmap_dumps(roadmap_data(md, roadmap_owners(family(root)))))
     git("rm", "-q", "-f", "--", OLD_ROADMAP, check=True)
     git("add", "--", ROADMAP, check=True)
     view = root / OLD_ROADMAP_VIEW
@@ -12026,9 +12035,10 @@ def conversion_waits(root: Path) -> list[str]:
     """uncarried for ROOT's old roadmap, with Family's owners and the hook's own checks."""
     trunk = Board.trunk_name(root)
     fam = family(root, trunk)
+    owners = roadmap_owners(fam)
     have = set(Snapshot(trunk).ls("docs/"))
-    return uncarried(read_raw(root / OLD_ROADMAP), fam.owners,
-                     lambda raw: roadmap_file_problems(raw, fam.owners, fam.glossary_name)
+    return uncarried(read_raw(root / OLD_ROADMAP), owners,
+                     lambda raw: roadmap_file_problems(raw, owners, fam.glossary_name)
                      + roadmap_problems(raw, fam, have, trunk))
 
 
@@ -13214,6 +13224,10 @@ def section_refusals(old: str, new: str, may, owner_of, who: str, newcomer: bool
         if old_s.get(h, "") == new_s.get(h, "") or may(h):
             continue
         name = f"## {h}" if h else "`products`"
+        if not h:
+            out.append(f"`products` adds or drops a product {who} doesn't own, and no move of {who}'s "
+                       "carries items into: a product's inclusion is the metarepo hubnode's")
+            continue
         if h not in old_s and newcomer:
             out.append(f"{name} names no product {who} owns: a new product is the metarepo "
                        "hubnode's, its glossary term and Owner: line first")
@@ -14114,11 +14128,14 @@ def proposal_section_refusals(branch: str, fork: str, text: str, fam: "Family", 
                  (owner in ("", THIS_REPO) if not to else name_in(owner, {to}))]
         return bool(pages) and only_items_for(old_s.get(h, ""), new_s.get(h, ""), pages)
     def products_owned() -> bool:
-        # `products` changes only by products the proposing repo owns, added or dropped.
+        # `products` changes with the sections the proposal may change: a product the proposing
+        # repo owns, added or dropped, or one added for the items a move carries into it.
         a = set((roadmap_records(fork) or {}).get("products") or [])
         b = set((roadmap_records(text) or {}).get("products") or [])
         owners = fam.owners if fork_owners is None else {**fork_owners, **fam.owners}
-        return all(owners.get(p, "") == repo for p in a ^ b)
+        carried = lambda p: any(heading_product(h, fam.owners) == p and old_s.get(h, "") != t and follows(h)
+                                for h, t in new_s.items() if h)
+        return all(owners.get(p, "") == repo or (p in b - a and carried(p)) for p in a ^ b)
     owns = lambda h: (whose(h) == repo or follows(h)) if h else products_owned()
     owner = lambda h: (lambda o: "this repo" if o in ("", THIS_REPO) else o)(whose(h))
     return section_refusals(fork, text, owns, owner, repo, True)
@@ -14198,7 +14215,7 @@ def roadmap_rules(board: "Board", branch: str, staged: bool, paths: list[str],
         # Products are a metarepo's (Family reads them only there), so elsewhere a product is
         # refused as jig roadmap reports it, never committed for the readers to miss.
         shape = roadmap_file_problems(roadmap_raw(staged=staged) if staged else roadmap_raw(cwd=Path(".")),
-                                      term_owners(in_index(GLOSSARY, staged)) if fam.kind == "meta" else {})
+                                      roadmap_owners(fam, in_index(GLOSSARY, staged)))
         if shape:
             return shape
     if on_trunk and ROADMAP in paths:

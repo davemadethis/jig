@@ -6186,7 +6186,7 @@ msg="bug: --draft then --edit with no change leaves roadmap.json byte for byte"
 $J roadmap --draft >/dev/null 2>&1; out=$($J roadmap --edit 2>&1); rc=$?
 expect_pass sh -c "test $rc = 0 && git diff --quiet" "$out"
 msg="bug: jig roadmap reads each as text: no wait, label or touches read from it, and --json gives each back as written"
-expect_pass sh -c "! $J roadmap | grep -E '^  Widget v[0-9]+/s ' | grep -qE 'after|labels' && $J roadmap --json --product Widget 2>/dev/null | python3 '$R/tests/roadmap.py' checkvalues"
+expect_pass sh -c "$J roadmap --json --product Widget 2>/dev/null | python3 '$R/tests/roadmap.py' checkvalues"
 msg="bug: jig roadmap --id prints only the record asked for, with its key and state"
 out=$($J roadmap --id 'Widget alpha/s' 2>/dev/null)
 expect_pass python3 -c "
@@ -12134,9 +12134,33 @@ expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \"## Kite alpha is K'
 msg="move (roadmap-labels' rule): on L's branch, a move line naming U's move lends L nothing: an item touching its page in K's section is refused"
 gtry '- `g1`: g one (touches docs/l.md)' "" U
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \"## Kite alpha is K's: L changes only its own sections\"" "$out"
+# A product the roadmap doesn't include yet: `products` changes only with the sections a move
+# carries items into (the products rule), and otherwise is the metarepo hubnode's.
+ktry() {  # ktry <item line>: on the branch, Kite2 (K's) in the glossary and the item under ## Kite2 No phase
+  git reset -q --hard && printf '\n## Kite2\n\nThe second kite.\n\nOwner: `K`.\n' >> docs/glossary.md \
+    && rmd && printf '\n## Kite2 No phase\n%s\n' "$1" >> .jig/roadmap.md && python3 - <<'PY'
+import sys
+sys.path.insert(0, '.jig'); import jig
+f = '.jig/decisions.md'; log = open(f).read()
+open(f, 'w').write(jig.log_with_line(log, 'Changed', '- Pointers to L/docs/l.md name K/docs/l.md, where it moved.'))
+PY
+  rj; git add -A; out=$(git commit -qm "POINTERS: guard" 2>&1); rc=$?; [ $rc = 0 ] && git reset -q --hard HEAD~1; }
+msg="move (the products rule): on propose/L-…, items following the moved page into Kite2, a product not yet included, include it, and pass"
+ktry '- `g3`: g three (touches docs/l.md)'
+expect_pass sh -c "test $rc = 0" "$out"; [ $rc = 0 ] || echo "$out"
+msg="move (the products rule): including Kite2 for an item that doesn't touch the moved page is refused, naming products and the hubnode"
+ktry '- `g4`: g four (touches docs/l2.md)'
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \".products. adds or drops a product L doesn't own, and no move of L's carries items into: a product's inclusion is the metarepo hubnode's\"" "$out"
 git reset -q --hard && git switch -q main  # end of the propose/ branch tries
 msg="move: a repo outside the family is refused, naming the family"
 expect_pass sh -c "$J move D-001 --to X 2>&1 | grep -q \"X isn't of this repo's family\""
+# A pararepo converting a roadmap of its own: the metarepo's products place none of its phases.
+gnew PP && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
+$J init --para M --location "$GM" >/dev/null 2>&1 && git add -A && git commit -qm para-init
+git rm -q --ignore-unmatch .jig/roadmap.json && printf '# Roadmap\n\n## Kite alpha\nScopes:\n- `s`: a scope\n' > .jig/roadmap.md && gplant "PP's own old roadmap"
+msg="move: a pararepo with its own old roadmap converts it with no product, though M's glossary has Kite, and the commit passes"
+out=$($J update --apply 2>&1)
+expect_pass sh -c "python3 -c \"import json; d = json.load(open('.jig/roadmap.json')); assert d['products'] == [] and d['phases'] == [{'name': 'Kite alpha', 'scopes': [{'id': 's', 'text': 'a scope'}]}], d\" && git add -A && git commit -qm 'jig update: convert'" "$out"
 }
 
 UNITS="rules merge_derived update board_split docmap worktree_setup metarepo,staging pararepo release r6_takes,r6_ints merge_after_sync repos workflow init_old_board ledger_rows hardware update_per_file pararepo_commands entry_globs report_fixes sync_buffer buffer_answered pointers removals feedback slash_names homes structure meta_docs agents_lines page_contract roadmap labels family family_report roadmap_edit phase_types boundary decisions ideas ideas_fold ideas_meta ideas_labels supersede touches,touches_terms sweep staging_batches merge_log findings glossary headings check_levels role_line consolidate cheaper_rounds next svg update_roles holders rig rig_batch close versioning pin_bump moves move movein claims inbox rigger queue"

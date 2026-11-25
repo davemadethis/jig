@@ -19,9 +19,12 @@ conversion writes them as roadmap.json: the one place the old parser runs.
     python3 tests/roadmap.py lossy  the conversion's check fires on its output: a conversion that
                                     loses a note line is named, with that line
     python3 tests/roadmap.py sweep  the class is closed, conversion side: each line of LINES inserted
-                                    at every position of RICH is named by the conversion, or is
-                                    held in a record of the section it was inserted in
+                                    at every position of RICH, each with a token of its own, is named
+                                    by the conversion, or held, as a whole line, in a record of the
+                                    section it was inserted in (an indented one under its parent)
 """
+from __future__ import annotations
+
 import json
 import re
 import importlib.util
@@ -74,8 +77,9 @@ Scopes:
 
 ## Up next
 - `u`: offline"""
-INSERTS = ["prose", "  indented prose", "- bullet", "  - nested", "```\n(after x)\n```", "(after x)",
-           "(labels ui)", "# H1", "<!-- c -->", "- [ ] box", "- `z`: scope"]
+# Each inserted with a token of its own, T, so a match is never a word the fixture has already.
+INSERTS = ["prose {t}", "  indented {t}", "- {t}", "  - {t}", "```\n(after {t})\n```", "(after {t})",
+           "(labels {t})", "# {t}", "<!-- {t} -->", "- [ ] {t}", "- `{t}`: scope {t}"]
 
 
 def owners() -> dict:
@@ -160,24 +164,48 @@ elif what == "sweep":
     lines = RICH.split("\n")
     assert not jig.uncarried(RICH, owners), jig.uncarried(RICH, owners)
     bad = []
+
+    def held(line: str, phase: dict | None, recs: list[dict], parent: str | None) -> bool:
+        """Whether LINE, as inserted, is in the section's records: a whole line of the phase's
+        note or of a record's text, an exit check, a record, or the phase's waits."""
+        line = line.rstrip()
+        note = (phase or {}).get("note", "").split("\n")
+        texts = {r.get("id"): str(r.get("text") or "").split("\n") for r in recs}
+        if line[:1].isspace():
+            # Indented: under the record it hung from, or in the note it sat in.
+            pid = (m.group(1) if parent and (m := jig.SCOPE_LINE.fullmatch(parent)) else None)
+            return (pid in texts and line in texts[pid]) or line in note
+        if line in note:
+            return True
+        if m := re.fullmatch(r"- \[([ xX])\] (.*)", line):
+            return any(e.get("text") == m.group(2) for e in (phase or {}).get("exit") or [])
+        if m := jig.SCOPE_LINE.fullmatch(line):
+            return any(r.get("id") == m.group(1) and str(r.get("text") or "").split("\n")[0] == (m.group(2) or "")
+                       for r in recs)
+        if (w := jig.phase_waits(line)) is not None:
+            return all(set(refs) <= set((phase or {}).get(key) or [])
+                       for refs, key in ((w[0], "after"), (w[1], "needed_by")) if refs)
+        return False
     for k in range(len(lines) + 1):
         heads = [l for l in lines[:k] if l.startswith("## ")]
         under = (heads[-1][3:].strip() if heads else "")
         under = jig.NO_PHASE if under == "Up next" else under
-        for ins in INSERTS:
-            md = "\n".join(lines[:k] + ins.split("\n") + lines[k:])
+        start = max((n for n, l in enumerate(lines[:k]) if l.startswith("## ")), default=-1)
+        parent = next((l for l in reversed(lines[start + 1:k]) if l.strip() and not l[:1].isspace()), None)
+        for j, template in enumerate(INSERTS):
+            ins = template.format(t=f"tok{k}x{j}").split("\n")
+            md = "\n".join(lines[:k] + ins + lines[k:])
             if jig.uncarried(md, owners):
                 continue
             data = jig.roadmap_data(md, owners)
             if problems := jig.roadmap_file_problems(jig.roadmap_dumps(data), owners):
                 bad.append((k, ins, "converts, then refused", problems))
                 continue
-            # The section it was inserted in, by the test's own split: a phase whole, or a list.
-            held = [p for p in data["phases"] if jig.phase_key(p) == under] + \
+            # The section it was inserted in, by the test's own split: a phase, or a list.
+            phase = next((p for p in data["phases"] if jig.phase_key(p) == under), None)
+            recs = (phase or {}).get("scopes") or [] if phase else \
                 [i for i in data["no_phase"] if jig.list_key(i.get("product", "")) == under]
-            words = [w for w in re.findall(r"[A-Za-z0-9][A-Za-z0-9_./-]*", ins) if w not in ("after", "labels", "needed", "by")]
-            dump = json.dumps(held, ensure_ascii=False)
-            if not under or not all(w in dump for w in words):
+            if not under or not all(held(l, phase, recs, parent) for l in ins if l.strip()):
                 bad.append((k, ins, "converts, and isn't held under", under or "the top"))
     assert not bad, "\n".join(map(str, bad))
 else:
