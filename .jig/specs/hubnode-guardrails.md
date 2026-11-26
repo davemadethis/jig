@@ -40,9 +40,6 @@ rewind trunk or a job's branch, or wipe uncommitted work, without the owner's ap
    - [ ] In this repo, `tests/smoke.sh` run with no section names is refused unless `check.sh
      --full` started it, which sets a variable naming the complete check. `smoke.sh <section>…`
      works as today (smoke).
-   - [ ] The work, review and hubnode skills say a check or smoke section already run once for the
-     change in hand is run again only on the owner's OK, asked through the hubnode with what would
-     rerun and why. A failure is reported, not rerun.
    - [ ] The hubnode skill says a brief never asks a work session or reviewer for the complete
      suite. The work skill says to run `check` and the sections the change touches, and to refuse
      a request for more.
@@ -122,8 +119,6 @@ rewind trunk or a job's branch, or wipe uncommitted work, without the owner's ap
 ## Decisions
 - The owner, 2026-11-25, on strikes (item 1): "Now we're talking - that is solving the problem."
 - The owner, 2026-11-25, setting the whole rule (items 1 and 4): "I dont need to review blocking, blocking get fixed as do should-fix, and you can take from zero up to as many optionals as there are should-fix. After a 3rd strike the bug starts. After that, review findings with me." So before a part's bug spec, every blocking and should-fix finding goes to the work session as a fix, with no owner step; after the bug spec, every review's findings, blocking or not, go to the owner before any fix.
-- The owner, 2026-11-25, on reruns (item 2): "dont run any checks or smokes twice without stopping to review if its necessary with me".
-- Interpreted: the Stop hook's automatic `check.sh` after each turn isn't an agent's run and stays as it is; the rule covers runs an agent or the hubnode starts.
 - The owner, on the optional cap (item 5): "overcorrecting. one round of should-fix with the
   hubnode stays. what we need to cut back on are subsequent rounds without intervention … and the
   hubnodes freedom to take tons of optionals … my idea is no more optionals than there are
