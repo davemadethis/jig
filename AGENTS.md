@@ -27,7 +27,7 @@ Risk: R0 — one user, nothing shipped. Optimize for simplicity and clarity, not
 
 ## Code
 - `jig.py` is stdlib Python, one file, no AI-tool dependency. Enforcement lives there and in git hooks; skills are thin wrappers that call it.
-- Nothing Claude-specific in `plugin/templates/jig/`, templates, or `RULES.md`. Standard terms are mapped in `RULES.md`, not adopted.
+- Nothing Claude-specific in `plugin/templates/jig/`, templates, or the rules (`plugin/templates/jig/rules/`). Standard terms are mapped in the rules, not adopted.
 - Comments explain *why*. A comment restating the code is a naming failure.
 - Every feature has a row in `marketing/FEATURES.md`: what, where it came from, why, what it is not. A row with no why is a cut candidate. Add the row before the feature.
 - `marketing/DIFFERENCES.md` and `marketing/FEATURES.md` are repo docs, not plugin files. Nothing in `plugin/` references them.
