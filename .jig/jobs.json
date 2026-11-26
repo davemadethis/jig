@@ -1,7 +1,7 @@
 {
   "jig-0.17.0-upgrade": {
     "spec": ".jig/specs/jig-0.17.0-upgrade.md",
-    "state": "claimed",
+    "state": "ready",
     "after": [],
     "owns": [],
     "shares": [
