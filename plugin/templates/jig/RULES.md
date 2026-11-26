@@ -302,8 +302,7 @@ git keeps it.
 A heading is its page's address, as a section number was, so a page holds each heading once,
 at any level: two `### Errors` under different sections are renamed apart (`### Sync errors`).
 The hook refuses a change that leaves a page under `docs/` with more copies of one heading than
-it had, compared as `§` compares them: code and emphasis marks dropped, case kept. In
-`docs/glossary.md` a table row's term is an address too, and counts with the headings. A
+it had, compared as `§` compares them: code and emphasis marks dropped, case kept. A
 heading quoted in fenced code is an example, not an address, and isn't counted. A page that
 already holds a duplicate isn't refused for it, wherever the change moved it from. A
 `CHANGELOG.md` or `DECISIONS.md` there, a datasheet and a file `not_docs` matches are exempt.
@@ -439,18 +438,52 @@ needs stays; the rest of how the repo is worked, code style included, to a secti
 `.jig/process.md`; a release step to `.jig/scripts/release.sh`; a fact about the product to its
 system's page; history to git. How the repo is worked never goes to a page.
 
-A repo's terms are its glossary, `docs/glossary.md`: a `# Glossary` title, an optional lead
-line, then the terms, each saying what it means and what it is not, in one of two forms: a
-`## <term>` heading per term, or one table whose first column is the term, a row per term, its
-other columns the repo's own (an owner, what the screen calls it). Either way
-`docs/glossary.md § <term>` names one. The glossary is no system's page: it is not in `docmap`,
+A repo's terms are its glossary, `docs/glossary.md`, in one form, with no title heading:
+- `# Basic terms` first, holding the terms every product uses, each an `###` heading;
+- then a product per `#` heading: the software a repo builds, or the hardware it runs on. Its
+  own definition is the paragraph under it, and it carries a `Repo:` line (the repo that builds
+  it, or `none`) and a `Kind:` line (`software` or `hardware`). A repo builds one software
+  product, so two products naming one repo can't both be `Kind: software`;
+- under a product, its own terms as `###` headings before its first feature, then a feature per
+  `##` heading, each with its own terms as `###` headings.
+
+A product, a feature and a term are each a term, and each heading says what it means and what
+it is not. A term may carry one field line, `Binds: <product or feature>, …`, naming where it
+applies beyond its own product, and only in a metarepo's glossary. A feature and `Basic terms`
+carry none. A term's controlling repo is its product's `Repo:`; a term under `Basic terms`, or
+under a product with `Repo: none`, is controlled by the repo whose glossary holds it. In a
+stand-alone repo the products are its software and the hardware it runs on, and the features
+its own; in a pararepo a product is one from the metarepo's glossary. `jig init` writes `Basic
+terms` and, in a stand-alone repo, its software product named for the board. `§` is written only
+in a pointer, `docs/glossary.md § <term>`, and names a heading at any of the three levels; a
+table row is no term.
+
+A commit changing the glossary is refused for each of these it adds: a first `#` heading that
+isn't `Basic terms`, an `##` under `Basic terms`, a heading deeper than `###`, a table, two
+headings that fold to one term (as a label folds), a product missing `Repo:` or `Kind:`, a field
+line its heading may not carry (an `Owner:` line's refusal names `Repo:`, the line it became), a
+`Binds:` naming no product or feature heading, two products naming one repo with `Kind:
+software`, and a product the roadmap includes or names dropped. One already there doesn't
+refuse the commit, so an older glossary stays editable until its rebuild; until it is in the
+form, any heading carrying `Repo:` reads as a product. Order isn't refused: `jig merge`
+re-sorts the glossary in the merge commit, `Basic terms` first, then the products in
+alphabetical order, and within each its own terms first, then its features, each set in
+alphabetical order. Whole entries move, within their parent, and no word changes; one already
+in order stays byte for byte. `jig glossary "<term>"` prints a term's heading path, its
+definition, its `Binds:` (a product's `Repo:` and `Kind:`) and its controlling repo, and `jig
+glossary add` writes one in its sorted place, refusing a duplicate. `jig update --apply`
+rewrites each `Owner: <repo>` line (`this repo` as the repo's own name) as `Repo: <repo>` and
+`Kind: software`; where two products name one repo, it writes `Repo:` on both, `Kind:` on
+neither, and says the owner marks one `software` and the other `hardware`. It reports a glossary
+out of the form, and re-forms nothing: its rebuild is the owner's. The glossary is no system's page: it is not in `docmap`,
 covers no files, and the page contract doesn't apply to it. No other glossary is a home: survey
 and update list a `## Glossary` section of the root `README.md`, or a root `GLOSSARY.md`, with
 `docs/glossary.md` as where it goes, and survey names each term in the glossary written as a
-bold word opening a paragraph (`**term** — …`) rather than a heading or a row.
-`jig update --apply --glossary`, on the owner's yes, moves it: each term in the form it has (a
-README's `### <term>` becomes `## <term>`, a bold-paragraph term gets a heading, a table moves
-as the table), the old section or file removed, and in the same change every pointer to the old
+bold word opening a paragraph (`**term** — …`) rather than a heading.
+`jig update --apply --glossary`, on the owner's yes, moves it under `# Basic terms`: a README's
+`### <term>` stays `### <term>`, a GLOSSARY.md's `## <term>` becomes `### <term>`, a
+bold-paragraph term gets an `###` heading, and a table moves as the table, listed with what else
+the one form refuses, for the session to rebuild before committing; the old section or file removed, and in the same change every pointer to the old
 home rewritten (`README.md § <term>` to `docs/glossary.md § <term>`, a pointer to the
 section itself and `GLOSSARY.md` to `docs/glossary.md`). The dry run lists each line it rewrites; each pointer it
 can't (a section naming no term, prose naming the README), and each line the hook would refuse
@@ -484,7 +517,7 @@ absent, on trunk (R5), and removes each emptied Undefined section where the page
 on trunk, or in a metarepo a job's worktree (M4), where it removes only the sections whose
 entries trunk's roadmap holds. In a pararepo with no roadmap of its own whose metarepo holds
 none of its products, or can't be reached, it writes nothing and refuses, saying to propose the
-product to the metarepo first (a glossary term with an `Owner:` line naming the repo), then
+product to the metarepo first (a glossary product with a `Repo:` line naming the repo), then
 `jig move-in`; the dry run says the same.
 
 ### The findings record
@@ -992,7 +1025,7 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
   naming each scope: re-point the label in the same commit. A label is never a ref: it orders
   nothing, changes no state and blocks nothing, so a ref naming one is a ref to nothing.
   `jig roadmap` prints each scope's labels after its state, and `jig roadmap --label <term>`, one of its filters (below), keeps only the scopes and items
-  carrying it, across every product, headed by the term's `Owner:`: what touches a feature,
+  carrying it, across every product, headed by the repo controlling the term (its product's `Repo:`): what touches a feature,
   and which other repo's work leans on one this repo owns. A new term is the
   metarepo hubnode's; a repo labels its own scopes freely.
 - **Types**: each phase is a *Prototype*, a *Pilot* or a *Production* phase, read from its name
@@ -1007,10 +1040,10 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
 - **Filters**: `jig roadmap` takes `--product`, `--phase`, `--type`, `--state`, `--owner` and `--label`,
   each repeatable and case folded; values of one flag are or'd, different flags and'ed.
   Product, phase, type and owner choose phases: `--phase alpha` is every product's alpha,
-  `--phase "Widget alpha"` that one heading. `--owner` is the repo a product's `Owner:` names; a
-  metarepo's own phases and its `this repo` products are the metarepo's, and in a stand-alone
+  `--phase "Widget alpha"` that one heading. `--owner` is the repo a product's `Repo:` names; a
+  metarepo's own phases and the products it controls (`Repo:` naming it, or `none`) are the metarepo's, and in a stand-alone
   repo everything is the repo's; any name jig knows this repo by (`this`, its name, an alias in
-  `jig repos`) means this repo, so in a pararepo it is the products its `Owner:` names.
+  `jig repos`) means this repo, so in a pararepo it is the products whose `Repo:` names it.
   `--state` (`open`, `taken`, `done`, `blocked`, `unknown`) and `--label` (a glossary term, as
   labels match) choose scopes within them, and a phase left with no scope isn't printed. A No phase item
   matches product, owner, state and label; `--phase "No phase"` chooses the lists, and `--type`
@@ -1032,7 +1065,7 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
 - **The old form.** `jig update --apply` converts a `.jig/roadmap.md` to `roadmap.json` on trunk
   on the owner's yes: every phase, scope, item, suffix, note and exit check with its text
   unchanged, a note whole (its lists and the prose after them), lines nested under an item as
-  its text, each phase under the product its heading's `Owner:` term named, an old
+  its text, each phase under the product its heading's leading words named, a product of the metarepo's glossary, an old
   `## Up next` folded into No phase, and a parked item's text split into `text`, `stopped_at`
   and `parked` where it has that form. It is judged by its output: the converted records drawn
   in the old form again, each old line that doesn't come back under its heading and the line it
@@ -1047,8 +1080,9 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
   the checker and names the conversion as waiting on it, and the run after that commit
   converts.
 - **Products**, in a metarepo's roadmap: a phase or an item with a `product` belongs to that
-  product, a term in the metarepo's glossary with an `Owner:` line naming a pararepo (its first
-  backticked name, as `jig repos` knows it) or `this repo`, which `products` includes. Every
+  product, a product of the metarepo's glossary (a `#` heading with its `Repo:` and `Kind:`
+  lines), which `products` includes; its `Repo:` names the pararepo that builds it, as `jig
+  repos` knows it, or the metarepo itself, or `none`, and the metarepo controls the last two. Every
   other phase is one of the metarepo's own. A product in the glossary that `products` doesn't
   include gets no phase, scope or item, and nothing asks about it. Each
   product's phases are ordered among themselves in file order and have their own current
@@ -1056,7 +1090,7 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
   `after`, and a ref may name another product's phase or scope. A product's items are its list,
   their ids `<Product> No phase/<id>`. A `touches` page of a product's
   phase or item is a page of the product's owning repo, checked on that repo's trunk when it can be
-  reached. `jig roadmap` reports a product whose `Owner:` names no repo jig knows.
+  reached. `jig roadmap` reports a product whose `Repo:` names no repo jig knows.
 - **One reader.** A pararepo with no roadmap of its own reads the metarepo's live, from its
   checkout's trunk, never at the pin: a roadmap change is never released (Metarepo and
   pararepos). Every reader goes through it: `jig roadmap`, rig, reading-list, fold-in and the
@@ -1130,7 +1164,7 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
   decides: a `BUFFER.md` row and `jig propose`, the change written on its
   `propose/<repo>-<slug>` branch in the metarepo, never on its trunk, and merged there at the
   next sync the owner calls. A pararepo's merge writes nothing to the metarepo's roadmap.
-  Labels, names and new products (the glossary term and its `Owner:` line) are the metarepo's
+  Labels, names and new products (the glossary product and its `Repo:` and `Kind:` lines) are the metarepo's
   hubnode's: a product a pararepo proposes with its phases (`jig move-in`) is decided with them,
   name and definition and all, at that proposal's merge, where its hubnode may change any of
   them first.
@@ -1173,8 +1207,8 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
      unless its name's leading words are already a term the metarepo's glossary says this repo
      owns, and each No phase item takes the product too; each ref in `after` and `needed_by` is
      mapped the same way, and every other field is kept as written. With no `<Product>` term on
-     the metarepo's trunk, the same proposal carries it: `## <Product>`, the sentence
-     `--definition` gives, and `` Owner: `<repo>`. ``, with its line under `## Unreleased`
+     the metarepo's trunk, the same proposal carries it: `# <Product>` in its sorted place, with
+     `Repo: <repo>`, `Kind: software` and the sentence `--definition` gives, and its line under `## Unreleased`
      `### Added`, so one yes decides the product and its phases. A term another repo owns, a
      mapped phase the metarepo's roadmap already has is refused before anything is written. `--apply` adds one `BUFFER.md` row, opens `propose/<repo>-move-in`
      carrying that row alone, listed in `.jig/specs/move-in.md` (the next free name, `move-in-2`
@@ -1189,7 +1223,7 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
      owner's yes; a job merging it from another branch is refused (R5). On the metarepo's trunk
      the hook reads a heading's product by the commit's own glossary, as by its own roadmap, so
      the term and the phases it owns land in one merge; it refuses a commit or a merge that
-     leaves a product's phases without the `Owner:` either side gave. A refused
+     leaves a product's phases without the glossary product either side had. A refused
      or failed step undoes what it wrote on both sides; a run interrupted part way may leave an
      empty `propose/` branch or its row, and a rerun recovers from either and starts the step
      again. A withdrawn proposal's spec stays as it is.
@@ -1269,7 +1303,7 @@ lists each one to backfill.
 
 Not every decision rules on a page. One that rules on a term, such as how products are named,
 names it in the glossary: `docs/glossary.md § <term>` (`<meta>/docs/glossary.md § <term>` from
-a pararepo), the term a `## <term>` heading or a table row there, matched whole. A genre's
+a pararepo), the term a heading there at any of its three levels, matched whole. A genre's
 term is its glossary heading. `§` names a glossary term only, never a heading of another page,
 and a term holding a parenthesis can't be named. A term may hold a comma: what follows it up
 to the next pointer is the term's. One that rules on no page and no term, such as a rule for
@@ -1777,8 +1811,8 @@ under `.jig/` counts, whatever the globs say, except `.jig/decisions.md`, which 
 (Documentation), and writes the glossary. The README is for outsiders and no entry file, so its
 prose changes without a log line. A metarepo that hasn't moved its glossary still names
 `README.md`, and pararepos cite only its `## Glossary` section: M3 counts a `README.md` change
-only there, until the move takes `README.md` out of `entry_files`. A release's term report reads the glossary's terms, headings
-and table rows alike, and names each term added, removed or reworded; across the release that
+only there, until the move takes `README.md` out of `entry_files`. A release's term report reads the glossary's terms, its headings
+at the three levels, and names each term added, removed or reworded; across the release that
 moves a README glossary to `docs/glossary.md`, it reads the older side's README, and names each
 term as moved. The move, in a metarepo, runs in a job's worktree (M4), and rewrites
 `entry_files` in the same change; a pararepo's `<meta>/README.md § <term>` is named at its pin
@@ -2018,6 +2052,10 @@ jig merge --number          in a merge stopped on conflicts, once resolved: numb
 jig rules [--staged]        run the rules here (`jig check`, its old name, too)
 jig job                    this branch's manifest
 jig decision <id>           a decision entry and its supersedes chain
+jig decision --page <page>  each decision entry whose Touches: names the page, or a term on it
+jig glossary "<term>"       a glossary term: its heading path, definition, fields and controlling repo
+jig glossary add "<term>" --text <t> [--under <product>[/<feature>]] [--binds a,b]   a term, in its sorted place
+jig glossary add "<product>" --repo <repo|none> --kind <software|hardware> --text <t>   a product
 jig sync                    merge trunk in, append rule applied; on a pararepo's trunk, the metarepo
 jig reviewed [--change] [--tier N --effort N] [--ran text] [--blocking N]   record that HEAD has had its review-work (or review-change), at what, and its blocking findings
 jig checked --tier N --effort N --seconds S   record that the complete check passed on HEAD

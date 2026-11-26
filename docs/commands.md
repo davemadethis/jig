@@ -53,7 +53,7 @@ yourself. Each one changes the repo, tags a release, writes your repo list, spea
 
 Setting up and checking:
 
-- `python3 .jig/jig.py init` writes the board, the decision log and the roadmap's empty structure, and installs the hooks. A pararepo gets no roadmap: it plans from its metarepo's.
+- `python3 .jig/jig.py init` writes the board, the decision log, the glossary (`# Basic terms` and the repo's software product) and the roadmap's empty structure, and installs the hooks. A pararepo gets no roadmap: it plans from its metarepo's.
 - `python3 .jig/jig.py install-hooks` rewrites the hooks.
 - `python3 .jig/jig.py rules` runs the rules here, as the hook does.
 - `python3 .jig/jig.py survey` inventories the repo against the jig shape.
@@ -88,7 +88,8 @@ Jobs, for anyone:
 
 Records:
 
-- `python3 .jig/jig.py decision <id>` prints a decision and what it replaced.
+- `python3 .jig/jig.py decision <id>` prints a decision and what it replaced. `--page <page>` prints each decision whose `Touches:` names the page, or a term on it.
+- `python3 .jig/jig.py glossary "<term>"` prints a glossary term: where it sits (product, feature), its definition, its fields and the repo that controls it. `glossary add "<term>" --text <t> [--under <product>[/<feature>]]` writes a term in its sorted place, and `--repo <repo|none> --kind <software|hardware>` writes a product. The glossary is one form: `# Basic terms`, then a product per `#` with its `Repo:` and `Kind:` lines, a feature per `##`, a term per `###`. `jig merge` re-sorts it.
 - `python3 .jig/jig.py roadmap` prints the [roadmap](glossary.md#roadmap)'s states, each phase with its type (Prototype, Pilot or Production). `--product`, `--phase`, `--type`, `--state`, `--owner` and `--label` narrow what it prints, each repeatable. `jig roadmap show` prints what they choose as a chart with no dates, each scope one column past what it waits on, one band per phase past 100 columns (`--width`). `--json` prints the records they choose as JSON, each with its key and state, and `--id <id>` only the phase, scope or item named. `--draft` and `--edit` change it: a JSON draft, checked and written. Run in the trunk checkout on a trunk with no roadmap, it commits the roadmap's empty structure first, as the other commands that read the roadmap do.
   `--label <term>` keeps the scopes and items carrying that [label](glossary.md#label), across every product,
   headed by the term's owner.

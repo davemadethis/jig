@@ -122,7 +122,7 @@ old text is left alone unless the owner raises it.
   rest to `no_phase` in `.jig/roadmap.json`, creating it when absent, and removes the emptied
   sections; a section holding other text stays, to move by hand. In a pararepo with no roadmap
   of its own it writes nothing and refuses: propose the product to the metarepo first (a
-  glossary term with an `Owner:` line naming this repo), then `jig move-in`, then sweep again. The roadmap is trunk's (R5), so
+  glossary product with a `Repo:` line naming this repo), then `jig move-in`, then sweep again. The roadmap is trunk's (R5), so
   run it there; in a metarepo the pages are a job's (M4): ask the hubnode to open the job the
   run names, and run `--apply --sweep` again in its worktree, which removes the sections whose
   entries trunk's roadmap holds. A clean tree is required.
@@ -180,10 +180,16 @@ owner first), each citation it rewrites and each it can't, the files still namin
 what it keeps (a template, the index's prose), and each line of the new entries the hook would
 refuse. On a yes, `--apply --merge-log`, edit those lines, and commit.
 
+The **glossary's** one form is `# Basic terms`, then a product per `#` with its `Repo:` and `Kind:`
+lines, a feature per `##` and a term per `###`. `jig update --apply` rewrites each `Owner:` line as
+`Repo:` and `Kind: software`; where two products name one repo, it leaves `Kind:` off both, so
+ask the user which is the software and which the hardware, and write those lines. A glossary out
+of the form is reported and never re-formed: rebuilding it is the user's call, a change of its own.
+
 A **glossary** in the README's `## Glossary` section, or in a root `GLOSSARY.md`: its home is
 `docs/glossary.md`, since pages cite its terms and docs point only at docs. Show the user
-`jig update --glossary`: the terms it moves, in the form they have (headings, or a table moved as
-it is), and every line whose pointer to the old home it rewrites in the same change, then the
+`jig update --glossary`: the terms it moves, under `# Basic terms` as `###` headings (a table moved
+as it is, listed with what else the one form refuses, to rebuild before committing), and every line whose pointer to the old home it rewrites in the same change, then the
 pointers it can't rewrite. On a yes, `jig update --apply --glossary`, and commit what it staged.
 Then repoint, with the user, each pointer it left. In a metarepo the move runs in a job's
 worktree (M4): `jig open glossary-move --shares README.md docs/glossary.md <the files it

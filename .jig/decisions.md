@@ -12,6 +12,7 @@ A breaking change is one that a reader taking the release must act on: a `**Brea
 - `jig roadmap --json [filters] [--id <id>…]` prints only the roadmap records asked for, each with its key and derived state: an agent asks jig rather than reading the file.
 - `jig roadmap show [filters] [--width N]` prints the roadmap as a text chart with no dates: a box per phase as wide as its scopes, each scope in the column one past what it waits on, a box per product where there is more than one, each product's No phase items last, and one band per phase past 100 columns. The agent instructions template's Commands carry a `roadmap:` line for it, and `jig update --apply` adds that line where it is missing.
 - A `jig update --apply` step deleting a `Later:` line from each spec on trunk, naming the spec and the ids it named.
+- `jig glossary "<term>"` prints a term's heading path, definition, fields and controlling repo, and `jig glossary add` writes a term (`--under <product>[/<feature>]`, `--binds`) or a product (`--repo`, `--kind`) in its sorted place. `jig decision --page <page>` prints each decision whose `Touches:` names the page or a term on it.
 
 ### Changed
 - The docs tree's map has its own file, `.jig/docmap.json`: `docmap`, `boards`, `deep_subsystems` and `not_docs` move there from `.jig/config.json`, which keeps only configuration. It is trunk-only like the board (R5), and the hook refuses a key jig doesn't know or a value of another shape. `jig init` writes it, and `jig update --apply` moves the four keys with their values unchanged.
@@ -20,11 +21,14 @@ A breaking change is one that a reader taking the release must act on: a `**Brea
 - **Breaking:** the Markdown roadmap is gone: edit the roadmap with `jig roadmap --draft` and `--edit`, and read it with `jig roadmap` or `jig roadmap show`. A tool reading `ROADMAP.md` reads `jig roadmap show` instead.
 - A spec takes only what it builds. Work it doesn't build stays on the roadmap, unspecced; a spec building only part of a scope waits on a roadmap change, on the owner's yes, that splits it, the built part a new scope the spec takes and the rest under the original id, its text unchanged. `## Out of scope` never defers: work worth building later goes onto the roadmap as a scope or No phase item, and review blocks a deferral written as prose.
 - **Breaking:** the hook refuses a spec carrying a `Later:` line in its header. `jig update --apply` deletes the line from each spec on trunk and names it; each id it named is already on the roadmap. Handoff notes keep theirs, as history nothing reads.
+- The glossary takes one form: `# Basic terms`, then a product per `#` heading with `Repo:` (the repo that builds it, or `none`) and `Kind:` (`software` or `hardware`), a feature per `##`, a term per `###`, a term in a metarepo's glossary perhaps carrying `Binds:`. A term's controlling repo is its product's `Repo:`. The hook refuses a commit adding a form problem, `jig merge` re-sorts the glossary in the merge commit, `jig init` seeds it with `Basic terms` and the repo's software product, and `jig move-in` writes the moved product's `Repo:` and `Kind:`.
+- **Breaking:** a glossary's table rows are no longer terms: a label, a `§` pointer or a Touches term naming one is refused until it is a heading. `Owner:` lines aren't read: `jig update --apply` rewrites each as `Repo:` and `Kind: software` (two products naming one repo get `Repo:` and no `Kind:`, for the owner to mark), and reports a glossary out of the form for the owner to rebuild.
 
 ### Removed
 - `docmap`, `boards`, `deep_subsystems` and `not_docs` as `.jig/config.json` keys: the hook refuses a config commit adding one.
 - `ROADMAP.md`, the generated view, with `jig roadmap --view` and `--write`: no command writes it, and `jig update --apply` removes one jig generated. A repo's own `ROADMAP.md` is left alone.
 - `Later:` on specs: the gate's later lines under "Closes with the spec at merge:" (it keeps the spec's `## Out of scope` lines), the merge carrying the line to the note, and rig's Left for later with its `--json` `later` key.
+- `Owner:` on glossary terms, and `this repo` as its value: a product's `Repo:` names its repo.
 
 ## v0.16.0 - 2026-11-24
 

@@ -733,7 +733,8 @@ def check_rules(root: Path, board: Board, *, staged: bool) -> list[str]:
             # A product's term and the phases it owns land in one merge (`jig move-in`): its
             # headings are read by the commit's own glossary, as by the commit's own roadmap.
             family(main_root(), trunk).owners = now
-        out += owner_dropped(now, in_index(ROADMAP, staged))
+    if GLOSSARY in paths or meta is not None and ROADMAP in paths:
+        out += glossary_rules(meta is not None, staged)
     out += roadmap_rules(board, branch, staged, paths, guarded)
     out += boundary_rules(trunk, branch, staged, paths, meta, board.data.get("not_docs") or [])
     out += page_form_rules(root, board, trunk, staged, guarded)
@@ -1052,6 +1053,13 @@ def cmd_init(root: Path, args) -> int:
     if not (root / IDEAS).exists():
         (root / IDEAS).write_text(IDEAS_SEED)
         print(f"wrote {IDEAS}")
+    # A stand-alone repo's glossary starts with its software product, named for the board, so
+    # control and `--owner` work from the start; a metarepo's init writes its own.
+    if not (root / GLOSSARY).exists() and not getattr(args, "meta", False) and getattr(args, "para", None) is None:
+        name = json.loads((root / CONFIG).read_text()).get("name") or root.name
+        (root / GLOSSARY).parent.mkdir(parents=True, exist_ok=True)
+        (root / GLOSSARY).write_text(glossary_seed(name))
+        print(f"wrote {GLOSSARY}")
     rc = 0
     if getattr(args, "no_hooks", False):
         print("hooks not installed (--no-hooks). Run `jig install-hooks` to cut over.")
@@ -2204,6 +2212,7 @@ def cmd_merge(root: Path, args) -> int:
         # The conflicted merge's last step before its commit, so it closes what a clean one does;
         # a merge stopped after its close (derive.sh failed) has its close in the index already.
         close_merged(root, board, trunk)
+        sort_glossary(root)
         return 0 if setup_and_derive(root, board, "the job") else 1
     if not name:
         die("usage: jig merge <job> [-m msg] [--subject ids], or jig merge --number", 2)
@@ -2308,6 +2317,8 @@ def cmd_merge(root: Path, args) -> int:
         if not same_roadmap(kept, raw):
             write_raw(roadmap, kept)
             git("add", "--", ROADMAP, check=True)
+    if not p.returncode:
+        sort_glossary(root)
     snap = Snapshot(where="index")
     # A merged job leaves nothing in flight: its spec and bug specs leave in the merge commit,
     # their scopes kept on the note. A conflicted merge closes at `jig merge --number` instead.
@@ -3324,7 +3335,7 @@ def claims_of_term(root: Path, term: str, prefix: str) -> tuple[list[str], list[
     gloss = root / GLOSSARY
     home = None
     if gloss.exists():
-        for shown, at in heading_lines(gloss.read_text(errors="replace"), glossary=True).items():
+        for shown, at in heading_lines(gloss.read_text(errors="replace")).items():
             if shown.casefold() == key:
                 home = (GLOSSARY, at[0][0])
                 term = shown
@@ -5097,13 +5108,30 @@ def carry_out(root: Path, board: dict, moves: list[dict], gone: list[str]) -> li
 
 
 # RULES.md (Documentation): a repo's terms are a docs file, docs/glossary.md, so pages that cite
-# a term point at a doc, never at the README, which is for outsiders. A term is a `## <term>`
-# heading or the first cell of a table row, so `docs/glossary.md § <term>` names it either way.
+# a term point at a doc, never at the README, which is for outsiders. Its one form: `# Basic
+# terms`, then a product per H1, a feature per H2 and a term per H3. Each heading is a term, so
+# `docs/glossary.md § <term>` names one at any of the three levels.
 GLOSSARY = "docs/glossary.md"
 # The old home, a section of the root README, which update moves out (`--glossary`).
 README_GLOSSARY = "## Glossary"
-GLOSSARY_SEED = ("# Glossary\n\n<!-- One term per ## heading, or one table row per term with the "
-                 "term first: what it means, and what it is not. -->\n")
+BASIC_TERMS = "Basic terms"
+# The field lines a glossary heading may carry: a product H1 its `Repo:` (the repo that builds
+# it, or `none`) and `Kind:`, a term in a metarepo's glossary `Binds:`. `Owner:` is the field
+# `Repo:` replaced, read only to refuse it and by update's rewrite.
+GLOSSARY_FIELD = re.compile(r"^(Repo|Kind|Binds|Owner):[ \t]*(.*?)[ \t]*$")
+PRODUCT_KINDS = ("software", "hardware")
+
+
+def glossary_seed(name: str = "") -> str:
+    """The glossary init writes: `Basic terms`, and in a stand-alone repo its software product,
+    named for the board's NAME, so control and `--owner` work from the start."""
+    out = (f"# {BASIC_TERMS}\n\n<!-- A term every product uses, as an ### heading: what it means, and "
+           "what it is not. -->\n")
+    if name:
+        out += (f"\n# {name}\n\nRepo: {name}\nKind: software\n\n<!-- What {name} is. Its features "
+                "are ## headings under it, and its terms ### headings: under it before its first "
+                "feature, or under the feature they belong to. -->\n")
+    return out
 # A term written as a bold word opening its paragraph, then a dash or colon on that line:
 # `**mote** — …`, `**operation** (registry op) — …`, `**seam:** …`.
 BOLD_TERM = re.compile(r"^\*\*([^*]+?)(:?)\*\*(.*)$")
@@ -5169,12 +5197,281 @@ def table_terms(lines: list[str]) -> list[tuple[int, str]]:
     return out
 
 
-def glossary_terms(text: str) -> list[str]:
-    """The terms of a glossary file, in order: its `## <term>` headings and its tables' first
-    cells, the two forms a term may take."""
+def glossary_entries(text: str) -> list[dict]:
+    """Each heading of a glossary file, in order, fenced code skipped: its `level`, `name` (the
+    term), 1-based `line`, the indices `start` and `end` of its own lines (to the next heading
+    of any level), its `fields` ({key: value} of its field lines; a key written twice keeps
+    the first), and the `product` and `feature` it sits under ("" for none)."""
     lines = text.splitlines()
-    heads = [(i, term_text(m.group(1))) for i, l in enumerate(lines) if (m := re.match(r"##\s+(.+?)\s*$", l))]
-    return [t for _, t in sorted(heads + table_terms(lines))]
+    out: list[dict] = []
+    product = feature = ""
+    for i, (line, prose) in enumerate(zip(lines, unfenced(lines))):
+        m = re.match(r"^ {0,3}(#{1,6})[ \t]+(.*?)[ \t#]*$", line) if prose else None
+        if not m:
+            continue
+        level, name = len(m.group(1)), term_text(m.group(2))
+        if out:
+            out[-1]["end"] = i
+        if level == 1:
+            product, feature = name, ""
+        elif level == 2:
+            feature = name
+        out.append({"level": level, "name": name, "line": i + 1, "start": i, "end": len(lines),
+                    "product": product if level > 1 else "", "feature": feature if level > 2 else "",
+                    "fields": {}})
+    prose_at = unfenced(lines)
+    for e in out:
+        for j in range(e["start"] + 1, e["end"]):
+            if prose_at[j] and (f := GLOSSARY_FIELD.match(lines[j].strip())):
+                e["fields"].setdefault(f.group(1), f.group(2))
+    return out
+
+
+def in_form(entries: list[dict]) -> bool:
+    """Whether a glossary is in the one form, as far as its products are read: its first H1 is
+    `Basic terms`. Until it is, any heading carrying `Repo:` reads as a product, so an older
+    glossary keeps its products after update's rewrite."""
+    return next((e["name"] for e in entries if e["level"] == 1), "") == BASIC_TERMS
+
+
+def glossary_products(text: str) -> dict[str, dict[str, str]]:
+    """{product: its fields} for each product of a glossary: an H1 other than `Basic terms`,
+    or out of the form any heading carrying `Repo:`."""
+    entries = glossary_entries(text)
+    form = in_form(entries)
+    return {e["name"]: e["fields"] for e in entries
+            if (e["level"] == 1 and e["name"] != BASIC_TERMS if form else "Repo" in e["fields"])}
+
+
+def glossary_terms(text: str) -> list[str]:
+    """The terms of a glossary file, in order: its H1, H2 and H3 headings, a product, a feature
+    and a term each one. `Basic terms` heads the shared terms and is none itself."""
+    return [e["name"] for e in glossary_entries(text) if e["level"] <= 3 and e["name"] != BASIC_TERMS]
+
+
+def cmd_glossary_term(root: Path, args) -> int:
+    """`jig glossary "<term>"`: the term asked of jig, not read from the file; `jig glossary add`
+    writes one where it sorts (glossary_add), unstaged, for the commit the hook checks."""
+    words = args.words
+    path = root / GLOSSARY
+    text = read_raw(path) if path.is_file() else ""
+    if words[0] == "add" and len(words) == 2:
+        name = words[1]
+        if not args.text:
+            die('usage: jig glossary add "<term>" --text "<definition>" [--under <product>[/<feature>]] '
+                '[--binds a,b], or --repo <repo|none> --kind <software|hardware> for a product', 2)
+        if args.repo is not None:
+            if not args.kind or args.under or args.binds:
+                die("a product takes --repo and --kind, and no --under or --binds", 2)
+            new = glossary_add(text or glossary_seed(), name, args.text, repo=args.repo, kind=args.kind)
+        else:
+            if args.kind:
+                die("--kind is a product's: give --repo too", 2)
+            binds = [b.strip() for b in (args.binds or "").split(",") if b.strip()]
+            new = glossary_add(text or glossary_seed(), name, args.text, args.under or "", binds)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        write_raw(path, new)
+        print(f"wrote {name} in {GLOSSARY}" + (f", under {args.under}" if args.under else ""))
+        return 0
+    if len(words) != 1 or any(getattr(args, a) for a in ("under", "text", "binds", "repo", "kind")):
+        die('usage: jig glossary "<term>", or jig glossary add "<term>" …', 2)
+    want = label_fold(words[0])
+    entries = glossary_entries(text)
+    e = next((x for x in entries if x["level"] <= 3 and label_fold(x["name"]) == want), None)
+    if e is None:
+        die(f"{GLOSSARY} has no term {words[0]}", 1)
+    lines = text.splitlines()
+    body = [l for l, keep in zip(lines[e["start"] + 1:e["end"]], unfenced(lines)[e["start"] + 1:e["end"]])
+            if not (keep and GLOSSARY_FIELD.match(l.strip()))]
+    definition = re.sub(r"<!--.*?-->", "", "\n".join(body), flags=re.S).strip()
+    me = own_name(main_root())
+    owners = term_owners(text)
+    product = e["name"] if e["level"] == 1 else e["product"]
+    control = (owners.get(product) or me) if product in owners else me
+    print(" > ".join(x for x in (e["product"], e["feature"], e["name"]) if x))
+    if definition:
+        print(definition)
+    for f in (("Repo", "Kind") if e["level"] == 1 else ("Binds",)):
+        if f in e["fields"]:
+            print(f"{f}: {e['fields'][f]}")
+    print(f"controlled by: {control}")
+    return 0
+
+
+def sort_glossary(root: Path) -> None:
+    """The merge's re-sort of the glossary (glossary_sorted), staged in the merge commit: two
+    jobs each appending a term merge as text, and the order is restored here, where no two
+    branches write it at once. One already in order is left untouched."""
+    path = root / GLOSSARY
+    if path.is_file() and (now := glossary_sorted(was := read_raw(path))) != was:
+        write_raw(path, now)
+        git("add", "--", GLOSSARY, check=True, cwd=str(root))
+        print(f"sorted {GLOSSARY}")
+
+
+def glossary_tree(text: str) -> tuple[list[str], dict]:
+    """TEXT's lines (ends kept) and its entries as a tree: the root's children are the H1s (and
+    any H2 or H3 above the first one), an H1's are its own H3s and its H2s, an H2's its H3s.
+    Each node holds its `lines`, from its heading to the next heading of the three levels; a
+    deeper heading is text of the entry above it."""
+    lines = text.splitlines(keepends=True)
+    heads = [e for e in glossary_entries(text) if e["level"] <= 3]
+    root: dict = {"level": 0, "name": "", "kids": [], "start": 0}
+    if not heads:
+        return lines, root
+    root["pre"] = lines[:heads[0]["start"]]
+    stack = [root]
+    for e, nxt in zip(heads, heads[1:] + [None]):
+        node = {"level": e["level"], "name": e["name"], "start": e["start"], "kids": [],
+                "lines": lines[e["start"]:nxt["start"] if nxt else len(lines)]}
+        while stack[-1]["level"] >= node["level"]:
+            stack.pop()
+        stack[-1]["kids"].append(node)
+        stack.append(node)
+    return lines, root
+
+
+def sibling_key(node: dict, parent: dict) -> tuple:
+    """Where NODE sorts among PARENT's children: under the root `Basic terms` first, then the
+    products; under an entry its own terms (H3) first, then its features (H2); each set in
+    alphabetical order, case folded. A heading above the first H1 keeps its place."""
+    if parent["level"] == 0:
+        if node["level"] != 1:
+            return (-1, "", node["start"])
+        return (0 if node["name"] == BASIC_TERMS else 1, node["name"].casefold(), 0)
+    return (0 if node["level"] == 3 else 1, node["name"].casefold(), 0)
+
+
+def glossary_sorted(text: str) -> str:
+    """TEXT, a glossary, in its order (sibling_key): whole entries move, each within its parent,
+    and no word changes. One already in order comes back byte for byte. Moved, each entry's
+    trailing blank lines become one, so no two run together."""
+    lines, root = glossary_tree(text)
+    if not root["kids"]:
+        return text
+    def walk(node: dict, out: list[dict]) -> None:
+        for kid in sorted(node["kids"], key=lambda k: sibling_key(k, node)):
+            out.append(kid)
+            walk(kid, out)
+    def flat(node: dict, out: list[dict]) -> None:
+        for kid in node["kids"]:
+            out.append(kid)
+            flat(kid, out)
+    was, now = [], []
+    flat(root, was)
+    walk(root, now)
+    if [n["start"] for n in was] == [n["start"] for n in now]:
+        return text
+    pre = "".join(root["pre"])
+    blocks = ["".join(n["lines"]).rstrip("\n") + "\n" for n in now]
+    return (pre.rstrip("\n") + "\n\n" if pre.strip() else "") + "\n".join(blocks)
+
+
+def glossary_add(text: str, name: str, definition: str, under: str = "", binds: list[str] | None = None,
+                 repo: str | None = None, kind: str | None = None) -> str:
+    """TEXT with NAME written in its sorted place: a product H1, with its `Repo:` (REPO) and
+    `Kind:` lines, when REPO is given; else a term H3 under UNDER, `<product>` or
+    `<product>/<feature>` (`Basic terms` when empty), with its `Binds:` line for BINDS. Dies on
+    a name the glossary already has, as a term folds, or a parent it lacks."""
+    if any(label_fold(t) == label_fold(name) for t in glossary_terms(text) + [BASIC_TERMS]):
+        die(f"{GLOSSARY} already has {name}: a term is written once", 2)
+    lines, root = glossary_tree(text)
+    if repo is not None:
+        fields = f"Repo: {repo}\n" + (f"Kind: {kind}\n" if kind else "")
+        block, level, parent = f"# {name}\n\n{fields}\n{definition}\n", 1, root
+    else:
+        path = [p.strip() for p in (under or BASIC_TERMS).split("/")]
+        parent = next((k for k in root["kids"] if k["level"] == 1 and k["name"].casefold() == path[0].casefold()), None)
+        if parent is not None and len(path) > 1:
+            parent = next((k for k in parent["kids"] if k["level"] == 2 and k["name"].casefold() == path[1].casefold()), None)
+        if parent is None or len(path) > 2:
+            die(f"{GLOSSARY} has no {under or BASIC_TERMS} to put {name} under: "
+                f"--under <product> or <product>/<feature>, a heading it has", 2)
+        block = f"### {name}\n\n" + (f"Binds: {', '.join(binds)}\n\n" if binds else "") + f"{definition}\n"
+        level = 3
+    new = {"level": level, "name": name, "start": -1, "kids": []}
+    key = sibling_key(new, parent)
+    after = [k for k in parent["kids"] if sibling_key(k, parent) < key]
+    def end_of(node: dict) -> int:
+        return end_of(node["kids"][-1]) if node["kids"] else node["start"] + len(node["lines"])
+    at = end_of(after[-1]) if after else (parent["start"] + len(parent["lines"]) if parent is not root
+                                          else len(root.get("pre", [])))
+    if parent is root and not after and not root["kids"]:
+        at = len(lines)
+    head = "".join(lines[:at])
+    tail = "".join(lines[at:])
+    head = head.rstrip("\n") + "\n\n" if head.strip() else ""
+    return head + block + ("\n" + tail.lstrip("\n") if tail.strip() else "")
+
+
+def glossary_problems(text: str, meta: bool) -> list[tuple[str, str]]:
+    """(key, problem) for each way TEXT, a glossary, is out of the one form. The key names the
+    problem apart from its line, so a commit is refused only for one it adds. META: the glossary
+    is a metarepo's, where a term may carry `Binds:`."""
+    entries = glossary_entries(text)
+    out: list[tuple[str, str]] = []
+    h1s = [e for e in entries if e["level"] == 1]
+    if not h1s or h1s[0]["name"] != BASIC_TERMS:
+        out.append(("first", f"the first # heading is {h1s[0]['name'] if h1s else 'missing'}, not "
+                             f"`# {BASIC_TERMS}`: shared terms come first, then each product"))
+    lines = text.splitlines()
+    prose = unfenced(lines)
+    # Out of the form a product is a heading carrying `Repo:`, or the `Owner:` update rewrites
+    # to it, so the rewrite adds no problem: its `Owner:` and missing `Repo:`/`Kind:` were there.
+    form = in_form(entries)
+    products = []
+    for e in entries:
+        where = f"line {e['line']}: {'#' * e['level']} {e['name']}"
+        if e["level"] > 3:
+            out.append((f"deep {e['name']}", f"{where} is deeper than ###: a product is #, a feature ##, "
+                                             "a term ###"))
+        if e["level"] == 2 and e["product"] == BASIC_TERMS:
+            out.append((f"basic {e['name']}", f"{where} is a feature under `# {BASIC_TERMS}`, which holds "
+                                              "only ### terms"))
+        product = (e["level"] == 1 and e["name"] != BASIC_TERMS if form
+                   else bool({"Repo", "Owner"} & set(e["fields"])))
+        if product:
+            products.append(e)
+        allowed = {"Repo", "Kind"} if product else {"Binds"} if e["level"] == 3 and meta else set()
+        for f in sorted(set(e["fields"]) - allowed):
+            fix = " (`Owner:` became `Repo:`, the repo that builds the product, or none)" if f == "Owner" else ""
+            out.append((f"field {e['name']} {f}", f"{where} carries `{f}:`, which a "
+                        + ("product" if product else "feature" if e["level"] == 2 else
+                           "term outside a metarepo's glossary" if e["level"] == 3 else "heading here")
+                        + f" may not{fix}"))
+        if product:
+            for f in ("Repo", "Kind"):
+                if f not in e["fields"]:
+                    out.append((f"lacks {e['name']} {f}", f"{where} is a product with no `{f}:` line"))
+            if "Kind" in e["fields"] and e["fields"]["Kind"] not in PRODUCT_KINDS:
+                out.append((f"kind {e['name']}", f"{where} has `Kind: {e['fields']['Kind']}`: a kind is "
+                                                 f"{' or '.join(PRODUCT_KINDS)}"))
+    if any(l.lstrip().startswith("|") and TABLE_RULE.match(n) for l, n, p in zip(lines, lines[1:], prose) if p):
+        out.append(("table", "a table is no glossary form: each term is a heading, a product #, a feature ##, a term ###"))
+    seen: dict[str, dict] = {}
+    for e in entries:
+        if e["level"] <= 3:
+            k = label_fold(e["name"])
+            if k in seen:
+                out.append((f"twice {k}", f"line {e['line']}: {e['name']} and line {seen[k]['line']}: "
+                                          f"{seen[k]['name']} are one term, as a label or pointer reads it"))
+            else:
+                seen[k] = e
+    heads = {label_fold(e["name"]) for e in entries if e["level"] in (1, 2) and e["name"] != BASIC_TERMS}
+    for e in entries:
+        for b in [x.strip().strip("`") for x in e["fields"].get("Binds", "").split(",") if x.strip()]:
+            if label_fold(b) not in heads:
+                out.append((f"binds {e['name']} {b}", f"line {e['line']}: {e['name']} binds {b}, which is "
+                                                      "no product or feature heading of the glossary"))
+    software: dict[str, list[str]] = {}
+    for e in products:
+        repo = e["fields"].get("Repo", "").strip().strip("`")
+        if e["fields"].get("Kind") == "software" and repo.casefold() not in ("", "none"):
+            software.setdefault(repo.casefold(), []).append(e["name"])
+    out += [(f"software {r}", f"products {', '.join(ps)} name one repo, {r}, each `Kind: software`: a "
+                              "repo builds one software product; the other is hardware, or another repo's")
+            for r, ps in software.items() if len(ps) > 1]
+    return out
 
 
 def glossary_term_in(section: str, terms: list[str]) -> str:
@@ -5662,9 +5959,9 @@ def cmd_survey(root: Path, args) -> int:
               f"`jig update` lists the move, and `jig update --apply --glossary` makes it.")
     if report["glossary_unheaded"]:
         terms = report["glossary_unheaded"]
-        print(f"\nTerms in {GLOSSARY} written as bold words, not headings or rows: {len(terms)} "
-              f"({', '.join(terms[:5])}{' …' if len(terms) > 5 else ''}).\nMake each a `## <term>` "
-              f"heading, or a table row, so `{GLOSSARY} § <term>` names it ({DIR}/RULES.md, Documentation).")
+        print(f"\nTerms in {GLOSSARY} written as bold words, not headings: {len(terms)} "
+              f"({', '.join(terms[:5])}{' …' if len(terms) > 5 else ''}).\nMake each a `### <term>` "
+              f"heading, so `{GLOSSARY} § <term>` names it ({DIR}/RULES.md, Documentation).")
     if report["root_docs_named"]:
         print(f"\nPages and decision entries that name a root document ({DIR}/RULES.md, Documentation): "
               f"docs point only at docs; a root document may point into docs/, never the reverse:")
@@ -5752,7 +6049,7 @@ def cmd_survey(root: Path, args) -> int:
         homes_line["docs/"] = (
             "the definitions this metarepo holds: docs/<genre>/<name>.md each page, in a genre folder "
             f"({', '.join(GENRES) if GENRES else f'any folder under docs/, until {META} declares genres'}); "
-            f"a genre has no page, its term is a ## heading in {GLOSSARY}, the one file directly in docs/; a page holding "
+            f"a genre has no page, its term is a ### heading under # {BASIC_TERMS} in {GLOSSARY}, the one file directly in docs/; a page holding "
             "other files moves into docs/<genre>/<name>/<name>.md; decision registers stay where they are")
     print("\nDoc homes: " + "; ".join(f"{k} = {v}" for k, v in homes_line.items()))
     old = old_board(root)
@@ -6095,17 +6392,22 @@ def cmd_meta_init(root: Path, args) -> int:
     gloss = root / GLOSSARY
     if not gloss.exists():
         gloss.parent.mkdir(parents=True, exist_ok=True)
-        gloss.write_text(GLOSSARY_SEED)
+        gloss.write_text(glossary_seed())
         print(f"wrote {GLOSSARY}")
         wrote.append(GLOSSARY)
     # Each genre is a term of the ecosystem's definition, defined once there: it has no page.
-    have = set(glossary_terms(gloss.read_text()))
-    new = [f"## {g}\n\nTODO: what its pages define, and what they are not.\n"
-           for g in genres or [] if g not in have]
-    if new:
-        gloss.write_text(gloss.read_text().rstrip("\n") + "\n\n" + "\n".join(new))
-        print(f"added a ## heading per genre to {GLOSSARY}")
+    have = {label_fold(t) for t in glossary_terms(gloss.read_text())}
+    new = [g for g in genres or [] if label_fold(g) not in have]
+    if new and in_form(glossary_entries(gloss.read_text())):
+        text = gloss.read_text()
+        for g in new:
+            text = glossary_add(text, g, "TODO: what its pages define, and what they are not.")
+        gloss.write_text(text)
+        print(f"added a ### heading per genre under # {BASIC_TERMS} in {GLOSSARY}")
         wrote.append(GLOSSARY)
+    elif new:
+        print(f"{GLOSSARY} isn't in the one form (# {BASIC_TERMS} first), so no genre term was "
+              f"added: add {', '.join(new)} as ### terms under # {BASIC_TERMS} once it is")
     release_script(root, meta=True)
     trunk = Board.trunk_name(root)
     agents = root / "AGENTS.md"
@@ -7231,6 +7533,10 @@ def hold_chain(want: str, text: str, prefix: str, rev: str | None = None,
 def cmd_decision(root: Path, args) -> int:
     """Print a decision entry and its supersedes chain. A superseded entry is removed from the
     log, so one the log doesn't have is read from git, and its chain walked to what holds now."""
+    if args.page:
+        return decisions_on_page(root, args.page)
+    if not args.id:
+        die("usage: jig decision <id> [--peers], or jig decision --page <page>", 2)
     if args.peers:
         return cmd_peers(root, args)
     board = Board.load(root)
@@ -7351,6 +7657,20 @@ def pointer_shaped(piece: str) -> bool:
     ending .md, then perhaps ` § <term>`."""
     page, _ = pointer_term(piece.strip().strip("`").strip())
     return bool(page) and " " not in page and page.endswith(".md")
+
+
+def decisions_on_page(root: Path, page: str) -> int:
+    """`jig decision --page PAGE`: each entry whose `Touches:` names PAGE, or a term on it
+    (`PAGE § <term>`), whole, in the log's order: what rules on the page, asked of jig rather
+    than read from the log."""
+    page = page.strip().removeprefix("./")
+    entries = log_entries(read_entries_text(root), log_prefix(Board.load(root).trunk))
+    hits = [e for e in entries if any(pointer_term(t)[0] == page for t in entry_touches(e["block"]) or [])]
+    if not hits:
+        print(f"no decision entry's Touches: names {page}")
+        return 0
+    print("\n\n".join(e["block"].rstrip("\n") for e in hits))
+    return 0
 
 
 def entry_touches(block: str) -> list[str] | None:
@@ -9071,12 +9391,21 @@ def term_blocks(lines: list[str], level: int) -> dict[str, list[str]]:
     return out
 
 
+def glossary_blocks(text: str) -> dict[str, list[str]]:
+    """Each term of a glossary with its own lines, blank lines dropped: its heading's level left
+    out, so a term moved between levels or parents reads the same, and a table row is none."""
+    lines = text.splitlines()
+    heads = [e for e in glossary_entries(text) if e["level"] <= 3]
+    return {e["name"]: [l for l in lines[e["start"] + 1:nxt["start"] if nxt else len(lines)] if l.strip()]
+            for e, nxt in zip(heads, heads[1:] + [None]) if e["name"] != BASIC_TERMS}
+
+
 def glossary_at(loc: Path, rev: str) -> tuple[str, dict[str, list[str]]]:
     """Where REV keeps its glossary, and its terms: docs/glossary.md, or before the move the
     README's Glossary section, so a release across the move compares the same terms."""
     text = git("show", f"{rev}:{GLOSSARY}", cwd=str(loc))
     if text:
-        return GLOSSARY, term_blocks(text.splitlines(), 2)
+        return GLOSSARY, glossary_blocks(text)
     return "README.md", term_blocks(readme_glossary(git("show", f"{rev}:README.md", cwd=str(loc))) or [], 3)
 
 
@@ -9912,9 +10241,6 @@ def pointer_gap(path: str, section: str | None, code: bool, body: str | None) ->
     # The roadmap's sections are its records' keys: it has no headings of its own.
     want = plain(section)
     heads = [plain(h) for h in (roadmap_headings(body) if path.endswith(ROADMAP) else HEADING.findall(body))]
-    # A glossary's term may be a table row's first cell instead of a heading.
-    if path.endswith(GLOSSARY):
-        heads += [t for _, t in table_terms(body.splitlines())]
     number = section_number(want)
     if number is not None:
         if number in {section_number(h) for h in heads}:
@@ -11619,7 +11945,7 @@ def roadmap_md(data: dict) -> str:
 def roadmap_data(md: str, owners: dict[str, str]) -> dict:
     """The old roadmap MD as roadmap.json's records: every phase, scope, item, suffix, note and
     exit check with its text unchanged, each phase under the product of OWNERS its leading words
-    name, as `Owner:` terms placed it (Family's owners: a metarepo's glossary, none elsewhere).
+    name, as the glossary's products placed it (Family's owners: a metarepo's glossary, none elsewhere).
     What it can't carry, uncarried names; the conversion waits on it."""
     md = fold_up_next(md) if up_next_heading(md) else md
     out: dict = {"products": [], "phases": [], "no_phase": []}
@@ -12416,26 +12742,27 @@ def quiet_resolve(root: Path, f: Path, carrier: str) -> bool:
     return head.get("kind") in ("user-story", "feature-request", "feedback")
 
 
-# A glossary term's owner: `Owner: \`<repo>\`.` names a pararepo (its first backticked name,
-# as `jig repos` knows it), `Owner: this repo.` the metarepo itself.
-OWNER_LINE = re.compile(r"^Owner:\s*(.*)$", re.M | re.I)
-THIS_REPO = "this repo"
-
-
-def term_owners(glossary: str) -> dict[str, str]:
-    """{term: owner} for each `## <term>` section of GLOSSARY with an `Owner:` line: the repo
-    named in its first backticks, or THIS_REPO. A term with none owns nothing."""
+def term_owners(glossary: str, holder: set[str] | None = None) -> dict[str, str]:
+    """{product: the repo its `Repo:` names} for each product of GLOSSARY (glossary_products),
+    or "" where the repo whose glossary it is controls it: `Repo: none`, no `Repo:` yet, or a
+    name of HOLDER, that repo's names (this repo's by default). Backticks and a closing period
+    are read past, as a hand writes them."""
+    names = this_repo_names(main_root()) if holder is None else holder
     out = {}
-    for name, lines in page_sections(glossary)[1:]:
-        m = OWNER_LINE.search("\n".join(lines))
-        if not m:
-            continue
-        named = re.search(r"`([^`]+)`", m.group(1))
-        if named:
-            out[term_text(name)] = named.group(1).strip()
-        elif m.group(1).strip().lower().startswith(THIS_REPO):
-            out[term_text(name)] = THIS_REPO
+    for product, fields in glossary_products(glossary).items():
+        repo = fields.get("Repo", "").strip().strip("`").rstrip(".").strip("`").strip()
+        out[product] = "" if repo.casefold() in ("", "none") or name_in(repo, names) else repo
     return out
+
+
+def meta_names(loc: Path | None, name: str = "") -> set[str]:
+    """The names the metarepo checked out at LOC goes by, NAME and its META's `name`: whose
+    glossary a pararepo reads, so its products controlled there read "" in term_owners."""
+    try:
+        own = json.loads(trunk_show(loc, META) or "{}").get("name", "") if loc is not None else ""
+    except ValueError:
+        own = ""
+    return {name, own} - {""}
 
 
 def product_of(heading: str, owners: dict[str, str]) -> str:
@@ -12517,7 +12844,7 @@ class Family:
                 return
             self.text = trunk_show(self.meta_loc, ROADMAP) or ""
             self.glossary = trunk_show(self.meta_loc, GLOSSARY) or None
-            self.owners = term_owners(self.glossary or "")
+            self.owners = term_owners(self.glossary or "", meta_names(self.meta_loc, self.meta_name))
             self.others.append((self.meta_name, Snapshot(Board.trunk_name(self.meta_loc), cwd=self.meta_loc)))
             try:
                 paras = list(json.loads(trunk_show(self.meta_loc, META) or "{}").get("pararepos") or [])
@@ -12549,9 +12876,9 @@ class Family:
         return self.kind == "para"
 
     def owner_loc(self, product: str) -> Path | None:
-        """Where a product's owning repo is checked out; the metarepo for THIS_REPO."""
+        """Where a product's controlling repo is checked out; the metarepo for one it controls."""
         owner = self.owners.get(product, "")
-        if owner == THIS_REPO:
+        if not owner:
             return self.meta_loc
         loc = repo_path(owner) if owner else None
         return loc if loc is not None and loc.is_dir() else None
@@ -12559,7 +12886,7 @@ class Family:
     def owner_gone(self, product: str) -> str:
         """The repo a product's owner names when it can't be reached here, else ""."""
         owner = self.owners.get(product, "")
-        return owner if product and owner and owner != THIS_REPO and self.owner_loc(product) is None else ""
+        return owner if product and owner and self.owner_loc(product) is None else ""
 
     def ours(self, product: str) -> bool:
         """Whether this repo builds the work under a heading of PRODUCT ("" for the
@@ -12567,16 +12894,16 @@ class Family:
         if self.kind == "own":
             return True
         if self.kind == "meta":
-            return not product or self.owners.get(product) == THIS_REPO
+            return not product or self.owners.get(product) == ""
         loc = self.owner_loc(product) if product else None
         return loc is not None and loc.resolve() == self.root.resolve()
 
     def pages_of(self, product: str, here: set[str]) -> set[str] | None:
         """The files a `(touches …)` under PRODUCT's heading is looked up in: the metarepo's for
-        its own sections and a product it owns as THIS_REPO, the owning repo's for a
+        its own sections and a product it controls, the controlling repo's for a
         pararepo's, each on its trunk; HERE where that is this repo. None when it can't be
         reached."""
-        loc = self.meta_loc if not product or self.owners.get(product) == THIS_REPO else self.owner_loc(product)
+        loc = self.meta_loc if not product or self.owners.get(product) == "" else self.owner_loc(product)
         if loc is None:
             return None if product or self.kind == "para" else here
         if loc.resolve() == self.root.resolve():
@@ -12591,7 +12918,7 @@ class Family:
         """Whose trunk a `(touches …)` of SID names a page of, as a refusal says it."""
         product = product_of(sid.rsplit("/", 1)[0].removesuffix(" " + NO_PHASE), self.owners)
         owner = self.owners.get(product, "")
-        if product and owner and owner != THIS_REPO:
+        if product and owner:
             return f"{owner}'s trunk"
         return f"{self.meta_name}'s trunk" if self.kind == "para" else trunk
 
@@ -12611,11 +12938,11 @@ class Family:
         return sorted({product_of(h, self.owners) for h in heads} - {""})
 
     def unknown_owners(self) -> list[tuple[str, str]]:
-        """(product, owner) for each product heading whose `Owner:` names no repo jig knows."""
+        """(product, repo) for each product heading whose `Repo:` names no repo jig knows."""
         heads = {p["name"] for p in roadmap_phases(self.text)} | {i["list"] for i in roadmap_list_items(self.text)}
         prods = {product_of(h, self.owners) for h in heads} - {""}
         return sorted((pr, self.owners[pr]) for pr in prods
-                      if self.owners[pr] != THIS_REPO and repo_path(self.owners[pr]) is None)
+                      if self.owners[pr] and repo_path(self.owners[pr]) is None)
 
 
 _FAMILIES: dict[tuple[str, str], "Family"] = {}
@@ -12888,7 +13215,7 @@ ROADMAP_FILTERS = {
     "phase": "a phase's name, with or without its product (`alpha`, `Widget alpha`), or `No phase`",
     "type": "prototype, pilot or production",
     "state": "open, taken, done, blocked (open and waiting) or unknown",
-    "owner": "the repo that owns the work: a product's Owner:, or this repo for its own phases",
+    "owner": "the repo that owns the work: a product's Repo:, or this repo for its own phases",
     "label": "a glossary term a scope or item carries as a label, any case and spacing",
 }
 FILTER_STATES = ("open", "taken", "done", "blocked", "unknown")
@@ -12906,7 +13233,7 @@ def roadmap_filter(phases: list[dict], items: list[dict], filt: dict[str, set[st
     """(phases, items) FILT chooses. Product, phase, type and owner choose phases; state chooses
     scopes within them, and a phase it leaves with no scope goes. A list item matches product,
     owner and state; `No phase` among the phases chooses the lists, and a type leaves them out.
-    ME is the repo the roadmap's own sections and `this repo` products belong to; an owner
+    ME is the repo the roadmap's own sections and the products it controls belong to; an owner
     value naming this repo by any name jig knows it by (SELF_NAMES) means the owners in MINE.
     Owners are compared as IDENT reads them, one repo however it is named (an alias, its listed
     name). A value naming nothing jig knows dies, naming the known ones, so a typo never
@@ -12915,13 +13242,13 @@ def roadmap_filter(phases: list[dict], items: list[dict], filt: dict[str, set[st
     if untested := sorted(set(filt) - {"product", "phase", "type", "state", "owner", "label"}):
         die(f"--{untested[0]} has no test in roadmap_filter: add one there, or the filter would "
             "print the whole roadmap")
-    owner_of = lambda pr: ident(owners[pr] if pr and owners.get(pr, THIS_REPO) != THIS_REPO else me)
+    owner_of = lambda pr: ident(owners[pr] if pr and owners.get(pr, "") else me)
     if "owner" in filt:
         repos = {ident(me)} | {owner_of(pr) for pr in owners} | {ident(o) for o in mine}
         named = {v: {ident(o) for o in (mine if name_in(v, self_names) else {v})} for v in filt["owner"]}
         if bad := sorted(v for v, ids in named.items() if not ids <= repos):
             die(f"--owner {', '.join(bad)}: no such owner; known: "
-                f"{', '.join(sorted({me} | {owners[pr] if owners[pr] != THIS_REPO else me for pr in owners}))}")
+                f"{', '.join(sorted({me} | {owners[pr] or me for pr in owners}))}")
         filt = dict(filt, owner=set().union(*named.values()))
     lists = [i["id"].rsplit("/", 1)[0] for i in items]
     known = {
@@ -13003,9 +13330,9 @@ def cmd_roadmap(root: Path, args) -> int:
     me = fam.meta_name if fam.reads_meta else \
         (load_meta(trunk) or {}).get("name") or board.data.get("name") or main_root().name
     # In a pararepo planning from the metarepo's roadmap, this repo owns the products whose
-    # Owner: names it; elsewhere it owns the roadmap's own sections.
+    # Repo: names it; elsewhere it owns the roadmap's own sections.
     names = this_repo_names(root)
-    mine = ({o for o in fam.owners.values() if o != THIS_REPO and name_in(o, names)} if fam.reads_meta
+    mine = ({o for o in fam.owners.values() if o and name_in(o, names)} if fam.reads_meta
             else {me})
     def repo_ident(name: str) -> str:
         found = repo_matches(name)
@@ -13102,17 +13429,26 @@ def roadmap_problems(text: str, fam: "Family", have: set[str], trunk: str) -> li
     problems += roadmap_label_problems(text, fam.glossary, fam.glossary_name)
     problems += [f"{iid} touches {page}, which {fam.page_home(iid, trunk)} has no page for: re-point it"
                  for iid, page in sorted(dead_touches(text, have, fam))]
-    problems += [f"product {pr}: its Owner: names {o}, which `jig repos` doesn't know"
+    problems += [f"product {pr}: its Repo: names {o}, which `jig repos` doesn't know"
                  for pr, o in fam.unknown_owners()]
     return [unline(x) for x in problems]
 
 
 def label_heads(fam: "Family", labels: set[str]) -> list[str]:
-    """`<term>: owned by <repo>` for each glossary term LABELS (label_fold'ed) name that has an
-    Owner: what `--label` is headed by, so a repo sees whose feature the work leans on (R2)."""
-    meta = fam.meta_name if fam.kind == "para" else THIS_REPO
-    return [f"{t}: owned by {meta if o == THIS_REPO else o}" for t, o in sorted(fam.owners.items())
-            if label_fold(t) in labels]
+    """`<term>: owned by <repo>` for each glossary term LABELS (label_fold'ed) name under a
+    product, with its controlling repo (the product's `Repo:`, or this repo for its own): what
+    `--label` is headed by, so a repo sees whose feature the work leans on (R2)."""
+    if fam.kind == "own":
+        return []
+    meta = fam.meta_name if fam.kind == "para" else "this repo"
+    out = {}
+    for e in glossary_entries(fam.glossary or ""):
+        # A shared term, under `Basic terms`, belongs to no product: no repo heads it.
+        if e["level"] <= 3 and label_fold(e["name"]) in labels and (e["product"] or e["level"] == 1) \
+                and e["product"] != BASIC_TERMS and e["name"] != BASIC_TERMS:
+            product = e["name"] if e["level"] == 1 else e["product"]
+            out[e["name"]] = fam.owners.get(product, "") or meta
+    return [f"{t}: owned by {o}" for t, o in sorted(out.items())]
 
 
 def work_owner(fam: "Family", product: str) -> str:
@@ -13120,8 +13456,8 @@ def work_owner(fam: "Family", product: str) -> str:
     names it; "" in a stand-alone repo, where everything is its own."""
     if fam.kind == "own":
         return ""
-    owner = fam.owners.get(product, THIS_REPO) if product else THIS_REPO
-    return (fam.meta_name if fam.kind == "para" else THIS_REPO) if owner == THIS_REPO else owner
+    owner = fam.owners.get(product, "") if product else ""
+    return owner or (fam.meta_name if fam.kind == "para" else "this repo")
 
 
 # ------------------------------------------------------------- the edit command
@@ -13157,8 +13493,7 @@ def may_change(fam: "Family", heading: str) -> bool:
 
 
 def heading_owner(fam: "Family", heading: str) -> str:
-    owner = fam.owners.get(heading_product(heading, fam.owners), THIS_REPO)
-    return (fam.meta_name or THIS_REPO) if owner == THIS_REPO else owner
+    return fam.owners.get(heading_product(heading, fam.owners), "") or fam.meta_name or "this repo"
 
 
 def roadmap_draft(root: Path, fam: "Family", trunk: str) -> int:
@@ -13182,7 +13517,7 @@ def roadmap_draft(root: Path, fam: "Family", trunk: str) -> int:
         # A product's list may be added though its heading isn't there yet.
         mine = sorted({heading_product(h, fam.owners) for h in heads} - {""})
         if fam.kind == "meta":
-            mine += [p for p, o in sorted(fam.owners.items()) if o == THIS_REPO and p not in mine]
+            mine += [p for p, o in sorted(fam.owners.items()) if not o and p not in mine]
         if fam.kind == "para":
             mine += [p for p in sorted(fam.owners) if p not in mine and fam.ours(p)]
         heads += [f"{p} {NO_PHASE}" for p in mine if p in included and f"{p} {NO_PHASE}" not in heads]
@@ -13230,7 +13565,7 @@ def section_refusals(old: str, new: str, may, owner_of, who: str, newcomer: bool
             continue
         if h not in old_s and newcomer:
             out.append(f"{name} names no product {who} owns: a new product is the metarepo "
-                       "hubnode's, its glossary term and Owner: line first")
+                       "hubnode's, its glossary product with its Repo: line first")
         else:
             out.append(f"{name} is {owner_of(h)}'s: {who} changes only its own sections")
     return out
@@ -13394,7 +13729,7 @@ def stage_label(fam: "Family", label: str, sids: list[str], repo: str) -> Path:
         f"---\nstaged: true\ntarget: {fam.meta_name}\nkind: doc\nchange: update\ndestination: {GLOSSARY}\n"
         f"source: {repo}'s hubnode, {time.strftime('%Y-%m-%d')}\nstatus: staged\n---\n"
         f"# Label: {label}\n\n{repo} labels its roadmap work `{label}`, a term {GLOSSARY} doesn't have. "
-        f"Add it as a `## ` term, with its `Owner:` line when a repo owns it; {repo}'s next "
+        f"Add it as a term, an `### ` heading under its product or feature, or under `# {BASIC_TERMS}`; {repo}'s next "
         f"`jig roadmap --edit` then puts the label on these.\n\n## Labels\n" + "\n".join(sorted(set(named))) + "\n")
     return path
 
@@ -13575,7 +13910,7 @@ def family_report(root: Path, trunk: str) -> dict | None:
         out["proposals"].append({"branch": b, "age": age, "empty": empty, "stale": age > STALE_DAYS,
                                  "cited": cites.get(b, [])})
     gloss = trunk_show(meta_loc, GLOSSARY) or ""
-    terms, owners = glossary_terms(gloss), term_owners(gloss)
+    terms, owners = glossary_terms(gloss), term_owners(gloss, meta_names(meta_loc, meta_name))
     # The states are the family's, read as every roadmap reader reads them; a pararepo keeping
     # a roadmap of its own plans from no labelled scope of the metarepo's.
     fam = family(root, trunk)
@@ -13583,8 +13918,7 @@ def family_report(root: Path, trunk: str) -> dict | None:
     work = ([s for p in full[0] for s in p["scopes"]] + full[1]) if full else []
 
     def repo_of(product: str) -> str:
-        owner = owners.get(product, THIS_REPO)
-        return meta_name if owner == THIS_REPO else owner
+        return owners.get(product, "") or meta_name
     # The pending rulings: the metarepo's ideas, a log not folded yet's ## Open, and ## Unreleased.
     log = with_ideas(trunk_show(meta_loc, LOG) or "", trunk_show(meta_loc, IDEAS) or "")
     for e in log_entries(log, log_prefix_of(log)):
@@ -13851,19 +14185,15 @@ def boundary_rules(trunk: str, branch: str, staged: bool, paths: list[str],
     return out
 
 
-def heading_lines(text: str, glossary: bool = False) -> dict[str, list[tuple[int, str]]]:
+def heading_lines(text: str) -> dict[str, list[tuple[int, str]]]:
     """Each address `§` can name in TEXT, keyed as `§` compares it (plain, case kept), with the
-    (line number, text) of every copy: a heading at any level, and in the GLOSSARY a table row's
-    first cell too. Fenced code is skipped: a heading quoted in an example is no address."""
+    (line number, text) of every copy: a heading at any level. Fenced code is skipped: a heading
+    quoted in an example is no address. A glossary's terms are its headings: a table row is none."""
     out: dict[str, list[tuple[int, str]]] = {}
     lines = text.splitlines()
     for n, (line, prose) in enumerate(zip(lines, unfenced(lines)), 1):
         if prose and (m := HEADING.match(line)) and (shown := plain(m.group(1))):
             out.setdefault(shown, []).append((n, shown))
-    if glossary:
-        for i, term in table_terms(lines):
-            out.setdefault(term, []).append((i + 1, term))
-            out[term].sort()
     return out
 
 
@@ -13886,12 +14216,12 @@ def heading_rules(trunk: str, staged: bool, paths: list[str], not_docs: list[str
     out = []
     for f in files:
         olds = [came_from[f]] if f in came_from else [f, *gone]
-        before = [heading_lines(at_rev(b, o), o == GLOSSARY) for o in olds]
-        for key, copies in heading_lines(in_index(f, staged), f == GLOSSARY).items():
+        before = [heading_lines(at_rev(b, o)) for o in olds]
+        for key, copies in heading_lines(in_index(f, staged)).items():
             if len(copies) > max(1, *(len(h.get(key, [])) for h in before)):
                 lines = ", ".join(str(n) for n, _ in copies)
                 out.append(f"{f} has `{copies[0][1]}` {len(copies)} times (lines {lines}): a heading "
-                           f"or glossary row is the address `{f} § {copies[0][1]}` cites, so a page "
+                           f"is the address `{f} § {copies[0][1]}` cites, so a page "
                            f"holds each once. Rename one or join the sections ({DIR}/RULES.md, Documentation)")
     return out
 
@@ -14004,19 +14334,19 @@ def moving_in(para: dict, staged: bool, removed: str | None = None, old_form: bo
               f"the Scope: lines this commit keeps pass unchecked", file=sys.stderr)
         return []
     text = trunk_show(loc, ROADMAP) or ""
-    owners = term_owners(trunk_show(loc, GLOSSARY) or "")
+    owners = term_owners(trunk_show(loc, GLOSSARY) or "", meta_names(loc, para.get("meta", "")))
     here = main_root().resolve()
     heads = [p["name"] for p in roadmap_phases(text)] + [i["list"].removesuffix(" " + NO_PHASE)
                                                        for i in roadmap_list_items(text)]
     mine = {pr for pr in {product_of(h, owners) for h in heads} - {""}
-            if (o := owners[pr]) != THIS_REPO and (l := repo_path(o)) is not None and l.resolve() == here}
+            if (o := owners[pr]) and (l := repo_path(o)) is not None and l.resolve() == here}
     if not mine and old_form:
         return [f"{OLD_ROADMAP} still holds phases or items: `jig update --apply` converts it, or "
                 f"`jig move-in` moves them to the metarepo"]
     if not mine:
         return [f"{ROADMAP}: this commit removes it, but {para['meta']}'s roadmap holds none of this repo's "
                 f"products yet, so its phases would be on no trunk: name the product in {para['meta']}'s "
-                f"glossary with its `Owner:` line, and propose its phases there first ({BUFFER}, `jig propose`)"]
+                f"glossary with its `Repo:` line, and propose its phases there first ({BUFFER}, `jig propose`)"]
     known = roadmap_scopes(text)
     out = []
     for f in git("-c", "core.quotePath=false", "ls-files", "--", SPECS, HANDOFFS).splitlines():
@@ -14126,7 +14456,7 @@ def proposal_section_refusals(branch: str, fork: str, text: str, fam: "Family", 
         # nothing else there: the owner's Part C route for items, where no other edit passes.
         owner = whose(h) if h else None
         pages = [p for to, p in moves or [] if owner is not None and
-                 (owner in ("", THIS_REPO) if not to else name_in(owner, {to}))]
+                 (not owner if not to else name_in(owner, {to}))]
         return bool(pages) and only_items_for(old_s.get(h, ""), new_s.get(h, ""), pages)
     def products_owned() -> bool:
         # `products` changes with the sections the proposal may change: a product the proposing
@@ -14138,7 +14468,7 @@ def proposal_section_refusals(branch: str, fork: str, text: str, fam: "Family", 
                                 for h, t in new_s.items() if h)
         return all(owners.get(p, "") == repo or (p in b - a and carried(p)) for p in a ^ b)
     owns = lambda h: (whose(h) == repo or follows(h)) if h else products_owned()
-    owner = lambda h: (lambda o: "this repo" if o in ("", THIS_REPO) else o)(whose(h))
+    owner = lambda h: whose(h) or "this repo"
     return section_refusals(fork, text, owns, owner, repo, True)
 
 
@@ -14840,6 +15170,76 @@ def drop_later_lines(root: Path, here: Path) -> None:
         git("add", "--", f, check=True, cwd=str(root))
 
 
+def own_name(root: Path) -> str:
+    """The name ROOT's repo goes by in its own records: its META's `name` in a metarepo, else its
+    board's, else its folder's."""
+    for f in (META, CONFIG):
+        try:
+            if (root / f).is_file() and (n := json.loads(read_raw(root / f) or "{}").get("name")):
+                return n
+        except (ValueError, AttributeError):
+            pass
+    return root.name
+
+
+OWNER_FIELD = re.compile(r"^Owner:[ \t]*(.*?)[ \t]*$", re.M)
+
+
+def owner_rewrites(root: Path) -> list[tuple[str, str]]:
+    """(heading, repo) for each glossary heading carrying the `Owner:` line `Repo:` replaced:
+    the repo its first backticks name, `this repo` as ROOT's own name."""
+    text = read_raw(root / GLOSSARY) if (root / GLOSSARY).is_file() else ""
+    out = []
+    for e in glossary_entries(text):
+        if "Owner" not in e["fields"]:
+            continue
+        v = e["fields"]["Owner"]
+        named = re.search(r"`([^`]+)`", v)
+        repo = named.group(1).strip() if named else own_name(root) if v.lower().startswith("this repo") else \
+            v.rstrip(".").strip()
+        out.append((e["name"], repo))
+    return out
+
+
+def rewrite_owners(root: Path, here: Path) -> None:
+    """Each `Owner:` line as `Repo:`, plus `Kind: software` where its repo builds one product;
+    where two products name one repo, `Repo:` on both and `Kind:` on neither, for the owner."""
+    pairs = owner_rewrites(root)
+    count = Counter(r.casefold() for _, r in pairs)
+    lines = read_raw(root / GLOSSARY).splitlines(keepends=True)
+    entries = {e["name"]: e for e in glossary_entries("".join(lines))}
+    for name, repo in reversed(pairs):
+        e = entries[name]
+        for j in range(e["start"] + 1, e["end"]):
+            if OWNER_FIELD.match(lines[j].strip()):
+                end = "\r\n" if lines[j].endswith("\r\n") else "\n"
+                lines[j] = f"Repo: {repo}{end}" + (f"Kind: software{end}" if count[repo.casefold()] == 1 else "")
+                break
+    write_raw(root / GLOSSARY, "".join(lines))
+    git("add", "--", GLOSSARY, check=True, cwd=str(root))
+
+
+def owner_step_label(root: Path) -> str:
+    pairs = owner_rewrites(root)
+    count = Counter(r.casefold() for _, r in pairs)
+    shared = sorted({r for _, r in pairs if count[r.casefold()] > 1})
+    return (f"rewrite each `Owner:` line in {GLOSSARY} as `Repo:` and `Kind: software`: "
+            + ", ".join(f"{n} → Repo: {r}" for n, r in pairs)
+            + (f". {', '.join(shared)} names more than one product, so those get `Repo:` and no `Kind:`: "
+               "the owner marks one `Kind: software` and the other `Kind: hardware`" if shared else ""))
+
+
+def glossary_out_of_form(root: Path) -> list[str]:
+    """The problems ROOT's glossary has in the one form once update's rewrite is made: reported,
+    never re-formed, since its rebuild is the owner's."""
+    if not (root / GLOSSARY).is_file():
+        return []
+    text = read_raw(root / GLOSSARY)
+    if owner_rewrites(root):
+        text = OWNER_FIELD.sub("Repo: x\nKind: software", text)
+    return [p for _, p in glossary_problems(text, (root / META).exists())]
+
+
 STEPS: list = [
     # save_board writes the split: the step names it, so the plan says what moves where.
     (f"move docmap, boards, deep_subsystems and not_docs from {CONFIG} to {DOCMAP}, each value "
@@ -14862,6 +15262,11 @@ STEPS: list = [
      + ". Commit this update, which installs the checker that reads it, then run "
      "`jig update --apply` again to convert",
      lambda root, after: (root / OLD_ROADMAP).is_file() and not knows_roadmap_json(root), lambda root, here: None),
+    (owner_step_label, lambda root, after: bool(owner_rewrites(root)), rewrite_owners),
+    (lambda root: f"{GLOSSARY} isn't in the one form ({DIR}/RULES.md, Documentation), and update "
+     "re-forms nothing: " + "; ".join(glossary_out_of_form(root)) + ". Rebuild it by hand: `# "
+     f"{BASIC_TERMS}` first, a product per #, a feature per ##, a term per ###",
+     lambda root, after: bool(glossary_out_of_form(root)), lambda root, here: None),
     (lambda root: "delete the `Later:` line from " + ", ".join(
         f"{f} ({named})" for f, named in later_lines(root))
      + ": work a spec doesn't build stays on the roadmap, unspecced, and the hook refuses the line. "
@@ -17563,7 +17968,7 @@ def cmd_sweep(root: Path, apply: bool) -> int:
                     + (f"{fam.meta_name}'s holds none of its products" if fam.meta_loc is not None
                        else f"{fam.meta_name or 'its metarepo'} can't be reached here (`jig repos`)")
                     + f": propose the product to {fam.meta_name or 'the metarepo'} first, a glossary term "
-                    f"with an `Owner:` line naming this repo, by a {BUFFER} row and `jig propose` "
+                    f"with a `Repo:` line naming this repo, by a {BUFFER} row and `jig propose` "
                     "(`jig move-in --product <Name> --definition <text>` proposes it with the phases of a "
                     "roadmap this repo keeps); then sweep again. Nothing is written here")
     if not apply and homeless:
@@ -17621,17 +18026,19 @@ OLD_README_LINK = re.compile(r"\]\((?P<pre>(?:\.\./)*)README\.md#(?P<anchor>[\w-
 OLD_GLOSSARY_PATH = re.compile(r"(?<![\w./:-])(?P<pre>(?:\.\./)*)GLOSSARY\.md(?![\w/-])")
 
 
-def moved_terms(lines: list[str], demote: bool) -> list[str]:
-    """LINES as the glossary file holds them: each line unchanged, but a term heading one level
-    up when it was a README's `###` (DEMOTE), and a heading added above each bold-paragraph term
-    that no heading names already. A table moves as it is."""
+def moved_terms(lines: list[str], promote: bool) -> list[str]:
+    """LINES as the glossary file holds them, under `# Basic terms`: each line unchanged, but a
+    term heading one level down when it was a root GLOSSARY.md's `##` (PROMOTE), a README's
+    `###` already a term's level, and an `###` heading added above each bold-paragraph term that
+    no heading names already. A table moves as it is, for the hook to refuse until it is
+    rebuilt as headings."""
     bold = dict(bold_terms(lines))
     out = []
     for i, line in enumerate(lines):
         if i in bold:
-            out += [f"## {bold[i]}", ""]
-        if demote and (m := re.match(r"(#{3,6})([ \t].*)$", line)):
-            line = m.group(1)[1:] + m.group(2)
+            out += [f"### {bold[i]}", ""]
+        if promote and (m := re.match(r"(#{2,5})([ \t].*)$", line)):
+            line = "#" + m.group(1) + m.group(2)
         out.append(line)
     while out and not out[0].strip():
         out.pop(0)
@@ -17745,7 +18152,7 @@ def glossary_plan(root: Path) -> dict:
                            "then remove the old home")
         return plan
     if section is not None:
-        body = moved_terms(section, demote=True)
+        body = moved_terms(section, promote=False)
         lines = rtext.splitlines()
         start = next(i for i, l in enumerate(lines) if l.strip() == README_GLOSSARY)
         end = start + 1 + len(section)
@@ -17756,11 +18163,18 @@ def glossary_plan(root: Path) -> dict:
     else:
         lines = old.read_text(errors="replace").splitlines()
         first = next((i for i, l in enumerate(lines) if l.strip()), 0)
-        body = moved_terms(lines[first + 1:] if lines and lines[first].startswith("# ") else lines, demote=False)
+        body = moved_terms(lines[first + 1:] if lines and lines[first].startswith("# ") else lines, promote=True)
         plan["remove"].append("GLOSSARY.md")
-    gtext = "# Glossary\n\n" + "\n".join(body) + "\n"
+    gtext = f"# {BASIC_TERMS}\n\n" + "\n".join(body) + "\n"
     plan["write"][GLOSSARY] = gtext
     plan["terms"] = glossary_terms(gtext)
+    # What the one form refuses in the moved file is left for the session to rebuild before
+    # committing, as a line naming a root document is.
+    meta_repo = (root / META).is_file()
+    for _, problem in glossary_problems(gtext, meta_repo):
+        n = re.match(r"line (\d+): ", problem)
+        plan["left"].append((GLOSSARY, int(n.group(1)) if n else 0,
+                             f"{problem[n.end():] if n else problem}: the hook refuses it, so rebuild it before committing"))
     keep = (f"{DIR}/specs/", f"{DIR}/ledgers/", LOG, IDEAS, PROCESS)
     for f in [*files, GLOSSARY]:
         if f.startswith(f"{DIR}/handoffs/") and (root / f).is_file():
@@ -18451,24 +18865,30 @@ BUFFER_SEED = ("# BUFFER\n\n| Id | Metarepo claim (`<meta>/<path> § section`, a
                "(source, commit) | Decided (who, date) | State |\n|---|---|---|---|---|\n")
 
 
-def owner_dropped(now: dict[str, str], road: str) -> list[str]:
-    """A metarepo commit, or merge, that leaves headings of ROAD, its own roadmap, under a product
-    whose `Owner:` one of its sides gave and its own glossary NOW doesn't: read by the commit's
-    own glossary, those sections would turn the metarepo's own. Each side is judged, HEAD and
-    every commit a merge brings in, so only what this commit or merge drops counts: a branch
-    behind trunk, or a rename made over two commits, is not refused for trunk's terms."""
-    out = []
-    heads = roadmap_headings(road)
+def glossary_rules(meta: bool, staged: bool) -> list[str]:
+    """The glossary's one form, for a commit changing it: each problem glossary_problems finds
+    that no side had (HEAD, and every commit a merge brings in), so an older glossary stays
+    editable until its rebuild; and each product a side had that the roadmap includes or names
+    and the commit's glossary drops, which would leave the roadmap naming no product."""
+    now_text = in_index(GLOSSARY, staged) or ""
     sides = [("HEAD", "HEAD")] + [(c, f"the merged {git('name-rev', '--name-only', '--always', c) or c[:12]}")
                                   for c in merging_commits()]
+    was = {rev: at_rev(rev, GLOSSARY) or "" for rev, _ in sides}
+    had = {k for t in was.values() for k, _ in glossary_problems(t, meta)}
+    out = [f"{GLOSSARY}: {p}" for k, p in glossary_problems(now_text, meta) if k not in had]
+    now = set(glossary_products(now_text))
+    road = in_index(ROADMAP, staged) or ""
+    included = set((roadmap_records(road) or {}).get("products") or [])
+    heads = roadmap_headings(road)
     for rev, side in sides:
-        for term in sorted(term_owners(at_rev(rev, GLOSSARY))):
-            using = [h for h in heads if product_of(list_base(h), {term: ""}) and not product_of(list_base(h), now)]
-            if term not in now and using:
-                out.append(f"{GLOSSARY}: ## {term} has no `Owner:` line here, though {side} gives it one, and "
-                           f"{ROADMAP} heads {', '.join(f'## {h}' for h in using)} with it: keep its owner, "
-                           "or re-head those sections in this commit")
-    return out
+        for product in sorted(set(glossary_products(was[rev])) - now):
+            using = [h for h in heads if product_of(list_base(h), {product: ""})]
+            if product in included or using:
+                out.append(f"{GLOSSARY}: product {product} is gone, though {side} has it, and {ROADMAP} "
+                           + (f"includes it" if product in included else
+                              f"heads {', '.join(using)} with it")
+                           + ": keep it, with its `Repo:` and `Kind:` lines, or change the roadmap in this commit")
+    return list(dict.fromkeys(out))
 
 
 def log_with_line(text: str, group: str, line: str) -> str:
@@ -18701,8 +19121,8 @@ def cmd_move_in(root: Path, args) -> int:
     branch = rec["branch"] if rec else f"propose/{me_root.name}-{spec.stem}"
     glossary = (git("show", f"{branch}:{GLOSSARY}", cwd=str(loc)) if state == "waiting"
                 else trunk_show(loc, GLOSSARY)) or ""
-    owners = term_owners(glossary)
-    mine = {t for t, o in owners.items() if o != THIS_REPO and (p := repo_path(o)) is not None
+    owners = term_owners(glossary, meta_names(loc, meta_name))
+    mine = {t for t, o in owners.items() if o and (p := repo_path(o)) is not None
             and p.resolve() == me_root.resolve()}
     want = (args.product or "").strip()
     if proposed:
@@ -18715,13 +19135,15 @@ def cmd_move_in(root: Path, args) -> int:
         if not product:
             die("usage: jig move-in --product <Name> [--definition <text>] [--apply]", 2)
         owner = next((o for t, o in owners.items() if t.casefold() == product.casefold()), None)
-        named = any(term_text(n).casefold() == product.casefold() for n, _ in page_sections(glossary)[1:])
-        if owner == THIS_REPO:
-            die(f"{product} is {meta_name}'s own term (its glossary's `Owner: this repo.`): name another product", 2)
+        named = any(t.casefold() == product.casefold() for t in glossary_terms(glossary))
+        if owner == "":
+            die(f"{product} is {meta_name}'s to control (its `Repo:` names {meta_name}, or none): its "
+                "hubnode gives it to this repo first, or name another product", 2)
         if owner is not None and not (repo_path(owner) is not None and repo_path(owner).resolve() == me_root.resolve()):
             die(f"{product} is {owner}'s product in {meta_name}'s {GLOSSARY}: name this repo's own", 2)
         if owner is None and named:
-            die(f"{meta_name}'s {GLOSSARY} has ## {product} with no `Owner:` line: its hubnode names the owner first", 2)
+            die(f"{meta_name}'s {GLOSSARY} has {product} as a term, not a product with a `Repo:` line: "
+                "its hubnode makes it a product first", 2)
         carries = owner is None
     hmap = move_in_map(own, product, mine)
     sid_map = {s: map_ref(s, hmap) for s in roadmap_scopes(own)}
@@ -18731,11 +19153,11 @@ def cmd_move_in(root: Path, args) -> int:
     if state == "merged" and not staged_out:
         # Before step 2 is next: the product must still be this repo's there, and its phases there.
         owner = next((o for t, o in owners.items() if t.casefold() == product.casefold()), None)
-        if owner is None or owner == THIS_REPO or not ((p := repo_path(owner)) is not None and p.resolve() == me_root.resolve()):
-            named = any(term_text(n).casefold() == product.casefold() for n, _ in page_sections(glossary)[1:])
-            what = ("has no such term" if not named else "has no `Owner:` line for it" if owner is None
-                    else f"gives it `Owner:` {owner}")
-            die(f"{meta_name}'s {GLOSSARY} on its {meta_trunk} doesn't give {product} to {me}: ## {product} {what}. "
+        if not owner or not ((p := repo_path(owner)) is not None and p.resolve() == me_root.resolve()):
+            named = any(t.casefold() == product.casefold() for t in glossary_terms(glossary))
+            what = ("has no such term" if not named else "has no `Repo:` line for it" if owner is None
+                    else f"gives it `Repo:` {owner or meta_name}")
+            die(f"{meta_name}'s {GLOSSARY} on its {meta_trunk} doesn't give {product} to {me}: # {product} {what}. "
                 f"Its hubnode restores the owner; if it renamed the product, `--product <Name>`", 2)
         if not taken:
             die(f"{meta_name}'s {ROADMAP} on its {meta_trunk} holds none of "
@@ -18759,8 +19181,8 @@ def cmd_move_in(root: Path, args) -> int:
             print(f"   {branch}, which {spec.relative_to(root)} records, is gone from {meta_name} unmerged: "
                   "step 1 proposes it again")
         if carries:
-            print(f"   carries the term {product}: ## {product} in {meta_name}'s {GLOSSARY}, "
-                  f"`Owner: \\`{me}\\`.`, with its line under ## Unreleased ### Added")
+            print(f"   carries the product {product}: # {product} in {meta_name}'s {GLOSSARY}, "
+                  f"`Repo: {me}` and `Kind: software`, with its line under ## Unreleased ### Added")
             if not args.definition:
                 print(f"   needs --definition \"<one sentence>\": {meta_name} has no {product} term yet")
         else:
@@ -18881,8 +19303,8 @@ def move_in_propose(root: Path, para: dict, loc: Path, product: str, me: str, ow
         meta_road = trunk_show(loc, ROADMAP) or ""
         files: dict[str, str | None] = {ROADMAP: moved_in(meta_road, own, hmap, mine | {product})}
         if carries:
-            files[GLOSSARY] = ((trunk_show(loc, GLOSSARY) or "# Glossary\n").rstrip("\n")
-                               + f"\n\n## {product}\n\n{definition}\n\nOwner: `{me}`.\n")
+            files[GLOSSARY] = glossary_add(trunk_show(loc, GLOSSARY) or glossary_seed(), product,
+                                           definition, repo=me, kind="software")
             files[LOG] = log_with_line(trunk_show(loc, LOG) or LOG_SEED, "Added",
                                        f"- {GLOSSARY} § {product}: {me}'s product, its plan moving in.")
         subject = f"{'GLOSSARY' if carries else 'ROADMAP'}: {product} moves in from {me}"
@@ -19043,8 +19465,9 @@ def receiver_plan(fam: "Family", to: str, loc: Path, meta_loc: Path | None) -> t
         # One keeping its own roadmap, converted or not, gets its items by a staged change.
         return "own", ""
     # A pararepo keeping a roadmap of its own is a family of one: the products are the metarepo's.
-    owners = fam.owners if fam.kind != "own" or meta_loc is None else term_owners(trunk_show(meta_loc, GLOSSARY) or "")
-    product = next((t for t, o in owners.items() if o != THIS_REPO and (p := repo_path(o)) is not None
+    owners = fam.owners if fam.kind != "own" or meta_loc is None else \
+        term_owners(trunk_show(meta_loc, GLOSSARY) or "", meta_names(meta_loc))
+    product = next((t for t, o in owners.items() if o and (p := repo_path(o)) is not None
                     and p.resolve() == loc.resolve()), "")
     return ("meta", product) if product else ("own", "")
 
@@ -19624,8 +20047,17 @@ def main(argv: list[str] | None = None) -> int:
     c_.add_argument("--staged", action="store_true")
     sub.add_parser("job", help="print this branch's manifest")
     dc = sub.add_parser("decision", help="print a decision entry and its supersedes chain")
-    dc.add_argument("id")
+    dc.add_argument("id", nargs="?")
+    dc.add_argument("--page", help="each entry whose Touches: names this page, or a term on it")
     dc.add_argument("--peers", action="store_true", help="an entry's peers, from this log or one read for peers (`<repo>/<id>` picks the log)")
+    gl = sub.add_parser("glossary", help="a glossary term: its heading path, definition, fields and "
+                        "controlling repo; `glossary add` writes one in its sorted place")
+    gl.add_argument("words", nargs="+", metavar="TERM", help='"<term>", or add "<term>"')
+    gl.add_argument("--under", help="add: the term's parent, <product> or <product>/<feature> (default: Basic terms)")
+    gl.add_argument("--text", help="add: its definition")
+    gl.add_argument("--binds", help="add: the products or features it applies to beyond its own, a,b (a metarepo's)")
+    gl.add_argument("--repo", help="add: a product, with the repo that builds it, or none")
+    gl.add_argument("--kind", choices=PRODUCT_KINDS, help="add: a product's kind")
     sy = sub.add_parser("sync", help="bring in the upstream: trunk on a job; the metarepo on a pararepo's trunk")
     sy.add_argument("--answered", metavar="IDS", help="pararepo trunk: close these Open buffer rows as answered")
     sy.add_argument("--in", dest="answered_in", metavar="RELEASE", help="the metarepo release that answered them")
@@ -19754,7 +20186,7 @@ def main(argv: list[str] | None = None) -> int:
     load_genres(root)
     fn = {
         "init": cmd_init, "install-hooks": cmd_install_hooks, "status": cmd_status,
-        "open": cmd_open, "reserve": cmd_reserve, "consolidate": cmd_consolidate, "share": cmd_share, "mark": cmd_mark, "merge": cmd_merge, "rules": cmd_rules, "check": cmd_rules, "checked": cmd_checked, "queue": cmd_queue, "decision": cmd_decision, "ideas": cmd_ideas,
+        "open": cmd_open, "reserve": cmd_reserve, "consolidate": cmd_consolidate, "share": cmd_share, "mark": cmd_mark, "merge": cmd_merge, "rules": cmd_rules, "check": cmd_rules, "checked": cmd_checked, "queue": cmd_queue, "decision": cmd_decision, "glossary": cmd_glossary_term, "ideas": cmd_ideas,
         "job": cmd_job, "sync": cmd_sync, "reviewed": cmd_reviewed,
         "handoff": cmd_handoff, "gate": cmd_gate, "hook": cmd_hook,
         "workflow": cmd_workflow, "roles": cmd_roles, "flows": cmd_flows, "next": cmd_next,
