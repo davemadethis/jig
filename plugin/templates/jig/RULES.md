@@ -1792,8 +1792,8 @@ job's worktree (M4).
 with its subsystems below it. A genre is a folder directly under `docs/`, a category of the
 ecosystem the metarepo defines (products, features, principles, concepts), so the opposite of a
 code repo holds: genre folders are required here, where a code repo's tree names one product's
-parts. A genre has no page of its own and adds no depth; its term is a `## <genre>` heading in
-`docs/glossary.md`, the one file directly in `docs/`. `meta.json`'s optional `genres` lists them (`jig init --meta --genres
+parts. A genre has no page of its own and adds no depth; its term is an `### <genre>` heading under
+`# Basic terms` in `docs/glossary.md`, the one file directly in `docs/`. `meta.json`'s optional `genres` lists them (`jig init --meta --genres
 a,b,c`, or `--genres product-ecosystem` for those four); without it, any folder under `docs/`
 is one. `jig survey` names a page directly in `docs/`, one in a folder `genres` doesn't declare,
 and every other Markdown file outside `docs/` that isn't a root document or a decision register

@@ -5316,7 +5316,8 @@ def sort_glossary(root: Path) -> None:
     jobs each appending a term merge as text, and the order is restored here, where no two
     branches write it at once. One already in order is left untouched."""
     path = root / GLOSSARY
-    if path.is_file() and (now := glossary_sorted(was := read_raw(path))) != was:
+    # A glossary out of the form isn't sorted: its order is the owner's until its rebuild.
+    if path.is_file() and in_form(glossary_entries(was := read_raw(path))) and (now := glossary_sorted(was)) != was:
         write_raw(path, now)
         git("add", "--", GLOSSARY, check=True, cwd=str(root))
         print(f"sorted {GLOSSARY}")
@@ -8050,7 +8051,7 @@ def touched_term(path: str, term: str, repo: str, cache: Path | None, staged: bo
     else:
         text, where = body_now(GLOSSARY, staged) or "", GLOSSARY
     have = {t.casefold() for t in glossary_terms(text)}
-    return "" if term.casefold() in have else f"is no term in {where}: add `## {term}` there, or name a term it has"
+    return "" if term.casefold() in have else f"is no term in {where}: add `### {term}` under `# {BASIC_TERMS}` there, or name a term it has"
 
 
 def touches_problems(old: str, new: str, prefix: str, trunk: str, staged: bool,
@@ -15224,6 +15225,13 @@ def owner_rewrites(root: Path) -> list[tuple[str, str]]:
 def rewrite_owners(root: Path, here: Path) -> None:
     """Each `Owner:` line as `Repo:`, plus `Kind: software` where its repo builds one product;
     where two products name one repo, `Repo:` on both and `Kind:` on neither, for the owner."""
+    write_raw(root / GLOSSARY, owners_rewritten(root))
+    git("add", "--", GLOSSARY, check=True, cwd=str(root))
+
+
+def owners_rewritten(root: Path) -> str:
+    """ROOT's glossary with rewrite_owners' rewrite made, written nowhere: what update's report
+    of a glossary out of the form judges, so it names no problem the rewrite won't leave."""
     pairs = owner_rewrites(root)
     count = Counter(r.casefold() for _, r in pairs)
     lines = read_raw(root / GLOSSARY).splitlines(keepends=True)
@@ -15235,8 +15243,7 @@ def rewrite_owners(root: Path, here: Path) -> None:
                 end = "\r\n" if lines[j].endswith("\r\n") else "\n"
                 lines[j] = f"Repo: {repo}{end}" + (f"Kind: software{end}" if count[repo.casefold()] == 1 else "")
                 break
-    write_raw(root / GLOSSARY, "".join(lines))
-    git("add", "--", GLOSSARY, check=True, cwd=str(root))
+    return "".join(lines)
 
 
 def owner_step_label(root: Path) -> str:
@@ -15254,10 +15261,7 @@ def glossary_out_of_form(root: Path) -> list[str]:
     never re-formed, since its rebuild is the owner's."""
     if not (root / GLOSSARY).is_file():
         return []
-    text = read_raw(root / GLOSSARY)
-    if owner_rewrites(root):
-        text = OWNER_FIELD.sub("Repo: x\nKind: software", text)
-    return [p for _, p in glossary_problems(text, (root / META).exists())]
+    return [p for _, p in glossary_problems(owners_rewritten(root), (root / META).exists())]
 
 
 def template_sources(root: Path, here: Path) -> dict[str, "Path | bytes"]:
@@ -15348,10 +15352,6 @@ STEPS: list = [
      "`jig update --apply` again to convert",
      lambda root, after: (root / OLD_ROADMAP).is_file() and not knows_roadmap_json(root), lambda root, here: None),
     (owner_step_label, lambda root, after: bool(owner_rewrites(root)), rewrite_owners),
-    (lambda root: f"{GLOSSARY} isn't in the one form ({DIR}/RULES.md, Documentation), and update "
-     "re-forms nothing: " + "; ".join(glossary_out_of_form(root)) + ". Rebuild it by hand: `# "
-     f"{BASIC_TERMS}` first, a product per #, a feature per ##, a term per ###",
-     lambda root, after: bool(glossary_out_of_form(root)), lambda root, here: None),
     (lambda root: "delete the `Later:` line from " + ", ".join(
         f"{f} ({named})" for f, named in later_lines(root))
      + ": work a spec doesn't build stays on the roadmap, unspecced, and the hook refuses the line. "
@@ -16591,6 +16591,10 @@ def cmd_update(root: Path, args) -> int:
     review += procedure_lines(root, files, template)
     review += overlapping_skills(root, files)
     review += project_review(root, files, [f for f, _ in review])
+    if problems := glossary_out_of_form(root):
+        review.append((GLOSSARY, f"isn't in the one form ({DIR}/RULES.md, Documentation), and update "
+                       f"re-forms nothing: {'; '.join(problems)}. Rebuild it by hand: `# {BASIC_TERMS}` "
+                       "first, a product per #, a feature per ##, a term per ###"))
     have_ignores = {l.strip() for l in ignore.read_text().splitlines()} if ignore.exists() else set()
     if (new_board.get("reference_files") == "ignore" and not ref_line
             and not set(REFERENCE_IGNORES) <= have_ignores):
@@ -18974,7 +18978,8 @@ def glossary_rules(meta: bool, staged: bool) -> list[str]:
     sides = [("HEAD", "HEAD")] + [(c, f"the merged {git('name-rev', '--name-only', '--always', c) or c[:12]}")
                                   for c in merging_commits()]
     was = {rev: at_rev(rev, GLOSSARY) or "" for rev, _ in sides}
-    had = {k for t in was.values() for k, _ in glossary_problems(t, meta)}
+    # A side with no glossary had no problems: one created in this commit answers for all of its own.
+    had = {k for t in was.values() if t for k, _ in glossary_problems(t, meta)}
     out = [f"{GLOSSARY}: {p}" for k, p in glossary_problems(now_text, meta) if k not in had]
     now = set(glossary_products(now_text))
     road = in_index(ROADMAP, staged) or ""
@@ -19043,7 +19048,7 @@ def drop_proposal(loc: Path, branch: str) -> None:
 
 def name_in_family(loc: Path) -> str:
     """This repo's name as the metarepo at LOC lists it in `pararepos`, which its glossary's
-    `Owner:` lines name; the checkout's folder name when it lists none that resolves here."""
+    `Repo:` lines name; the checkout's folder name when it lists none that resolves here."""
     here = main_root().resolve()
     try:
         paras = json.loads(trunk_show(loc, META) or "{}").get("pararepos") or []

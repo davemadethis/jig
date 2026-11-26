@@ -320,7 +320,7 @@ git add -A && git commit -qm init && $J init >/dev/null && git add -A && git com
 msg="init: root holds only AGENTS.md, CLAUDE.md, .jig/ and docs/: the roadmap is .jig/roadmap.json, with no view file"
 expect_pass test "$(ls -A | grep -v '^\.git$' | LC_ALL=C sort | tr '\n' ' ')" = ".jig AGENTS.md CLAUDE.md docs "
 msg="init: the glossary is seeded in the one form, no title: # Basic terms, then the repo's software product named for the board"
-expect_pass sh -c "test \"\$(ls docs)\" = glossary.md && head -1 docs/glossary.md | grep -qx '# Basic terms' && grep -qx '# '\"\$(python3 -c 'import json; print(json.load(open(\".jig/config.json\"))[\"name\"])')\" docs/glossary.md && grep -qx 'Kind: software' docs/glossary.md && test -z \"\$($J glossary \"\$(python3 -c 'import json; print(json.load(open(\".jig/config.json\"))[\"name\"])')\" >/dev/null 2>&1; echo)\""
+expect_pass sh -c "test \"\$(ls docs)\" = glossary.md && head -1 docs/glossary.md | grep -qx '# Basic terms' && grep -qx '# '\"\$(python3 -c 'import json; print(json.load(open(\".jig/config.json\"))[\"name\"])')\" docs/glossary.md && grep -qx 'Kind: software' docs/glossary.md && $J glossary \"\$(python3 -c 'import json; print(json.load(open(\".jig/config.json\"))[\"name\"])')\" | grep -qx 'Kind: software'"
 
 msg="init: .jig/ holds jig.py, RULES.md, config.json, docmap.json, jobs.json, decisions.md, ideas.md, roadmap.json, the five scripts, staging/.gitignore, inbox/.gitignore and the templates, nothing else"
 expect_pass test "$(find .jig -type f | LC_ALL=C sort | tr '\n' ' ')" = ".jig/RULES.md .jig/config.json .jig/decisions.md .jig/docmap.json .jig/ideas.md .jig/inbox/.gitignore .jig/jig.py .jig/jobs.json .jig/roadmap.json .jig/scripts/check.sh .jig/scripts/derive.sh .jig/scripts/format.sh .jig/scripts/publish.sh .jig/scripts/release.sh .jig/scripts/setup.sh .jig/staging/.gitignore .jig/templates/deferred.md .jig/templates/glossary-product.md .jig/templates/glossary-term.md .jig/templates/handoff.md .jig/templates/hardware.md .jig/templates/no-phase-item.json .jig/templates/page.md .jig/templates/phase.json .jig/templates/process.md .jig/templates/scope.json .jig/templates/skill.md .jig/templates/spec.md .jig/templates/workarounds.md "
@@ -12249,12 +12249,20 @@ msg="glossary form: two products naming one repo, each Kind: software, are refus
 gtry "s += '\n# A1\n\nRepo: x\nKind: software\n\nA.\n\n# A2\n\nRepo: x\nKind: software\n\nB.\n'"; expect_pass refused "products A1, A2 name one repo, x"
 msg="glossary form: one software and one hardware product naming one repo commit"
 gtry "s += '\n# A1\n\nRepo: x\nKind: software\n\nA.\n\n# A2\n\nRepo: x\nKind: hardware\n\nB.\n'"; expect_pass test $rc = 0
+msg="glossary form: a glossary made where none was is held to the whole form: one in the old form is refused"
+git rm -q docs/glossary.md && git commit -qm "no glossary" >/dev/null 2>&1
+mkdir -p docs && printf '# Glossary\n\n## mote\n\nA speck.\n' > docs/glossary.md && git add -A; out=$(git commit -qm "GLOSSARY: old" 2>&1); rc=$?; git reset -q --hard
+expect_pass refused "the first # heading is Glossary, not .# Basic terms."
+mkdir -p docs
 msg="glossary form: an older glossary out of the form stays editable: a commit adding no problem passes"
 printf '# Glossary\n\n## mote\n\nOwner: `x`.\n\nA speck.\n' > docs/glossary.md && git add -A && git -c core.hooksPath=/dev/null commit -qm "an older glossary"
 gtry "s += '\n## seam\n\nA join.\n'"; expect_pass test $rc = 0
 msg="glossary form: update rewrites the Owner: line as Repo: and Kind: software, naming it, and its commit passes"
 out=$($UP 2>&1); $UP --apply >/dev/null 2>&1
 expect_pass sh -c "echo \"\$0\" | grep -q 'mote → Repo: x' && grep -qx 'Repo: x' docs/glossary.md && grep -qx 'Kind: software' docs/glossary.md && ! grep -q '^Owner:' docs/glossary.md && git commit -qm 'jig update' && $UP 2>&1 | grep -q \"isn't in the one form\"" "$out"
+msg="glossary form: update's report of a glossary out of the form judges the rewrite it would make: two products, two repos, no shared repo named"
+printf '# Glossary\n\n## A\n\nOwner: `ya`.\n\n## B\n\nOwner: `yb`.\n' > docs/glossary.md && git add -A && git -c core.hooksPath=/dev/null commit -qm "two owners"
+expect_pass sh -c "$UP 2>&1 | grep -q \"isn't in the one form\" && ! $UP 2>&1 | grep -q 'name one repo'"
 msg="glossary form: two products naming one repo get Repo: and no Kind:, and update says the owner marks them"
 printf '# Glossary\n\n## A\n\nOwner: `y`.\n\n## B\n\nOwner: this repo.\n\n## C\n\nOwner: `y`.\n' > docs/glossary.md && git add -A && git -c core.hooksPath=/dev/null commit -qm "two of y"
 out=$($UP 2>&1); $UP --apply >/dev/null 2>&1
@@ -12284,6 +12292,13 @@ $J open GS --spec .jig/specs/gs.md --owns "GS/**" >/dev/null && git add -A && gi
        && $J reviewed >/dev/null && $J handoff --spec .jig/specs/gs.md >/dev/null 2>&1 && pcfold && git add -A && git commit -qm "note GS" )
 gated GS; out=$($J merge GS 2>&1); rc=$?; [ $rc = 0 ] || echo "$out"
 expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -qx 'sorted docs/glossary.md' && test \"\$(grep '^#' docs/glossary.md | tr '\n' '|')\" = '# Basic terms|### mote|### seam|### zinc|# app|### bolt|# Gear|' && git show --name-only --format= HEAD | grep -qx docs/glossary.md" "$out"
+msg="glossary form: jig merge leaves a glossary out of the form in its order"
+expect_pass python3 -c "
+import importlib.util, pathlib, tempfile, subprocess
+sp = importlib.util.spec_from_file_location('j', '.jig/jig.py'); j = importlib.util.module_from_spec(sp); sp.loader.exec_module(j)
+d = pathlib.Path(tempfile.mkdtemp()); (d / 'docs').mkdir(); old = '# Glossary\n\n## zed\n\nZ.\n\n## ant\n\nA.\n'
+(d / 'docs/glossary.md').write_text(old); subprocess.run(['git', 'init', '-q'], cwd=d); j.sort_glossary(d)
+assert (d / 'docs/glossary.md').read_text() == old"
 msg="glossary form: jig decision --page prints each entry whose Touches: names the page or a term on it"
 ulog "$(printf '### D-?pg Pages\nAccepted (owner, 2026-11-25).\nTouches: docs/glossary.md § mote\n\nMotes are small.')" && ulog "$(printf '### D-?other Other\nAccepted (owner, 2026-11-25).\nTouches: none — smoke\n\nNot here.')" && git add -A && git commit -qm "log: two entries" >/dev/null 2>&1
 out=$($J decision --page docs/glossary.md 2>&1)
