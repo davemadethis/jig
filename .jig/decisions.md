@@ -11,6 +11,7 @@ A breaking change is one that a reader taking the release must act on: a `**Brea
 - `jig docmap <page or path>…` queries the docs tree's map: a page's globs and whether it is a board or an approved deep subsystem, or the pages covering a file.
 - `jig roadmap --json [filters] [--id <id>…]` prints only the roadmap records asked for, each with its key and derived state: an agent asks jig rather than reading the file.
 - `jig roadmap show [filters] [--width N]` prints the roadmap as a text chart with no dates: a box per phase as wide as its scopes, each scope in the column one past what it waits on, a box per product where there is more than one, each product's No phase items last, and one band per phase past 100 columns. The agent instructions template's Commands carry a `roadmap:` line for it, and `jig update --apply` adds that line where it is missing.
+- A `jig update --apply` step deleting a `Later:` line from each spec on trunk, naming the spec and the ids it named.
 
 ### Changed
 - The docs tree's map has its own file, `.jig/docmap.json`: `docmap`, `boards`, `deep_subsystems` and `not_docs` move there from `.jig/config.json`, which keeps only configuration. It is trunk-only like the board (R5), and the hook refuses a key jig doesn't know or a value of another shape. `jig init` writes it, and `jig update --apply` moves the four keys with their values unchanged.

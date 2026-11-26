@@ -724,7 +724,7 @@ def check_rules(root: Path, board: Board, *, staged: bool) -> list[str]:
     # A spec takes only what it builds: what it leaves stays on the roadmap, unspecced, where any
     # later spec can take it. A `Later:` line would hold it in a file that closes with the spec.
     for f in paths:
-        if is_spec(f) and LATER_LINE.search(in_index(f, staged) or ""):
+        if is_spec(f) and later_line(in_index(f, staged) or ""):
             out.append(f"{f} has a `Later:` line: work a spec doesn't build stays on the roadmap, "
                        "unspecced, and a partly built scope is split by a roadmap change. Delete the line")
     if meta is not None and (GLOSSARY in paths or ROADMAP in paths):
@@ -12201,6 +12201,13 @@ def spec_scopes(text: str) -> list[str]:
 LATER_LINE = re.compile(r"^Later:[ \t]*.*\n?", re.M)
 
 
+def later_line(text: str) -> "re.Match | None":
+    """A spec's `Later:` line in its header, above its first `## ` section: a line in its body,
+    an example in a fence say, is no record."""
+    end = m.start() if (m := re.search(r"^## ", text, re.M)) else len(text)
+    return LATER_LINE.search(text, 0, end)
+
+
 def cited(path: str, text: str, bad) -> str:
     """What PATH's `Scope:` line names that BAD holds, as a refusal says it: "takes a, b"; ""
     when none."""
@@ -12282,7 +12289,7 @@ def finished_specs(snap: Snapshot, board: "Board", job: str = "", named: set[str
             if bug in board.jobs or job and bug != job:
                 continue
             note = ""
-            # What it leaves for later outlives it on its job's note, as its job's spec's does.
+            # Its Scope: and staged marks outlive it on its job's note, as its job's spec's do.
             carry = job_note(snap, bug)
         else:
             note = note_for(f, notes)
@@ -14820,14 +14827,16 @@ def later_lines(root: Path) -> list[tuple[str, str]]:
     out = []
     for p in sorted((root / SPECS).glob("*.md")):
         f = p.relative_to(root).as_posix()
-        if is_spec(f) and (m := LATER_LINE.search(read_raw(p))):
+        if is_spec(f) and (m := later_line(read_raw(p))):
             out.append((f, m.group(0).removeprefix("Later:").strip() or "empty"))
     return out
 
 
 def drop_later_lines(root: Path, here: Path) -> None:
     for f, _ in later_lines(root):
-        write_raw(root / f, LATER_LINE.sub("", read_raw(root / f), count=1))
+        text = read_raw(root / f)
+        m = later_line(text)
+        write_raw(root / f, text[:m.start()] + text[m.end():])
         git("add", "--", f, check=True, cwd=str(root))
 
 

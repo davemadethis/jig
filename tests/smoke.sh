@@ -6002,13 +6002,16 @@ sed -i.bak 's/^Later: .*$/Later:/' .jig/specs/sl.md && rm .jig/specs/sl.md.bak &
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'sl.md has a .Later:. line'" "$out"
 sed -i.bak '/^Later:/d' .jig/specs/sl.md && rm .jig/specs/sl.md.bak && git add -A
 expect_pass git commit -qm "sl, no Later"
-msg="roadmap: jig update --apply deletes a Later: line from each spec on trunk, naming each, and leaves a note's"
-printf '# sk\n\nSource: smoke\nScope: No phase/nope\nLater: No phase/nope, alpha/x\n\n## Intent\nx\n' > .jig/specs/sk.md
+msg="roadmap: a Later: line in a spec's body, below its first section, is no record: the spec commits"
+printf '# sf\n\nSource: smoke\n\n## Intent\nThe old form:\n```\nLater: No phase/example\n```\n' > .jig/specs/sf.md && git add -A
+expect_pass git commit -qm "sf, a fenced example"
+msg="roadmap: jig update --apply deletes a Later: line from each spec on trunk, naming each, leaves a body's example and a note's"
+printf '# sk\n\nSource: smoke\nScope: No phase/nope\nLater: No phase/nope, alpha/x\n\n## Intent\nx\n```\nLater: No phase/example\n```\n' > .jig/specs/sk.md
 mkdir -p .jig/handoffs && printf '# Handoff: sk\n\nCommit: %s\nDate: 2026-11-01\nSpec: .jig/specs/old.md\nLater: No phase/nope\n\n## Built\nx\n' "$(git rev-parse HEAD)" > .jig/handoffs/sk-2026-11-01.md
 git add -A && git -c core.hooksPath=/dev/null commit -qm "an older jig's spec and note"
 out=$($UP 2>&1)
 $UP --apply >/dev/null 2>&1
-expect_pass sh -c "echo \"\$0\" | grep -q 'delete the .Later:. line from .jig/specs/sk.md (No phase/nope, alpha/x)' && ! grep -q '^Later:' .jig/specs/sk.md && grep -qx 'Scope: No phase/nope' .jig/specs/sk.md && grep -qx 'Later: No phase/nope' .jig/handoffs/sk-2026-11-01.md && git commit -qm 'jig update' && test -z \"\$($UP 2>&1 | grep 'Later')\"" "$out"
+expect_pass sh -c "echo \"\$0\" | grep -q 'delete the .Later:. line from .jig/specs/sk.md (No phase/nope, alpha/x)' && test \"\$(grep -c '^Later:' .jig/specs/sk.md)\" = 1 && grep -qx 'Later: No phase/example' .jig/specs/sk.md && ! echo \"\$0\" | grep -q 'specs/sf.md' && grep -qx 'Scope: No phase/nope' .jig/specs/sk.md && grep -qx 'Later: No phase/nope' .jig/handoffs/sk-2026-11-01.md && git commit -qm 'jig update' && test -z \"\$($UP 2>&1 | grep 'Later')\"" "$out"
 cd "$NR"
 
 NP="$T/no-phase"; pcnew "$NP" && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board

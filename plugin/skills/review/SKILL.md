@@ -46,9 +46,10 @@ Its job is to find the reason this change is wrong. Its questions:
 
 1. Does every "done when" item have evidence? Name it, or it isn't done. Does "done when"
    cover the symptom in the spec's `Source:` line? A fix spec whose "done when" doesn't, and whose
-   `Out of scope` doesn't say why, is blocking. Out of scope never defers: an `Out of scope` line that leaves work for
-   later, in any wording ("later", "a follow-up", "once this lands"), is blocking. That line
-   closes with the spec, and the work with it; work worth building later goes onto the roadmap
+   `Out of scope` doesn't say why, is blocking. Out of scope never defers: a deferral written as prose is blocking, in
+   any wording ("later", "a follow-up", "once this lands"), whether in `Out of scope`, another
+   section of the spec, or the handoff note. That prose closes with the spec or sits in a note
+   nothing reads, and the work with it; work worth building later goes onto the roadmap
    as a scope or No phase item on the owner's word. So is a spec taking a scope it builds only
    part of: a spec takes only what it builds, and a roadmap change on the owner's yes splits the
    scope first.

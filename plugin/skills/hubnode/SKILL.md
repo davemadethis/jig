@@ -337,8 +337,11 @@ it builds: work it doesn't build stays on the roadmap, unspecced, and out of sco
 defers. Work worth building later is put as its own roadmap change, one line per item, never
 inside another question; the owner's yes to the line is the yes to the deferral. A spec
 building only part of a scope waits on a roadmap change splitting it: the built part becomes
-a new scope the spec takes whole, and the rest stays in the original scope, under its id,
-its text unchanged. A roadmap change asks
+a new scope the spec takes whole, in its own words if it likes, and the rest stays in the
+original scope, under its id, its text unchanged, so a wait on that id holds until the rest
+is built. For an open job, land the split on trunk and tell its work session: it syncs and
+re-points its spec's `Scope:` line from the original id to the new one. Left on the original,
+the merge reads the unbuilt rest done and releases its waits, and no hook catches it. A roadmap change asks
 for no decision entry and no change line. A built item stays, read done from the spec that
 took it, until a roadmap change of the owner's removes it.
 
