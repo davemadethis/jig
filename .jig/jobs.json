@@ -1,7 +1,7 @@
 {
   "fixes-0.17.1": {
     "spec": ".jig/specs/fixes-0.17.1.md",
-    "state": "claimed",
+    "state": "ready",
     "after": [],
     "owns": [],
     "shares": [
