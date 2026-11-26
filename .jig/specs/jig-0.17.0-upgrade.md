@@ -4,7 +4,7 @@ Source: jig hubnode session / 2026-11-26 / the owner (staged as jig-0.17.0-upgra
 
 Source: the owner, 2026-11-26, in jig's hubnode session: "everything in this latest release, since the one before it, needs to be applied to every repo, including but not limited to updating roadmaps … Require that each hubnode checks jig and its own repo to make sure the process is what it would recommend also. Each hubnode should also commit and push before running the spec, and remember that point so that it can rollback if needed, and that rollback point will be recorded into its spec before the job opens and must be recorded in the handoff when it finishes."
 
-Rollback: <filled in by step 1, before anything else runs>
+Rollback: main at 357a0d37f4cf5afebfca42bbcae51711c19fa42e, pushed to origin on 2026-11-26
 
 ## Intent
 This repo (a stand-alone repo: no `.jig/meta.json`, no `.jig/para.json`) runs jig 0.17.0's
