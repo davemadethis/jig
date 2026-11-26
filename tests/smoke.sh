@@ -6217,6 +6217,15 @@ cd "$here"
 pcnew "$T/splace" && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
 mkdir -p docs && printf '# Glossary\n\n## Widget\n\nThe widget.\n\nOwner: `this repo`.\n' > docs/glossary.md && git rm -q .jig/roadmap.json
 printf '# Roadmap\n\n## Widget alpha\nScopes:\n- `s`: a scope\n' > .jig/roadmap.md && git add -A && git -c core.hooksPath=/dev/null commit -qm old
+msg="bug: on a branch, removing the old roadmap.md is refused (R5), as removing roadmap.json is"
+git switch -q -c rmb && git rm -q .jig/roadmap.md; out=$(git commit -qm "drop on a branch" 2>&1); rc=$?; git reset -q --hard; git switch -q main; git branch -q -D rmb
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'R5 the roadmap is the owner.s: .jig/roadmap.md is edited on main only'" "$out"
+msg="bug: a conversion commit that drops a phase a spec takes is refused, naming the spec, read against the old roadmap.md"
+mkdir -p .jig/specs && printf '# x\n\nSource: smoke\nScope: Widget alpha/s\n\n## Intent\nx\n' > .jig/specs/x.md && git add -A && git -c core.hooksPath=/dev/null commit -qm "spec x"
+git rm -q .jig/roadmap.md && printf '{"products": [], "phases": [], "no_phase": []}\n' > .jig/roadmap.json && git add -A
+out=$(git commit -qm "convert, losing the phase" 2>&1); rc=$?; git reset -q --hard
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'drops Widget alpha/s, which .jig/specs/x.md still takes'" "$out"
+git rm -q .jig/specs/x.md && git -c core.hooksPath=/dev/null commit -qm "no spec x"
 msg="bug: in a stand-alone repo, removing the old roadmap.md with no roadmap.json in its place is refused, naming update"
 git rm -q .jig/roadmap.md; out=$(git commit -qm "drop the old roadmap" 2>&1); rc=$?; git reset -q --hard
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'every stand-alone repo and metarepo keeps a roadmap: .jig update --apply. converts it'" "$out"
@@ -12174,7 +12183,7 @@ msg="move (sweep): in PP, unconverted, the sweep is refused, saying to convert f
 printf '# Own\n\nOwn is.\n\n## Undefined\n\n- a parked thing\n' > docs/own.md && gplant "an Undefined entry"
 msg="move (sweep): in PP, unconverted, the sweep's dry run says to convert first, promising no write"
 out=$($J update --sweep 2>&1)
-expect_pass sh -c "echo \"\$0\" | grep -q 'Dry run: nothing changed. .jig/roadmap.md is the roadmap in jig.s old form: .jig update --apply. converts it to .jig/roadmap.json first' && ! echo \"\$0\" | grep -q 'On the owner.s yes'" "$out"
+expect_pass sh -c "echo \"\$0\" | grep -q 'Dry run: nothing changed. .jig/roadmap.md is the roadmap in jig.s old form: .jig update --apply. converts it to .jig/roadmap.json; then sweep again' && ! echo \"\$0\" | grep -q 'On the owner.s yes'" "$out"
 msg="move (sweep): in PP, unconverted, the sweep is refused, saying to convert first, and writes no roadmap.json"
 out=$($J update --apply --sweep 2>&1); rc=$?
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'roadmap.md is the roadmap in jig.s old form: .jig update --apply. converts it' && test ! -e .jig/roadmap.json && test -z \"\$(git status --porcelain)\"" "$out"
@@ -12190,8 +12199,13 @@ msg="move (removal): in PP, removing its old roadmap.md, which holds phases, wit
 git rm -q .jig/roadmap.md; out=$(git commit -qm "drop the old roadmap" 2>&1); rc=$?; git reset -q --hard
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '.jig/roadmap.md still holds phases or items: .jig update --apply. converts it, or .jig move-in. moves them to the metarepo'" "$out"
 msg="move (removal): in PP, an old roadmap.md with no phases or items is removable"
+h0=$(git rev-parse HEAD)
 printf '# Roadmap\n\n## No phase\n' > .jig/roadmap.md && gplant "emptied" && git rm -q .jig/roadmap.md
-expect_pass git commit -qm "drop the empty old roadmap"; git reset -q --hard HEAD~2
+expect_pass git commit -qm "drop the empty old roadmap"; git reset -q --hard "$h0"
+msg="move (removal): in PP, an old roadmap.md holding only prose and a line it can't read as an item is held, not removed as empty"
+printf '# Roadmap\n\nSome prose.\n\n## No phase\n- just text\n' > .jig/roadmap.md && gplant "prose only" && git rm -q .jig/roadmap.md
+out=$(git commit -qm "drop the prose" 2>&1); rc=$?; git reset -q --hard "$h0"
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '.jig/roadmap.md still holds phases or items'" "$out"
 msg="move (removal): in PP, once M's trunk holds Pod's phase, removing the old roadmap.md is moving in, and passes"
 ( cd "$GM" && rmd && printf '\n## Pod alpha\nScopes:\n- `p1`: the pod\n' >> .jig/roadmap.md && rj && gplant "Pod alpha" )
 git rm -q .jig/roadmap.md; out=$(git commit -qm "moved in by hand" 2>&1); rc=$?

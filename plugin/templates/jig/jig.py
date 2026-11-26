@@ -713,7 +713,7 @@ def check_rules(root: Path, board: Board, *, staged: bool) -> list[str]:
         if f in guarded and branch != trunk:
             out.append(f"R5 the board is the hubnode's: {f} is edited on {trunk} only")
     # A phase or a scope is the owner's decision: the roadmap changes on trunk alone.
-    for f in (ROADMAP,):
+    for f in (ROADMAP, OLD_ROADMAP):
         # A pararepo's change to its products' sections reaches a metarepo only by its
         # `propose/` branch, merged on trunk on the owner's yes: the one other place it may be.
         if f in guarded and branch != trunk and not (f == ROADMAP and meta is not None
@@ -14011,8 +14011,9 @@ def moving_in(para: dict, staged: bool, removed: str | None = None, old_form: bo
     OLD_FORM, its old roadmap.md converted), once its phases and lists are the metarepo's: every
     `Scope:` line it keeps names the metarepo's ids, read on its trunk."""
     removed = at_rev(Board.trunk_name(main_root()), ROADMAP) if removed is None else removed
-    if empty_roadmap(removed):
-        # The empty structure an init wrote before `init --para`: nothing in it moves in.
+    if empty_roadmap(removed) and not old_form:
+        # The empty structure an init wrote before `init --para`: nothing in it moves in. An old
+        # roadmap.md's emptiness its caller judged, with what the conversion would name.
         return []
     loc = meta_checkout(main_root(), para)
     if loc is None:
@@ -14196,7 +14197,8 @@ def roadmap_rules(board: "Board", branch: str, staged: bool, paths: list[str],
         if para is None:
             return [f"{OLD_ROADMAP}: this commit removes it with no {ROADMAP} in its place, but every "
                     f"stand-alone repo and metarepo keeps a roadmap: `jig update --apply` converts it"]
-        if empty_roadmap(converted):
+        # Empty, and nothing the conversion would name: prose or a line it can't read is held.
+        if empty_roadmap(converted) and not uncarried(old_md, {}):
             return []
         return moving_in(para, staged, converted, old_form=True)
     if load_meta(trunk) is not None and proposed_branch(branch, trunk) and ROADMAP in paths:
@@ -14263,8 +14265,11 @@ def roadmap_rules(board: "Board", branch: str, staged: bool, paths: list[str],
         hint = (f" ({GLOSSARY} changes in this commit: re-point or drop the label in it)"
                 if GLOSSARY in guarded else "")
         out += [f"{ROADMAP} {unline(x)}{hint}" for x in roadmap_label_problems(text, in_index(GLOSSARY, staged) or None)]
-    if on_trunk and ROADMAP in guarded:
-        dropped = dropped_scopes(old, known, Snapshot(trunk), fam)
+    if on_trunk and (ROADMAP in guarded or OLD_ROADMAP in guarded):
+        # Before the conversion, trunk's roadmap is its old roadmap.md, read as converted: a
+        # conversion commit that loses a phase drops its scopes like any other.
+        base = old or (roadmap_dumps(roadmap_data(old_md, {})) if (old_md := at_rev(trunk, OLD_ROADMAP)) else "")
+        dropped = dropped_scopes(base, known, Snapshot(trunk), fam)
         here = git("-c", "core.quotePath=false", "ls-files", "--", SPECS, HANDOFFS).splitlines()
         for f, gone, line, verb in scope_holders(dropped, [(f, in_index(f, staged)) for f in here]):
             named.add(f)
@@ -17564,7 +17569,7 @@ def cmd_sweep(root: Path, apply: bool) -> int:
         return 0
     if not apply and new and not roadmap and (why := roadmap_withheld(root)) and why != "para":
         # --apply refuses this, so the dry run promises no write.
-        print(f"\nDry run: nothing changed. {why} first; then sweep again.")
+        print(f"\nDry run: nothing changed. {why}; then sweep again.")
         return 0
     if not apply:
         print("\nDry run: nothing changed. On the owner's yes: jig update --apply --sweep"
