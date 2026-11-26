@@ -61,8 +61,8 @@ Fill `## Roles` from `jig roles`, as `/jig:spec` says.
 `Done when` must include an observable that proves the fix fires. A fix that can't be observed isn't a fix.
 It also includes an observable that the symptom the report describes no longer happens. If the whys moved
 to a different cause, the spec says what happens to the original symptom: fixed too, with that
-observable, left for later as a `Later:` id on trunk's roadmap (a roadmap change on the owner's
-yes adds one), or not fixed at all, as an `Out of scope` line with its reason, so the owner sees it.
+observable, left on trunk's roadmap as a scope or No phase item, unspecced (a roadmap change on
+the owner's yes adds one), or not fixed at all, as an `Out of scope` line with its reason, so the owner sees it.
 
 If the fix is a workaround:
 - one-line code comment, ≤120 chars, starting `WORKAROUND:` — what it patches and why a patch was right

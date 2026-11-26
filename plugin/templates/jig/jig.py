@@ -721,6 +721,12 @@ def check_rules(root: Path, board: Board, *, staged: bool) -> list[str]:
             out.append(f"R5 the roadmap is the owner's: {f} is edited on {trunk} only"
                        + (", or on a propose/ branch `jig propose` opened that isn't merged yet"
                           if meta is not None and f == ROADMAP else ""))
+    # A spec takes only what it builds: what it leaves stays on the roadmap, unspecced, where any
+    # later spec can take it. A `Later:` line would hold it in a file that closes with the spec.
+    for f in paths:
+        if is_spec(f) and LATER_LINE.search(in_index(f, staged) or ""):
+            out.append(f"{f} has a `Later:` line: work a spec doesn't build stays on the roadmap, "
+                       "unspecced, and a partly built scope is split by a roadmap change. Delete the line")
     if meta is not None and (GLOSSARY in paths or ROADMAP in paths):
         now = term_owners(in_index(GLOSSARY, staged))
         if GLOSSARY in paths and (branch == trunk or proposed_branch(branch, trunk)):
@@ -3714,7 +3720,7 @@ def cmd_gate(root: Path, args) -> int:
             f for f in git("-c", "core.quotePath=false", "ls-tree", "-r", "--name-only", commit, "--",
                            SPECS).splitlines() if is_spec(f) and bug_for(git("show", f"{commit}:{f}")) == name] if x))
         for f in own:
-            lines = closes_with(trunk, git("show", f"{commit}:{f}"))
+            lines = closes_with(git("show", f"{commit}:{f}"))
             closing += ([f"{f}:"] + [f"  {l}" for l in lines]) if lines and len(own) > 1 else lines
     if closing:
         # The merge deletes the spec: this is the owner's last look at what goes with it.
@@ -3733,20 +3739,13 @@ def cmd_gate(root: Path, args) -> int:
 
 
 
-def closes_with(trunk: str, spec: str) -> list[str]:
-    """What the merge closes along with SPEC: each id its `Later:` line leaves, with its roadmap
-    text (rig keeps listing it), and every `## Out of scope` line (gone with the spec)."""
+def closes_with(spec: str) -> list[str]:
+    """What the merge closes along with SPEC: every `## Out of scope` line, gone with the spec.
+    Work not built stays on the roadmap, unspecced: nothing of it closes here."""
     if not spec:
         return []
-    texts = {}
-    full = roadmap_full(Snapshot(trunk), family(main_root(), trunk))
-    if full:
-        texts = {s["id"]: s.get("plain") or s.get("what") or ""
-                 for s in [x for p in full[0] for x in p["scopes"]] + full[1]}
-    out = [f"later         {i}" + (f": {texts[i]}" if texts.get(i) else "") for i in spec_laters(spec)]
     prose = re.sub(r"<!--.*?-->", "", spec_section(spec, "Out of scope") or "", flags=re.S)
-    out += [f"out of scope  {l.strip()}" for l in prose.splitlines() if l.strip()]
-    return out
+    return [f"out of scope  {l.strip()}" for l in prose.splitlines() if l.strip()]
 
 
 # --------------------------------------------------------------------- survey
@@ -12197,28 +12196,16 @@ def spec_scopes(text: str) -> list[str]:
     return [s.strip().strip("`") for s in m.group(1).split(",") if s.strip()] if m else []
 
 
-def spec_laters(text: str) -> list[str]:
-    """The roadmap ids a spec's `Later:` line leaves for later work, in its order. Taking
-    nothing, it changes no id's state: an item left for later stays open."""
-    m = re.search(r"^Later:[ \t]*(.*)$", text, re.M)
-    return [s.strip().strip("`") for s in m.group(1).split(",") if s.strip()] if m else []
+# A spec's `Later:` line, retired: work not built stays on the roadmap, unspecced, and a spec
+# takes only what it builds. Read only to refuse one and to remove it (`jig update --apply`).
+LATER_LINE = re.compile(r"^Later:[ \t]*.*\n?", re.M)
 
 
-def laters_in(path: str, text: str) -> list[str]:
-    return spec_laters(note_head(text) if path.startswith(HANDOFFS) else text)
-
-
-def cited(path: str, text: str, bad, *, notes_later: set[str] | None = None) -> str:
-    """What PATH's `Scope:` and `Later:` lines name that BAD holds, as a refusal says it:
-    "takes a, b", "leaves c for later", or both; "" when none. A note's `Later:` is history,
-    so the owner drops a deferred item without rewriting it: it counts only for an id in
-    NOTES_LATER, the roadmap moving in removes, whose ids change form there. One the owner
-    already dropped has nothing to be re-pointed to, and stays as history."""
+def cited(path: str, text: str, bad) -> str:
+    """What PATH's `Scope:` line names that BAD holds, as a refusal says it: "takes a, b"; ""
+    when none."""
     took = [s for s in scopes_in(path, text) if bad(s)]
-    left = [s for s in laters_in(path, text) if bad(s)
-            and (is_spec(path) or notes_later is not None and s in notes_later)]
-    return " and ".join(x for x in (f"takes {', '.join(took)}" if took else "",
-                                     f"leaves {', '.join(left)} for later" if left else "") if x)
+    return f"takes {', '.join(took)}" if took else ""
 
 
 def takes_scopes(path: str) -> bool:
@@ -12356,22 +12343,15 @@ def close_specs(finished: list[dict], snap: Snapshot) -> list[str]:
             body = read_raw(root / carry)
             head = note_head(body)
             add = [l for l in MARK_LINE.findall(text) if l not in head.splitlines()]
-            # Later: is carried as Scope: is: what the spec left for later outlives it on the note,
-            # where rig lists each id until a spec takes it or the owner drops it. A job's bug spec
-            # closes onto the same note, so a line already there gains its ids.
-            for key, ids in (("Scope:", spec_scopes(text)), ("Later:", spec_laters(text))):
-                have = re.search(rf"^{key}[ \t]*(.*)$", head, re.M)
-                if not ids:
-                    continue
+            # A job's bug spec closes onto the same note, so a Scope: line already there gains its ids.
+            if ids := spec_scopes(text):
+                have = re.search(r"^Scope:[ \t]*(.*)$", head, re.M)
                 if not have:
-                    add.insert(0 if key == "Scope:" else len([a for a in add if a.startswith("Scope:")]),
-                               f"{key} {', '.join(ids)}")
-                    continue
-                old = [i.strip().strip("`") for i in have.group(1).split(",") if i.strip()]
-                if new := [i for i in ids if i not in old]:
-                    line = f"{key} {', '.join(old + new)}"
-                    body = body.replace(have.group(0), line, 1)
-                    head = head.replace(have.group(0), line, 1)
+                    add.insert(0, f"Scope: {', '.join(ids)}")
+                else:
+                    old = [i.strip().strip("`") for i in have.group(1).split(",") if i.strip()]
+                    if new := [i for i in ids if i not in old]:
+                        body = body.replace(have.group(0), f"Scope: {', '.join(old + new)}", 1)
             if add:
                 body = re.sub(r"^(Spec: .*\n)", lambda m: m.group(1) + "".join(f"{l}\n" for l in add),
                               body, count=1, flags=re.M)
@@ -12381,10 +12361,6 @@ def close_specs(finished: list[dict], snap: Snapshot) -> list[str]:
         # -f: mid-merge the spec is staged from the job, as a new file.
         git("rm", "-q", "-f", "--", f, check=True, cwd=str(root))
         out.append(f"closed {f}")
-        if later := spec_laters(text):
-            out.append(f"left for later by {f}: {', '.join(later)}" if carry else
-                       f"not written: {f} left {', '.join(later)} for later, and no landed note of its "
-                       "job is there to carry it; add the line to the job's note by hand")
     return out
 
 
@@ -14037,8 +14013,7 @@ def moving_in(para: dict, staged: bool, removed: str | None = None, old_form: bo
     known = roadmap_scopes(text)
     out = []
     for f in git("-c", "core.quotePath=false", "ls-files", "--", SPECS, HANDOFFS).splitlines():
-        if takes_scopes(f) and (what := cited(f, in_index(f, staged), lambda sc: sc not in known,
-                                              notes_later=roadmap_scopes(removed))):
+        if takes_scopes(f) and (what := cited(f, in_index(f, staged), lambda sc: sc not in known)):
             out.append(f"{f} {what}, which {para['meta']}'s {ROADMAP} on its trunk doesn't "
                        f"have: this commit removes {ROADMAP}, so re-point it to {para['meta']}'s ids here")
     return out
@@ -14054,16 +14029,13 @@ def dropped_scopes(old: str, known: set[str], snap: Snapshot, fam: "Family") -> 
 
 def scope_holders(dropped: set[str], files: list[tuple[str, str]]) -> list[tuple[str, list[str], str, str]]:
     """(file, the DROPPED ids it names, its line, what the line does) for each spec or note of
-    FILES, (path, text): a `Scope:` line that takes them, or a spec's `Later:` line that leaves
-    them for later, either one naming ids the roadmap must keep."""
+    FILES, (path, text): a `Scope:` line that takes them, naming ids the roadmap must keep."""
     out = []
     for f, text in files:
         if not takes_scopes(f):
             continue
-        for line, verb, ids in (("Scope:", "takes", scopes_in(f, text)),
-                                ("Later:", "leaves for later", laters_in(f, text) if is_spec(f) else [])):
-            if gone := [s for s in ids if s in dropped]:
-                out.append((f, gone, line, verb))
+        if gone := [s for s in scopes_in(f, text) if s in dropped]:
+            out.append((f, gone, "Scope:", "takes"))
     return out
 
 
@@ -14230,7 +14202,7 @@ def roadmap_rules(board: "Board", branch: str, staged: bool, paths: list[str],
         if fam.meta_loc is None:
             if takers:
                 print(f"jig: warning: {fam.meta_name or 'the metarepo'} isn't reachable here (`jig repos`), "
-                      f"so the Scope: and Later: lines in {', '.join(takers)} pass unchecked", file=sys.stderr)
+                      f"so the Scope: lines in {', '.join(takers)} pass unchecked", file=sys.stderr)
             return []
         known = roadmap_scopes(fam.text)
         for f in takers:
@@ -14843,6 +14815,22 @@ def cmd_fold_ideas(root: Path, apply: bool) -> int:
     return 0
 
 
+def later_lines(root: Path) -> list[tuple[str, str]]:
+    """(spec, what its `Later:` line names) for each spec in ROOT carrying the retired line."""
+    out = []
+    for p in sorted((root / SPECS).glob("*.md")):
+        f = p.relative_to(root).as_posix()
+        if is_spec(f) and (m := LATER_LINE.search(read_raw(p))):
+            out.append((f, m.group(0).removeprefix("Later:").strip() or "empty"))
+    return out
+
+
+def drop_later_lines(root: Path, here: Path) -> None:
+    for f, _ in later_lines(root):
+        write_raw(root / f, LATER_LINE.sub("", read_raw(root / f), count=1))
+        git("add", "--", f, check=True, cwd=str(root))
+
+
 STEPS: list = [
     # save_board writes the split: the step names it, so the plan says what moves where.
     (f"move docmap, boards, deep_subsystems and not_docs from {CONFIG} to {DOCMAP}, each value "
@@ -14865,6 +14853,11 @@ STEPS: list = [
      + ". Commit this update, which installs the checker that reads it, then run "
      "`jig update --apply` again to convert",
      lambda root, after: (root / OLD_ROADMAP).is_file() and not knows_roadmap_json(root), lambda root, here: None),
+    (lambda root: "delete the `Later:` line from " + ", ".join(
+        f"{f} ({named})" for f, named in later_lines(root))
+     + ": work a spec doesn't build stays on the roadmap, unspecced, and the hook refuses the line. "
+     "Notes keep theirs, as history",
+     lambda root, after: bool(later_lines(root)), drop_later_lines),
     (f"fold {LOG}'s ## Open into {IDEAS}, ids and blocks kept byte for byte: the log keeps only "
      f"decisions, and an open question is an idea; the hook then refuses ## Open and an Open or "
      f"Proposed entry added to the log",
@@ -18266,7 +18259,6 @@ def rig_state(root: Path, board: "Board") -> dict:
             "unconfirmed": unconfirmed_waits(root, board),
             # A report, not a question: counted in neither number.
             "family": family_rig_counts(root, board),
-            "later": left_for_later(root, board),
             # Closing needs no answer, so finished specs count in neither number.
             "finished": finished_specs(Snapshot(board.trunk), board)}
 
@@ -18276,29 +18268,6 @@ def family_rig_counts(root: Path, board: "Board") -> list[int]:
     rep = family_report(root, board.trunk)
     counts = list(family_counts(rep)) if rep is not None else []
     return counts if any(counts) else []
-
-
-def left_for_later(root: Path, board: "Board") -> list[dict]:
-    """Each id a landed note's `Later:` line names that trunk's roadmap still has open, taken by
-    no spec: work a merged job left, which the owner placed, shown until a spec takes it or he
-    drops it. Not a question and never the next step: an item naming no pages is never offered."""
-    snap = Snapshot(board.trunk)
-    full = roadmap_full(snap, family(root, board.trunk))
-    if not full:
-        return []
-    by_id = {s["id"]: s for s in [x for p in full[0] for x in p["scopes"]] + full[1]}
-    out, seen = [], set()
-    for n in sorted(snap.ls(HANDOFFS)):
-        body = snap.show(n)
-        job = re.search(r"^# Handoff: (\S+)", body, re.M)
-        for i in laters_in(n, body):
-            s = by_id.get(i)
-            if s is None or s["state"] != "open" or i in seen:
-                continue
-            seen.add(i)
-            out.append({"id": i, "job": job.group(1) if job else Path(n).stem, "note": n,
-                        "what": s.get("plain") or s.get("what") or ""})
-    return out
 
 
 def unconfirmed_waits(root: Path, board: "Board") -> list[list[str]]:
@@ -18354,10 +18323,6 @@ def rig_text(state: dict) -> str:
         a, b, c, d = state["family"]
         out.append(f"Family: {a} stale staged, {b} stale or empty proposals, {c} entries touch "
                    f"labelled work, {d} pairs of names: jig family")
-    if state.get("later"):
-        out.append("\nLeft for later:")
-        out += [f"  {x['id']}  left by {x['job']}" + (f": {x['what']}" if x["what"] else "")
-                for x in state["later"]]
     out.append("\nRunning:")
     out += [f"  {j['name']}: {j['step']} — {j['who']}, {j['session']}" + (f" ({j['why']})" if j["why"] else "")
             for j in state["jobs"]] or ["  no open jobs"]
@@ -18630,12 +18595,12 @@ def moved_in(meta_raw: str, own_raw: str, hmap: dict[str, str], owned: set[str])
 
 def move_in_takers(snap_files: list[str], read) -> dict[str, list[str]]:
     """{roadmap id: [spec or note naming it]} over SNAP_FILES, read by READ: its `Scope:` line
-    takes the id, its `Later:` line leaves it for later, and both name the roadmap moving in."""
+    takes the id, naming the roadmap moving in."""
     out: dict[str, list[str]] = {}
     for f in snap_files:
         if takes_scopes(f):
             text = read(f)
-            for s in dict.fromkeys(scopes_in(f, text) + laters_in(f, text)):
+            for s in dict.fromkeys(scopes_in(f, text)):
                 out.setdefault(s, []).append(f)
     return out
 
@@ -18838,22 +18803,18 @@ def cmd_move_in(root: Path, args) -> int:
     for f in sorted({f for fs in takers.values() for f in fs}):
         path = root / f
         text = was = path.read_text()
-        # A note's header holds its Scope: and Later: lines; a line in its prose is no record.
+        # A note's header holds its Scope: line; a line in its prose is no record.
         head_end = len(note_head(text)) if f.startswith(HANDOFFS) else len(text)
-        for key in ("Scope:", "Later:"):
-            m = re.compile(rf"^{key}[ \t]*(.*)$", re.M).search(text, 0, head_end)
-            if not m:
-                continue
+        if m := re.compile(r"^Scope:[ \t]*(.*)$", re.M).search(text, 0, head_end):
             new = ", ".join(sid_map[s] if sid_map.get(s) in known else s
                             for s in (x.strip().strip("`") for x in m.group(1).split(",") if x.strip()))
             if new != m.group(1).strip():
                 text = text[:m.start(1)] + new + text[m.end(1):]
-                head_end += len(new) - len(m.group(1))
         if text != was:
             path.write_text(text)
             git("add", "--", f, check=True)
     left = sorted({f for s in missing for f in takers.get(s, [])})
-    print(f"staged: {ROADMAP} removed, Scope: and Later: lines re-pointed. The hubnode commits it "
+    print(f"staged: {ROADMAP} removed, Scope: lines re-pointed. The hubnode commits it "
           f"on {trunk} on the owner's yes" + (f"; first re-point {', '.join(left)} by hand: the hook "
                                                "refuses the commit while they name an id that isn't there" if left else "") + ".")
     return 0
@@ -19017,13 +18978,10 @@ def add_items(road: str, items: list[tuple[str, dict]]) -> str:
 
 
 def roadmap_takers(fam: "Family") -> set[str]:
-    """Every scope or item id a spec or note takes, or a spec leaves for later on its `Later:`
-    line, in this repo and the family planning with it: each such item stays where it is."""
+    """Every scope or item id a spec or note takes, in this repo and the family planning with
+    it: each such item stays where it is."""
     snaps = [Snapshot(Board.trunk_name(main_root()))] + [sn for _, sn in fam.others]
-    out = {sid for sn in snaps for sid in scope_takers(sn)[0]}
-    for sn in snaps:
-        out |= {i for f in sn.ls(SPECS) if is_spec(f) for i in spec_laters(sn.show(f))}
-    return out
+    return {sid for sn in snaps for sid in scope_takers(sn)[0]}
 
 
 def phase_part(heading: str, owners: dict[str, str]) -> str:

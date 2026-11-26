@@ -232,10 +232,9 @@ tell that job to sync before its next handoff. A merge that stops on conflicts: 
 `git commit`.
 
 Before the merge question, the merge card carries the gate's `Closes with the spec at merge:`
-lines: each `Later:` id with its text, and each `## Out of scope` line, which the merge deletes.
+lines: each `## Out of scope` line, which the merge deletes.
 A clean merge also removes the job's spec and its `Bug-for:` specs in the merge commit, each
-spec's `Scope:`, `Later:` and staged marks kept on its note; it prints each, and `left for later
-by <spec>: <ids>`. It deletes nothing in
+spec's `Scope:` and staged marks kept on its note; it prints each. It deletes nothing in
 staging: `/jig:rig`'s `jig rig --close` resolves the requests, stories and reports the job
 built. A staged decisions file it carried (or any carried file resolve would write) stays,
 `noted` with the job's note: read that job's
@@ -333,10 +332,13 @@ file step 2 stages for a receiver keeping its own roadmap waits in staging: afte
 `jig staging resolve` forwards it.
 
 Work with no phase yet, parked mid-build (naming the pages it will touch) or not started, is
-a No phase item in `.jig/roadmap.json`, proposed the same way. Work a spec leaves for
-later is one too: its `Later:` id must be on trunk's roadmap before the spec commits, so put
-each as its own roadmap change, one line per item, never inside another question. The owner's
-yes to the line is the yes to the deferral. A roadmap change asks
+a No phase item in `.jig/roadmap.json`, proposed the same way. A spec takes only what
+it builds: work it doesn't build stays on the roadmap, unspecced, and out of scope never
+defers. Work worth building later is put as its own roadmap change, one line per item, never
+inside another question; the owner's yes to the line is the yes to the deferral. A spec
+building only part of a scope waits on a roadmap change splitting it: the built part becomes
+a new scope the spec takes whole, and the rest stays in the original scope, under its id,
+its text unchanged. A roadmap change asks
 for no decision entry and no change line. A built item stays, read done from the spec that
 took it, until a roadmap change of the owner's removes it.
 

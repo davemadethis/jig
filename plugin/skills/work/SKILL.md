@@ -30,6 +30,11 @@ parallel jobs don't fight for its cores.
 - Your files are your `owns`, your `shares`, `common`, and anything new you create. If you
   need another, ask the hubnode to add it to `shares` and build elsewhere meanwhile.
 - Your numbers are the board's. Never take one by looking at what seems free.
+- Build all of what the spec takes: a spec takes only what it builds. Part of a scope you
+  find you won't build goes to the hubnode, whose roadmap change on the owner's yes splits the
+  scope, the rest staying under its id, its text unchanged. Out of scope never defers: never
+  write work you skipped there as "later". Work worth building later goes onto the roadmap
+  as a scope or No phase item on the owner's word.
 - A choice that outlives your spec, or a change a release's reader can act on, goes in
   `.jig/decisions.md` (`.jig/RULES.md`, Decision log), which any job may add to. Write a new
   decision as `### D-?<slug> <title>`; `jig merge` numbers it. To change an accepted entry

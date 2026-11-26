@@ -86,10 +86,12 @@ its `labels` list (`["teleport", "wallet-compatibility"]`), each a term of the g
 family). A misspelt label is refused, and a label orders nothing. `roadmap --label <term>` lists
 the work carrying one, across every product.
 
-Work a spec leaves for later goes on its `Later:` line, as roadmap ids already on the roadmap, never as
-prose that closes with the spec. The gate shows what closes with the spec, the merge keeps the
-`Later:` line on the handoff note, and `jig rig` lists each id until a spec takes it or the owner
-drops it.
+A spec takes only what it builds. Work it doesn't build stays on the roadmap, unspecced, until a
+later spec takes it. When a spec builds only part of a scope, the owner's roadmap change splits
+the scope first: the built part becomes a new scope the spec takes, and the rest stays under the
+original id, its text unchanged. `## Out of scope` never defers: it closes with the spec, so work
+worth building later goes onto the roadmap as a scope or No phase item. The gate shows what
+closes with the spec.
 
 Pages and decisions describe the product. The roadmap holds the project: what comes next, and
 in what order.

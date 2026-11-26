@@ -5143,12 +5143,9 @@ cd "$FA" && fspec s2 'Walyt alpha/z2' && git add -A
 expect_pass git commit -qm s2
 fspec sn 'Walyt alpha/nope' && git add -A; out=$(git commit -qm sn 2>&1); rc=$?; git reset -q --hard
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \"takes Walyt alpha/nope, which meta's .jig/roadmap.json on its trunk doesn't have\"" "$out"
-msg="family: in pa, Later: is checked on meta's trunk as Scope: is: Walyt alpha/z2 commits, Walyt No phase/nope is refused"
-printf '# sl\n\nSource: smoke\nLater: Walyt alpha/z2\n\n## Intent\nx\n' > .jig/specs/sl.md && git add -A
-expect_pass git commit -qm sl
-printf '# sm\n\nSource: smoke\nLater: Walyt No phase/nope\n\n## Intent\nx\n' > .jig/specs/sm.md && git add -A; out=$(git commit -qm sm 2>&1); rc=$?; git reset -q --hard
-expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q \"leaves Walyt No phase/nope for later, which meta's .jig/roadmap.json on its trunk doesn't have\"" "$out"
-git rm -q .jig/specs/sl.md && git commit -qm "no sl"
+msg="family: in pa, a spec with a Later: line is refused, even one naming an id meta's trunk has"
+printf '# sl\n\nSource: smoke\nLater: Walyt alpha/z2\n\n## Intent\nx\n' > .jig/specs/sl.md && git add -A; out=$(git commit -qm sl 2>&1); rc=$?; git reset -q --hard
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'sl.md has a .Later:. line: work a spec doesn.t build stays on the roadmap, unspecced'" "$out"
 fspec sp 'Walyt alpha/pairing' && git add -A && git commit -qm sp
 cd "$FM"
 msg="family: dropping Walyt alpha/pairing in meta while pa's spec takes it is refused, naming that spec"
@@ -5268,19 +5265,9 @@ msg="family D: pd's commit removing its roadmap and view, re-pointing to a scope
 git rm -q .jig/roadmap.json && sed -i.bak 's|^Scope: alpha/x$|Scope: Delta alpha/nope|' .jig/specs/sx.md && rm .jig/specs/sx.md.bak && git add -A
 out=$(git commit -qm "move in" 2>&1); rc=$?
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'takes Delta alpha/nope, which meta.s .jig/roadmap.json on its trunk'" "$out"
-msg="family D: the spec re-pointed, a note's Later: still naming pd's own No phase/v is refused: moving in re-points notes' Later: too"
+msg="family D: the spec re-pointed, the moving-in commit passes, a landed note's Later: line left as history"
 sed -i.bak 's|^Scope: Delta alpha/nope$|Scope: Delta alpha/x|' .jig/specs/sx.md && rm .jig/specs/sx.md.bak && git add -A
-out=$(git commit -qm "move in" 2>&1); rc=$?
-expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'old-2026-11-01.md leaves No phase/v for later, which meta.s .jig/roadmap.json on its trunk'" "$out"
-msg="family D: once the owner drops v from pd's roadmap, a note's Later: naming it is history: the move-in passes with the note untouched"
-git reset -q --hard && rmd && sed -i.bak '/`v`: later v/d' .jig/roadmap.md && rm .jig/roadmap.md.bak && rj && git add -A && git commit -qm "drop v"
-git rm -q .jig/roadmap.json && sed -i.bak 's|^Scope: alpha/x$|Scope: Delta alpha/x|' .jig/specs/sx.md && rm .jig/specs/sx.md.bak && git add -A
-expect_pass sh -c "git commit -qm 'move in, v dropped' && grep -qx 'Later: No phase/v' .jig/handoffs/old-2026-11-01.md"
-git reset -q --hard HEAD~2    # back to before the drop: the re-pointing case below
-git rm -q .jig/roadmap.json && sed -i.bak 's|^Scope: alpha/x$|Scope: Delta alpha/x|' .jig/specs/sx.md && rm .jig/specs/sx.md.bak && git add -A
-msg="family D: re-pointed to Delta alpha/x and Delta No phase/v, the moving-in commit passes"
-sed -i.bak 's|^Later: No phase/v$|Later: Delta No phase/v|' .jig/handoffs/old-2026-11-01.md && rm .jig/handoffs/old-2026-11-01.md.bak && git add -A
-expect_pass git commit -qm "move in"
+expect_pass sh -c "git commit -qm 'move in' && grep -qx 'Later: No phase/v' .jig/handoffs/old-2026-11-01.md"
 msg="family D: moved in, a spec in pd taking Delta No phase/v commits, and pd's reading-list shows u, read from meta"
 fspec sv 'Delta No phase/v' && git add -A && git commit -qm sv
 expect_pass sh -c "git log -1 --format=%s | grep -qx sv && $J reading-list src/x.py | grep -q 'no phase .Delta No phase/u.: parked u'"
@@ -5647,14 +5634,10 @@ $RMAP edit "$sdraft" "s = s.replace('- \`a\`: a\n', '- \`a\`: a\n- \`b\`: b (aft
 out=$($J roadmap --edit 2>&1); rc=$?
 $RMAP edit "$sdraft" "s = s.replace(' (after alpha/nope)', '')"
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'waits on alpha/nope' && $J roadmap --edit >/dev/null && $RMAP md .jig/roadmap.json | grep -q '^- .b.: b\$' && git add -A && git commit -qm 'roadmap b'" "$out"
-msg="roadmap edit: --edit refuses dropping an id a spec's Later: names, naming the spec and its Later: line"
-mkdir -p .jig/specs && printf '# lt\n\nSource: smoke\nLater: alpha/b\n\n## Intent\nx\n' > .jig/specs/lt.md && git add -A && git commit -qm "specs: lt" >/dev/null
+msg="roadmap edit: a landed note's Later: line, history, doesn't stop --edit dropping the id it names"
+mkdir -p .jig/handoffs && printf '# Handoff: lt\n\nCommit: %s\nDate: 2026-11-01\nSpec: .jig/specs/lt.md\nLater: alpha/b\n\n## Built\nx\n' "$(git rev-parse HEAD)" > .jig/handoffs/lt-2026-11-01.md && git add -A && git -c core.hooksPath=/dev/null commit -qm "a note leaving alpha/b for later"
 $J roadmap --draft >/dev/null
 $RMAP edit "$sdraft" "s = s.replace('- \`b\`: b\n', '')"
-out=$($J roadmap --edit 2>&1); rc=$?
-expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'drops alpha/b, which .jig/specs/lt.md still leaves for later: re-point its Later: line first' && $RMAP md .jig/roadmap.json | grep -q '^- .b.: b\$'" "$out"
-msg="roadmap edit: a note's Later: naming the id doesn't stop --edit dropping it"
-git rm -q .jig/specs/lt.md && mkdir -p .jig/handoffs && printf '# Handoff: lt\n\nCommit: %s\nDate: 2026-11-01\nSpec: .jig/specs/lt.md\nLater: alpha/b\n\n## Built\nx\n' "$(git rev-parse HEAD)" > .jig/handoffs/lt-2026-11-01.md && git add -A && git -c core.hooksPath=/dev/null commit -qm "a note leaving alpha/b for later"
 out=$($J roadmap --edit 2>&1); rc=$?
 expect_pass sh -c "test $rc = 0 && ! $RMAP md .jig/roadmap.json | grep -q '^- .b.: b\$'" "$out"
 git add -A && git commit -qm "roadmap: b dropped" >/dev/null
@@ -5949,9 +5932,9 @@ git rm -q .jig/roadmap.json && git -c core.hooksPath=/dev/null commit -qm "roadm
 msg="roadmap: with no roadmap on trunk, a spec's Scope: line is refused, naming jig roadmap"
 rspec s1 alpha/whatever && git add -A; out=$(git commit -qm s1 2>&1); rc=$?; undo
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 's1.md takes alpha/whatever, but main has no .jig/roadmap.json: .jig roadmap. in the main checkout'" "$out"
-msg="roadmap: with no roadmap on trunk, a spec's Later: line is refused the same way"
+msg="roadmap: with no roadmap on trunk, a spec's Later: line is refused as retired"
 mkdir -p .jig/specs && printf '# s1\n\nSource: smoke\nLater: No phase/whatever\n' > .jig/specs/s1.md && git add -A; out=$(git commit -qm s1 2>&1); rc=$?; undo
-expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 's1.md leaves No phase/whatever for later, but main has no .jig/roadmap.json: .jig roadmap.'" "$out"
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 's1.md has a .Later:. line'" "$out"
 mkdir -p .jig/specs && printf '# s1\n\nSource: smoke\n\n## Intent\nx\n' > .jig/specs/s1.md && git add -A && git commit -qm s1
 $J open N --spec .jig/specs/s1.md >/dev/null && git add -A && git commit -qm "open N"
 msg="roadmap: jig reading-list in a job's worktree writes nothing, says where the roadmap is written, and exits 0 as before"
@@ -6009,19 +5992,23 @@ msg="roadmap: init --meta writes the seed too, and no view"
 expect_pass sh -c "$J init --meta >/dev/null 2>&1 && test -f .jig/roadmap.json && test ! -e ROADMAP.md"
 cd "$NR"
 RL="$T/later-ids"; pcnew "$RL" && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
-msg="roadmap: on trunk, a spec with Later: No phase/nope is refused with the Scope:-shaped message naming nope"
+msg="roadmap: a spec with a Later: line is refused, saying the work stays on the roadmap, unspecced, and to delete the line, even naming an id the roadmap has"
+rmd && printf -- '- `nope`: a thing for later\n' >> .jig/roadmap.md && rj && git add -A && git commit -qm nope
 mkdir -p .jig/specs && printf '# sl\n\nSource: smoke\nLater: No phase/nope\n\n## Intent\nx\n' > .jig/specs/sl.md
 git add -A; out=$(git commit -qm sl 2>&1); rc=$?
-expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'sl.md leaves No phase/nope for later, which .jig/roadmap.json on main doesn.t have'" "$out"
-msg="roadmap: with the item added to ## No phase in the same commit it passes, and jig roadmap shows it open"
-rmd && printf -- '- `nope`: a thing for later\n' >> .jig/roadmap.md && rj && git add -A
-expect_pass sh -c "git commit -qm 'sl and nope' && $J roadmap | grep -E '^  No phase/nope ' | grep -q ' open'"
-msg="roadmap: a roadmap change dropping an item a spec's Later: names is refused, naming the spec"
-rmd && sed -i.bak '/`nope`/d' .jig/roadmap.md && rm .jig/roadmap.md.bak && rj && git add -A; out=$(git commit -qm "drop nope" 2>&1); rc=$?
-expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'drops No phase/nope, which .jig/specs/sl.md still leaves for later: re-point the Later: line'" "$out"
-msg="roadmap: it passes once the same commit re-points the Later: line"
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'sl.md has a .Later:. line: work a spec doesn.t build stays on the roadmap, unspecced, and a partly built scope is split by a roadmap change. Delete the line'" "$out"
+msg="roadmap: a change to a spec still carrying one is refused too; a spec with none commits"
+sed -i.bak 's/^Later: .*$/Later:/' .jig/specs/sl.md && rm .jig/specs/sl.md.bak && git add -A; out=$(git commit -qm sl 2>&1); rc=$?
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'sl.md has a .Later:. line'" "$out"
 sed -i.bak '/^Later:/d' .jig/specs/sl.md && rm .jig/specs/sl.md.bak && git add -A
-expect_pass git commit -qm "drop nope, sl leaves nothing"
+expect_pass git commit -qm "sl, no Later"
+msg="roadmap: jig update --apply deletes a Later: line from each spec on trunk, naming each, and leaves a note's"
+printf '# sk\n\nSource: smoke\nScope: No phase/nope\nLater: No phase/nope, alpha/x\n\n## Intent\nx\n' > .jig/specs/sk.md
+mkdir -p .jig/handoffs && printf '# Handoff: sk\n\nCommit: %s\nDate: 2026-11-01\nSpec: .jig/specs/old.md\nLater: No phase/nope\n\n## Built\nx\n' "$(git rev-parse HEAD)" > .jig/handoffs/sk-2026-11-01.md
+git add -A && git -c core.hooksPath=/dev/null commit -qm "an older jig's spec and note"
+out=$($UP 2>&1)
+$UP --apply >/dev/null 2>&1
+expect_pass sh -c "echo \"\$0\" | grep -q 'delete the .Later:. line from .jig/specs/sk.md (No phase/nope, alpha/x)' && ! grep -q '^Later:' .jig/specs/sk.md && grep -qx 'Scope: No phase/nope' .jig/specs/sk.md && grep -qx 'Later: No phase/nope' .jig/handoffs/sk-2026-11-01.md && git commit -qm 'jig update' && test -z \"\$($UP 2>&1 | grep 'Later')\"" "$out"
 cd "$NR"
 
 NP="$T/no-phase"; pcnew "$NP" && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
@@ -11118,46 +11105,28 @@ gated FQ; out=$($J merge FQ 2>&1); rc=$?
 expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -qx 'closed .jig/specs/fq-bug.md' && ! git cat-file -e HEAD:.jig/specs/fq-bug.md 2>/dev/null && git cat-file -e HEAD:.jig/specs/fqq.md" "$out"
 msg="close: the merge and --close share one rule"
 expect_pass test "$(grep -c 'finished_specs(' .jig/jig.py)" -ge 3
-# Work a spec leaves for later: the gate shows it, the merge keeps it on the note, rig lists it
-# until a spec takes it. The repro: before this, nothing printed "labels" after the merge.
+# What closes with a spec: the gate shows its Out of scope lines, the owner's last look. Work
+# not built stays on the roadmap, unspecced: no Later: line carries it anywhere.
 LL="$T/later"; pcnew "$LL" && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
 rmd && printf -- '- `labels`: labels on each item\n' >> .jig/roadmap.md && rj
-mkdir -p .jig/specs && printf '# lt\n\nSource: chat lt\nLater: No phase/labels\n\n## Intent\nx\n\n## Out of scope\n- the export: the export job does it\n' > .jig/specs/lt.md
+mkdir -p .jig/specs && printf '# lt\n\nSource: chat lt\n\n## Intent\nx\n\n## Out of scope\n- the export: the export job does it\n' > .jig/specs/lt.md
 cspec ln && git add -A && git commit -qm "labels and specs"
 cjob LT lt && cjob LN ln
-msg="close: jig gate on a spec with Later: and an Out of scope line prints Closes with the spec at merge:, the id with its text, then the line"
+msg="close: jig gate on a spec with an Out of scope line prints Closes with the spec at merge: and the line"
 out=$($J gate LT 2>&1); git worktree remove --force .git/jig/worktrees/gate-LT 2>/dev/null
-expect_pass sh -c "echo \"\$0\" | grep -A2 '^Closes with the spec at merge:' | grep -q 'later  *No phase/labels: labels on each item' && echo \"\$0\" | grep -A2 '^Closes with the spec at merge:' | grep -q 'out of scope  - the export: the export job does it'" "$out"
-msg="close: jig gate on a spec with neither prints no such block"
+expect_pass sh -c "echo \"\$0\" | grep -A2 '^Closes with the spec at merge:' | grep -q 'out of scope  - the export: the export job does it' && ! echo \"\$0\" | grep -q 'later  '" "$out"
+msg="close: jig gate on a spec with none prints no such block"
 out=$($J gate LN 2>&1); git worktree remove --force .git/jig/worktrees/gate-LN 2>/dev/null
 expect_pass sh -c "echo \"\$0\" | grep -q 'job LN: gate' && ! echo \"\$0\" | grep -q 'Closes with the spec'" "$out"
 gated LT; out=$($J merge LT 2>&1); rc=$?
 note=$(git ls-files .jig/handoffs | grep '/LT-')
-msg="close: the merge prints what the spec left for later, the note's header keeps its Later: line, and the item stays open"
-expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -qx 'left for later by .jig/specs/lt.md: No phase/labels' && git show HEAD:$note | sed '/^## /,\$d' | grep -qx 'Later: No phase/labels' && $J roadmap | grep -E '^  No phase/labels ' | grep -q ' open'" "$out"
-msg="close: the symptom: rig lists what the merged job left under Left for later, with its job, and --json under later"
-expect_pass sh -c "$J rig | sed -n '/^Left for later:/,/^\$/p' | grep -q '^  No phase/labels  left by LT: labels on each item' && $J rig --json | python3 -c \"import json,sys; d=json.load(sys.stdin); assert [(x['id'], x['job']) for x in d['later']] == [('No phase/labels', 'LT')], d['later']\""
-msg="close: Left for later asks nothing and is never the next step"
-expect_pass sh -c "$J rig --json | python3 -c \"import json,sys; d=json.load(sys.stdin); assert d['waiting_on_you'] == 0 and not [x for x in d['items'] if x['kind'] == 'next-step'], d\""
-msg="close: an open, pages-less No phase item no note's Later: names stays out of rig, as before"
-rmd && printf -- '- `other`: other work\n' >> .jig/roadmap.md && rj && git add -A && git commit -qm other
-expect_pass sh -c "! $J rig | grep -q 'other work' && ! $J rig --json | grep -q 'No phase/other'"
-msg="close: the owner's roadmap change drops a deferred item with the note's Later: line untouched, and rig stops listing it"
-cp .jig/roadmap.json "$T/ll.roadmap"; rmd && sed -i.bak '/`labels`/d' .jig/roadmap.md && rm .jig/roadmap.md.bak && rj && git add -A
-expect_pass sh -c "git commit -qm 'drop labels' && git show HEAD:$note | sed '/^## /,\$d' | grep -qx 'Later: No phase/labels' && ! $J rig | grep -q 'Left for later'"
-git reset -q --hard HEAD~1
-msg="close: jig gate shows a Bug-for spec's Later: id and Out of scope line too, under its file"
-rmd && printf -- '- `tags`: tags on each item\n' >> .jig/roadmap.md && rj && cspec lb && git add -A && git commit -qm "tags and lb"
-cjob LB lb "" "printf '# lb bug\n\nBug-for: LB\nLater: No phase/tags\n\n## Out of scope\n- the colours: the theme job does it\n' > .jig/specs/lb-bug.md"
+msg="close: the merge writes no Later: line, the untaken item stays open on the roadmap, and rig has no Left for later"
+expect_pass sh -c "test $rc = 0 && ! echo \"\$0\" | grep -q 'left for later' && ! git show HEAD:$note | grep -q '^Later:' && $J roadmap | grep -E '^  No phase/labels ' | grep -q ' open' && ! $J rig | grep -q 'Left for later' && $J rig --json | python3 -c \"import json,sys; assert 'later' not in json.load(sys.stdin)\"" "$out"
+msg="close: jig gate shows a Bug-for spec's Out of scope line too, under its file"
+cspec lb && git add -A && git commit -qm "lb"
+cjob LB lb "" "printf '# lb bug\n\nBug-for: LB\n\n## Out of scope\n- the colours: the theme job does it\n' > .jig/specs/lb-bug.md"
 out=$($J gate LB 2>&1); git worktree remove --force .git/jig/worktrees/gate-LB 2>/dev/null
-expect_pass sh -c "echo \"\$0\" | sed -n '/^Closes with the spec at merge:/,/^\$/p' | grep -A2 '^  .jig/specs/lb-bug.md:' | grep -q 'later  *No phase/tags: tags on each item' && echo \"\$0\" | sed -n '/^Closes with the spec at merge:/,/^\$/p' | grep -q 'out of scope  - the colours: the theme job does it'" "$out"
-gated LB; out=$($J merge LB 2>&1); rc=$?
-lbnote=$(git ls-files .jig/handoffs | grep '/LB-')
-msg="close: a Bug-for spec's Later: goes onto its job's note at merge, and rig lists it under Left for later"
-expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -qx 'left for later by .jig/specs/lb-bug.md: No phase/tags' && git show HEAD:$lbnote | sed '/^## /,\$d' | grep -qx 'Later: No phase/tags' && $J rig | sed -n '/^Left for later:/,/^\$/p' | grep -q '^  No phase/tags  left by LB: tags on each item' && $J rig --json | python3 -c \"import json,sys; assert 'No phase/tags' in [x['id'] for x in json.load(sys.stdin)['later']]\"" "$out"
-msg="close: once a new spec takes No phase/labels, Left for later no longer lists it"
-cspec lab 'No phase/labels' && git add -A && git commit -qm lab
-expect_pass sh -c "! $J rig | grep -q 'No phase/labels  left' && $J rig --json | python3 -c \"import json,sys; assert [x['id'] for x in json.load(sys.stdin)['later']] == ['No phase/tags']\""
+expect_pass sh -c "echo \"\$0\" | sed -n '/^Closes with the spec at merge:/,/^\$/p' | grep -A1 '^  .jig/specs/lb-bug.md:' | grep -q 'out of scope  - the colours: the theme job does it'" "$out"
 msg="close: jig rig --close during a merge in progress commits nothing: the merge stays the user's"
 head=$(git rev-parse HEAD); side=$(git commit-tree "HEAD^{tree}" -p HEAD -m side)
 git merge -q --no-commit --no-ff "$side" >/dev/null 2>&1; out=$($J rig --close 2>&1); rc=$?
@@ -11577,7 +11546,7 @@ $J init --para M --location "$MM" >/dev/null 2>&1 && git add -A && git commit -q
 python3 .jig/jig.py repos add meta "$MM" --name M >/dev/null
 mpara pd '# Roadmap\n\n## alpha\nScopes:\n- `x`: the x\n- `y`: the y (after alpha/x)\n\n## No phase\n- `u`: parked u (touches docs/p.md)\n- `v`: later v\n'
 FD="$T/pd"
-mspec sx alpha/x && mspec sy alpha/y && mspec sl alpha/x && printf 'Later: No phase/u\n' >> .jig/specs/sl.md && mkdir -p .jig/handoffs && printf '# v\n\nSpec: .jig/specs/sv.md\nScope: No phase/v\n\n## Built\nx\n' > .jig/handoffs/v-1.md
+mspec sx alpha/x && mspec sy alpha/y && mspec sl 'alpha/x, No phase/u' && mkdir -p .jig/handoffs && printf '# v\n\nSpec: .jig/specs/sv.md\nScope: No phase/v\n\n## Built\nx\n' > .jig/handoffs/v-1.md
 mkdir -p .jig/ledgers && cp "$P/ledgers/BUFFER.md" .jig/ledgers/BUFFER.md
 printf '| B0 | M/docs/glossary.md § Walyt: the wallet | not ours | owner, 2026-11-23 | Open |\n' >> .jig/ledgers/BUFFER.md && mplant "takers and B0"
 msg="movein: the plan lists both steps, the first next and carrying the term Delta, the second waiting; nothing is written"
@@ -11627,7 +11596,7 @@ msg="movein: after the merge, --apply stages the removal and the Scope: lines, n
 out=$($J move-in --product Delta --apply 2>&1); rc=$?
 expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q 'alpha/y → Delta alpha/y .*sy.md' && git diff --cached --name-status | grep -q '^D	.jig/roadmap.json' \
   && grep -qx 'Scope: Delta alpha/x' .jig/specs/sx.md && grep -qx 'Scope: Delta No phase/v' .jig/handoffs/v-1.md \
-  && grep -qx 'Scope: alpha/y' .jig/specs/sy.md && grep -qx 'Later: Delta No phase/u' .jig/specs/sl.md" "$out"
+  && grep -qx 'Scope: alpha/y' .jig/specs/sy.md && grep -qx 'Scope: Delta alpha/x, Delta No phase/u' .jig/specs/sl.md" "$out"
 msg="movein: the commit is refused while sy.md takes alpha/y, which M renamed"
 out=$(git commit -qm "move in" 2>&1); rc=$?
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'sy.md takes alpha/y'" "$out"
@@ -11795,7 +11764,7 @@ Touches: docs/products/walyt/battery.md
 
 The battery is 400 mAh.' && rment E-001 && gplant "E-002"
 printf '# Roadmap\n\n## alpha\nScopes:\n- `battery`: the battery (touches docs/products/walyt/battery.md)\n- `charge`: charging (touches docs/products/walyt/battery.md)\n- `later`: later work (touches docs/products/walyt/battery.md)\n\n## Walyt alpha\nScopes:\n- `pair`: pairing\n\n## Kite alpha\nScopes:\n- `k1`: k one\n' > .jig/roadmap.md && rj
-mkdir -p .jig/specs && printf '# b\n\nSource: smoke\nScope: alpha/battery\nLater: alpha/later\n\n## Intent\nx\n' > .jig/specs/b.md && gplant "roadmap"
+mkdir -p .jig/specs && printf '# b\n\nSource: smoke\nScope: alpha/battery, alpha/later\n\n## Intent\nx\n' > .jig/specs/b.md && gplant "roadmap"
 for r in L K U; do
   gnew $r && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
   $J init --para M --location "$GM" $( [ $r = U ] && echo --contract 'docs/**') >/dev/null 2>&1 && git add -A && git commit -qm para-init && python3 .jig/jig.py repos add para "$T/$r" --name $r >/dev/null
@@ -11852,7 +11821,7 @@ git commit -qm "TOOL: move battery" >/dev/null 2>&1
 msg="move (a page down): step 2 in M's job removes the page with its move line, says which items follow, and leaves .jig/roadmap.json alone"
 GARGS="docs/products/walyt/battery.md --to L --as docs/battery.md"; gjob bat .jig/specs/move-docs-products-walyt-battery-md.md "DOCS: battery to L" docs/products/walyt/battery.md .jig/decisions.md
 expect_pass sh -c "test $grc = 0 && echo \"\$0\" | grep -q '.charge. → ## Walyt alpha' && echo \"\$0\" | grep -q 'alpha/battery, alpha/later stay, taken' && echo \"\$0\" | grep -q 'jig merge. moves them in this job.s merge commit'" "$gout"; [ $grc = 0 ] || echo "$gout"
-msg="move (a page down): jig merge's merge commit moves the untaken charge into ## Walyt alpha touching docs/battery.md, drops the page from battery and from later (left for later by b.md), closes the spec, and passes"
+msg="move (a page down): jig merge's merge commit moves the untaken charge into ## Walyt alpha touching docs/battery.md, drops the page from battery and from later (taken by b.md), closes the spec, and passes"
 expect_pass sh -c "test $mrc = 0 && git log -1 --format=%P | grep -q ' ' && test ! -e docs/products/walyt/battery.md && $RMAP md .jig/roadmap.json | sed -n '/^## Walyt alpha/,/^## /p' | grep -qx -- '- .charge.: charging (touches docs/battery.md)' \
   && ! $RMAP md .jig/roadmap.json | sed -n '/^## alpha/,/^## /p' | grep -q charge && $RMAP md .jig/roadmap.json | grep -qx -- '- .battery.: the battery' && $RMAP md .jig/roadmap.json | grep -qx -- '- .later.: later work' \
   && grep -qx -- '- docs/products/walyt/battery.md: moved to L/docs/battery.md.' .jig/decisions.md && git diff HEAD~1 HEAD --name-only | grep -qx .jig/roadmap.json \
