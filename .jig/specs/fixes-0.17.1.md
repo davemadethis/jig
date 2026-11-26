@@ -83,6 +83,9 @@ From a metarepo's `Owner:` rewrite:
 - Write spec names by path in Kept and Build after lines, as a rule: rejected, because the rules
   promise a path, a file name and a bare name are one spec, and the bare form is what people
   write [seen: `kept_separate`'s docstring, and the existing Kept lines on trunk].
+- Let trunk's update rewrite `Owner:` in a metarepo and exempt that commit from M4, or skip the
+  rewrite there: rejected by the owner, "I think it'd be best to do it through the job anyway".
+  [seen: the owner's words above]
 
 ## Decisions
 - Interpreted: "the glossary's first h1 should be Glossary" means a `# Glossary` title heading
