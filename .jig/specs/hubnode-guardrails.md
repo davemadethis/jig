@@ -21,8 +21,10 @@ rewind trunk or a job's branch, or wipe uncommitted work, without the owner's ap
    hook covers a branch moved backwards, and nothing covers uncommitted work.
 
 ## Done when
-1. **Under a bug spec, a blocking review goes to the owner.**
-   - [ ] `jig reviewed` records a blocking review under a part's bug spec and prints that the next
+1. **Under a bug spec, a review's findings go to the owner.**
+   - [ ] Before a part's bug spec, a review's blocking and should-fix findings go to the work
+     session as fixes, with no owner step, as today.
+   - [ ] `jig reviewed` records a review with findings under a part's bug spec and prints that the next
      step is the owner's, with three options: fix, rescope, or another bug investigation. It no
      longer prints "the work session fixes them" (smoke).
    - [ ] `jig next <job>` names the owner, not the work role, until the owner's answer is on the
@@ -116,6 +118,7 @@ rewind trunk or a job's branch, or wipe uncommitted work, without the owner's ap
 
 ## Decisions
 - The owner, 2026-11-25, on strikes (item 1): "Now we're talking - that is solving the problem."
+- The owner, 2026-11-25, setting the whole rule (items 1 and 4): "I dont need to review blocking, blocking get fixed as do should-fix, and you can take from zero up to as many optionals as there are should-fix. After a 3rd strike the bug starts. After that, review findings with me." So before a part's bug spec, every blocking and should-fix finding goes to the work session as a fix, with no owner step; after the bug spec, every review's findings, blocking or not, go to the owner before any fix.
 - The owner, on the optional cap (item 5): "overcorrecting. one round of should-fix with the
   hubnode stays. what we need to cut back on are subsequent rounds without intervention … and the
   hubnodes freedom to take tons of optionals … my idea is no more optionals than there are
