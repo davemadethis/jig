@@ -2,6 +2,8 @@
 
 Source: Dave (owner), 2026-11-26, in jig's hubnode session, answering the process check of jig's own 0.17.0 upgrade, on `docs/glossary.md` being out of the one form because its first heading is `# Glossary`: "Note the glossary's first h1 *should* be \"Glossary\" and this is a gap in 0.17.0, we should fix it and push 0.17.1. Take the rebuild now with this exception, and write a spec of fixes for 0.17.1 (this will be its only entry for now)"
 
+Kept separate from jig-0.17.0-upgrade: 0.17.1 ships first, and the upgrade then runs on it (owner, 2026-11-26: "make that one fix, release 0.17.1, then I'll run jig update here").
+
 ## Intent
 Each fix 0.17.1 ships is a labelled group below; today, only the glossary's title.
 
