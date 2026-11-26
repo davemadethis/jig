@@ -78,7 +78,7 @@ newest review recorded some.
    with `--partial`, so the roadmap doesn't count the spec complete. The review is already
    recorded, once, by whoever dispatched it (the hubnode, or you working alone). Never record
    it again: a second record of the same commit replaces the first, its blocking findings too.
-2. Fill every heading in the note. Commit it with the work, and with the DEFERRED.md rows
+2. Fill every heading in the note. Commit it with the work, and with the deferred.md rows
    for the review's untaken findings: rows added there after the review don't count as a change.
 3. Message the hubnode: the job, the commit, the note's path. Then keep building, or wait.
 
@@ -87,9 +87,9 @@ newest review recorded some.
 The review's blocking findings come back to this session as a fix. Fix them, run the checks
 the fix touched, commit, and report: a review-change runs next, in a fresh session, on what
 changed since the last recorded review. Every should-fix or optional finding you don't take
-gets a row in `.jig/ledgers/DEFERRED.md` with its rank and one reason, tagged `[seen]` or
+gets a row in `.jig/ledgers/deferred.md` with its rank and one reason, tagged `[seen]` or
 `[assumed]`; the first row creates the file from
-`${CLAUDE_PLUGIN_ROOT}/templates/ledgers/DEFERRED.md`. A review with no blocking findings ends
+`.jig/templates/deferred.md`. A review with no blocking findings ends
 the fixing (`.jig/RULES.md`, Contracts). A job's third blocking review, counting its first
 review-work, starts Bug: jig refuses the next review until the bug role's spec for the job is
 committed.

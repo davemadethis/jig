@@ -127,5 +127,5 @@ never starts one on its own hunch that something is broken.
 ## Workarounds
 
 A patch is allowed. Each one is a workaround: a `WORKAROUND:`
-comment in the code, and a row in `.jig/ledgers/WORKAROUNDS.md`. The hook refuses the commit if
+comment in the code, and a row in `.jig/ledgers/workarounds.md`. The hook refuses the commit if
 the row is missing, so nothing gets patched quietly.

@@ -39,8 +39,8 @@ Each one gets exactly one job and one home:
 | `README.md` | for people outside the repo |
 | `docs/<system>.md` | what the code is now, one page per system; a subsystem stays a section until it has something to say that its system's page doesn't, then gets `docs/<system>/<subsystem>.md`, no deeper without the owner's `deep_subsystems` entry; a page is flat until it holds other files (subsystem pages, files it links, `datasheets/`), then moves into a folder named for it, `docs/<system>/<system>.md`, with them beside it |
 | `.jig/specs/` | a task in flight |
-| `.jig/ledgers/WORKAROUNDS.md` | patches that are in the code |
-| `.jig/ledgers/DEFERRED.md` | review findings that are not |
+| `.jig/ledgers/workarounds.md` | patches that are in the code |
+| `.jig/ledgers/deferred.md` | review findings that are not |
 | `docs/<board>.md` | one per board, a system or a subsystem like any other, in its folder once it holds files (`docs/<board>/<board>.md` beside its `datasheets/`), listed in `boards` in `.jig/docmap.json`: components, wiring, toolchain, flash |
 | `docs/…/datasheets/` | the vendor documents a page leans on, in that page's folder; one two pages use, in the nearest folder both share |
 | `docs/datasheets/` | a vendor document two systems use: reference files only, never a page |
@@ -173,7 +173,7 @@ When the repo already coordinates parallel work (4b), these stages come first, i
 Copy `${CLAUDE_PLUGIN_ROOT}/templates/jig/` to `.jig/` as `/jig:init` does, and
 `chmod +x .jig/scripts/*.sh`. `AGENTS.md` and `CLAUDE.md` are the plan's diet, not this copy.
 Where the diet moves lines to `.jig/process.md`, create it from
-`${CLAUDE_PLUGIN_ROOT}/templates/process.md` (`templates/jig/` doesn't bring it), and add `AGENTS.md`'s pointer line naming its trigger ("Before a release, read `.jig/process.md` § Release").
+`.jig/templates/process.md`, and add `AGENTS.md`'s pointer line naming its trigger ("Before a release, read `.jig/process.md` § Release").
 Keep `.jig/scripts/check.sh` and `format.sh` to fast checks — the Stop hook has a time limit.
 Fill `.jig/scripts/setup.sh` the way `/jig:init` does. It replaces whatever the predecessor
 did to set up each new worktree, which goes with the predecessor in 6.5.

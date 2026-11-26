@@ -18,7 +18,7 @@ the code always matches it, and the check at the gate would catch nothing.
    it is a system of its own or a subsystem of an existing system (a board inside a larger
    product), defaulting to a system. Its folder, `<home>` below, is `docs/<board>/` for a
    system or `docs/<system>/<board>/` for a subsystem, the board's name in lowercase with
-   dashes (`docs/acme-devboard-2/`). Copy `${CLAUDE_PLUGIN_ROOT}/templates/hardware.md` to
+   dashes (`docs/acme-devboard-2/`). Copy `.jig/templates/hardware.md` to
    `<home><board>.md`. Never overwrite: if the page exists, you are updating it, so show the
    diff before changing it. Fill every section the definition covers and leave TODO where it
    says nothing. The template is on the page contract (`.jig/RULES.md`, Documentation): the
@@ -69,7 +69,7 @@ the code always matches it, and the check at the gate would catch nothing.
      of its own.
    - **Only the code says it** — ask whether to add the code's value to the page.
 4. **Skills.** Read the frontmatter (`platform`, `framework`, `peripheral`) and description of
-   each skill in `${CLAUDE_PLUGIN_ROOT}/templates/skills/` (skip `_template`) and in
+   each skill in `${CLAUDE_PLUGIN_ROOT}/templates/skills/` and in
    `.claude/skills/`. Under Skills, list each one that fits this page's Components and
    Toolchain, with one line on why. List only skills that exist.
 5. **Install.** Copy each listed skill that jig ships and `.claude/skills/` lacks to

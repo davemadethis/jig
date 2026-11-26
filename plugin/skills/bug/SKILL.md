@@ -50,7 +50,7 @@ Does the fix handle the symptom where it appears, or change the thing that produ
 Prefer the correction. A workaround is fine when it is the right fix — say why in one line.
 
 ## 5. Write the spec
-The spec takes the template's sections (`.jig/specs/_template.md`, as `/jig:spec` finds it), each a
+The spec takes the template's sections (`.jig/templates/spec.md`, as `/jig:spec` copies it), each a
 `## ` heading. Steps 1–4 go in as `## Why`, `## Givens`, `## One layer up` and `## Correction`
 above them, never with the spec nested under a step.
 The spec opens with `Source:` naming who reported it, when, and the symptom in their words.
@@ -66,4 +66,4 @@ the owner's yes adds one), or not fixed at all, as an `Out of scope` line with i
 
 If the fix is a workaround:
 - one-line code comment, ≤120 chars, starting `WORKAROUND:` — what it patches and why a patch was right
-- an entry in `.jig/ledgers/WORKAROUNDS.md` (the commit hook checks for it); the first creates the file from `${CLAUDE_PLUGIN_ROOT}/templates/ledgers/WORKAROUNDS.md`
+- an entry in `.jig/ledgers/workarounds.md` (the commit hook checks for it); the first creates the file from `.jig/templates/workarounds.md`

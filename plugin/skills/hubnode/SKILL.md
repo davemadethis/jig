@@ -42,7 +42,7 @@ out as `/jig:decision-cards` says.
    `pin-bump-<metarepo>.md` becomes a job: `/jig:rig` offers it like any staged file, and its
    spec rewrites the uses it lists and moves the pin.
    In a metarepo (`.jig/meta.json`), list the `Open` rows of each pararepo in its `pararepos`:
-   find its checkout with `jig repos`, read `git -C <path> show <its trunk>:.jig/ledgers/BUFFER.md`,
+   find its checkout with `jig repos`, read `git -C <path> show <its trunk>:.jig/ledgers/buffer.md`,
    and report each row's id and claim. Beside them, name this repo's unreleased buffer
    proposals (`git branch --no-merged <trunk> --list 'propose/<pararepo>-*'`) and the rows each
    carries (the `## Buffer rows` of the pararepo's spec that names the branch). An Open row whose
@@ -166,7 +166,7 @@ Your answer goes back only through the owner.
 
 New process (a rule, a procedure, a convention), from the owner or a subnode, is placed by the
 test in `.jig/RULES.md` (Homes) before it is written, and a spec for process work names its home.
-When `.jig/process.md` is absent, create it from `${CLAUDE_PLUGIN_ROOT}/templates/process.md`,
+When `.jig/process.md` is absent, create it from `.jig/templates/process.md`,
 and add `AGENTS.md`'s pointer line naming its trigger ("Before a release, read `.jig/process.md` § Release"); a new section gets its trigger on that line too.
 
 ## Opening a job (assign)
@@ -300,15 +300,15 @@ A scope a spec still takes is re-pointed in that commit: the hook names the spec
 In a pararepo that plans from its metarepo's roadmap (no `.jig/roadmap.json` of its own), a change
 to its products' sections is never made here or on the metarepo's trunk: on the owner's yes,
 `jig roadmap --draft`, make the change in the draft, and `jig roadmap --edit`. It writes the
-`BUFFER.md` row and the change on this repo's open roadmap proposal in the metarepo, and stages
-a label the metarepo's glossary lacks there; commit the spec and `BUFFER.md` it names. It
+`buffer.md` row and the change on this repo's open roadmap proposal in the metarepo, and stages
+a label the metarepo's glossary lacks there; commit the spec and `buffer.md` it names. It
 merges in the metarepo at the next sync the owner calls. In a metarepo, merging such a branch
 is a roadmap change like any other: show the diff, and merge on the owner's yes. Rig there lists
 each cross-product wait no section confirms in its `needed_by`: put it to the owner.
 
 A pararepo with a roadmap of its own moves it in by `jig move-in --product <Name>` in its trunk
 checkout, on the owner's yes, one step per `--apply`: its run with no flag says which step is
-next and whose yes it waits on. Step 1 stages a `BUFFER.md` row and `.jig/specs/move-in.md`
+next and whose yes it waits on. Step 1 stages a `buffer.md` row and `.jig/specs/move-in.md`
 here (commit them) and makes the metarepo's `propose/<repo>-move-in`, with the product's
 glossary term when the metarepo has none. Step 2, once the metarepo merged it, stages the
 roadmap's removal and the re-pointed `Scope:` lines: re-point any id it names by hand, then

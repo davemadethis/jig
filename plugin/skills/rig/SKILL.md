@@ -156,7 +156,7 @@ Nothing is ever dropped for it.
 - **An unconfirmed wait's ruling:** show it; rig changes no roadmap. Keep: the waited-on
   product's repo adds the waiter to its `needed_by`; drop: the waiter's repo removes it from its `after`.
   The repo whose section changes proposes it, as any change to a product's section goes: a
-  `BUFFER.md` row and `jig propose --buffer` there, the change on the `propose/` branch it
+  `buffer.md` row and `jig propose --buffer` there, the change on the `propose/` branch it
   makes, merged in the metarepo at the next sync the owner calls. For the metarepo's own
   sections, or a product it owns as `this repo`, the hubnode makes it as its skill's "A roadmap
   change" says: the diff shown, applied on the owner's yes.

@@ -33,10 +33,21 @@ DIR = ".jig"
 CONFIG = f"{DIR}/config.json"
 JOBS = f"{DIR}/jobs.json"
 LEGACY_BOARD = f"{DIR}/lanes.json"   # the one-file board, before version 8
-WORKAROUNDS = f"{DIR}/ledgers/WORKAROUNDS.md"
+WORKAROUNDS = f"{DIR}/ledgers/workarounds.md"
 # How the repo is worked where no other home takes it (RULES.md, Homes): the repo's text, not jig's.
 PROCESS = f"{DIR}/process.md"
-DEFERRED = f"{DIR}/ledgers/DEFERRED.md"
+DEFERRED = f"{DIR}/ledgers/deferred.md"
+# Every record's shape, a skeleton for prose and an example for JSON, written into the repo from
+# this copy so a session copies the repo's own and never the plugin's.
+TEMPLATES = f"{DIR}/templates"
+PAGE_TEMPLATE = f"{TEMPLATES}/page.md"
+SPEC_TEMPLATE = f"{TEMPLATES}/spec.md"
+# Copied from this copy's templates/ folder into every repo.
+TEMPLATE_FILES = ("page.md", "spec.md", "process.md", "hardware.md", "skill.md", "deferred.md",
+                  "workarounds.md", "glossary-term.md", "glossary-product.md")
+# Built from jig.py itself: the JSON records' one example, the handoff note `jig handoff`
+# writes, and a pararepo's buffer ledger.
+JSON_TEMPLATES = {"phase.json": "phase", "scope.json": "scope", "no-phase-item.json": "no_phase"}
 # A merged job has no state: its entry is gone, deleted in its merge commit.
 STATES = ["claimed", "building", "ready", "gated", "parked"]
 # The layout this copy of jig writes into the config's "version". Any change that adds a
@@ -1073,6 +1084,7 @@ def cmd_init(root: Path, args) -> int:
         rc = cmd_para_init(root, args)
     # After those, so a pararepo's para.json is there to say it plans from its metarepo's.
     ensure_roadmap(root, init=True)
+    write_templates(root)
     return rc
 
 
@@ -2574,8 +2586,8 @@ def changed_since(commit: str, branch: str, board: "Board") -> list[str]:
     """What a job did after the commit that was checked: the files its own commits changed,
     and what a merge of trunk carries beyond what `jig sync` makes of that merge. Trunk's
     changes aren't the job's, a hand edit hidden in a resolution is. Handoff notes, and the
-    DEFERRED.md rows the review's untaken findings get beside them, are bookkeeping made after
-    the check by design. DEFERRED.md is judged by its net change over the whole range, not
+    deferred.md rows the review's untaken findings get beside them, are bookkeeping made after
+    the check by design. deferred.md is judged by its net change over the whole range, not
     commit by commit: a row edited and restored later deleted nothing. A line the job's net
     change deletes rewrites a disposition no one checked, so it counts; one trunk deleted,
     brought in by a sync, is trunk's."""
@@ -2618,7 +2630,7 @@ def changed_since(commit: str, branch: str, board: "Board") -> list[str]:
 
 
 def deferred_deleted(commit: str, branch: str, trunk: str) -> bool:
-    """Whether the job's net change to DEFERRED.md from COMMIT to BRANCH deletes a line: one
+    """Whether the job's net change to deferred.md from COMMIT to BRANCH deletes a line: one
     COMMIT had that BRANCH lacks, unless trunk deleted it between the two syncs."""
     def rows(rev: str) -> Counter:
         return Counter(l for l in blob(rev, DEFERRED).splitlines() if l.strip()) if rev else Counter()
@@ -3049,7 +3061,7 @@ def foldin_lines(root: Path, board: Board, branch: str) -> str:
             for (kind, iid, what), hit in asked.items()]
     if gone := unreachable_line():
         out.append(gone)
-    out += [f"- [ ] UNOWNED {f} — add to docmap (a new page starts from {DIR}/docs-page.md), "
+    out += [f"- [ ] UNOWNED {f} — add to docmap (a new page starts from {PAGE_TEMPLATE}), "
             "or no page needed because ___ (the repository's own tooling, its build, CI, release "
             "and dev scripts, needs none)"
             for f in sorted(unowned)]
@@ -3785,7 +3797,8 @@ DOC_HOMES = {
     f"docs/{DATASHEETS}/": "a vendor document two systems use: reference files only, never a page",
     f"{DIR}/specs/": "a task in flight",
     f"{DIR}/process.md": "how the repo is worked where no other home takes it, one section per topic, read on demand",
-    f"{DIR}/ledgers/": "WORKAROUNDS.md patches that are in the code; DEFERRED.md review findings that are not",
+    f"{DIR}/ledgers/": "workarounds.md patches that are in the code; deferred.md review findings that are not",
+    f"{TEMPLATES}/": "the shape each record starts from, jig's, rewritten by every update",
     f"{DIR}/staging/": "chat-born files waiting to be resolved (untracked)",
 }
 # Tooling directories, jig's own among them. Their contents are a tool's own records, not
@@ -6170,7 +6183,7 @@ def reviewed_commits() -> set[str]:
 
 def counts_reviewed(commit: str, done: set[str], board: "Board") -> bool:
     """A commit is reviewed when `jig reviewed` recorded it, or when a recorded commit is its
-    first-parent ancestor and nothing of the job's changed since (`changed_since`): the note, and the DEFERRED.md rows
+    first-parent ancestor and nothing of the job's changed since (`changed_since`): the note, and the deferred.md rows
     beside it, are committed after the review, and a clean sync may be too."""
     for c in git("rev-list", "--first-parent", commit).splitlines():
         if c in done:
@@ -8473,7 +8486,7 @@ PROPOSAL = re.compile(r"^\s*-?\s*meta: (?:none — \S.*|buffered (?P<row>\S+)|"
                       r"(?P<pmeta>\S+) pointers (?P<pbranch>\S+))\s*$", re.M)
 # The sync buffer: each metarepo claim this repo has moved away from, held until a release
 # proposes them all at once. Rows are Open until the release that settles them is pinned.
-BUFFER = f"{DIR}/ledgers/BUFFER.md"
+BUFFER = f"{DIR}/ledgers/buffer.md"
 BUFFER_STATES = ("Open", "Closed")
 # A row the metarepo answered by some change other than the proposal that carried it: closed
 # by `jig sync --answered` on the owner's word, naming the release, which the pin must hold, and why.
@@ -10324,7 +10337,7 @@ def row_offer(claim: str, now: str) -> str:
 
 def buffer_offer(root: Path, claim: str, path: str, now: str, section: str | None = None) -> str:
     """What to do about a claim this repo moved away from: the Open row that already names PATH
-    (and SECTION, for a heading), or the row to add to BUFFER.md, the owner's to accept. Never
+    (and SECTION, for a heading), or the row to add to buffer.md, the owner's to accept. Never
     written here."""
     ledger = root / BUFFER
     row = naming_row(buffer_rows(ledger.read_text()) if ledger.exists() else [], path, section)
@@ -10421,13 +10434,13 @@ def pointer_cleanup(root: Path) -> list[str]:
 
 def contract_removals(root: Path, trunk: str) -> list[str]:
     """Update's Contract removals block: each trunk commit that took a contract path away while
-    nothing answered it, which an older P2 let through, and the one BUFFER.md row to offer for
+    nothing answered it, which an older P2 let through, and the one buffer.md row to offer for
     it. Each commit is judged by the contract_paths its parent's para.json held, which is what P2
     read then. Writes nothing."""
     olds = dict(LAYOUT)
     para_at = [PARA, *olds[PARA]]
     spec_dirs = [f"{DIR}/specs/", *olds[f"{DIR}/specs/"]]
-    ledgers = [f"{d}BUFFER.md" for d in (f"{DIR}/ledgers/", *olds[f"{DIR}/ledgers/"])]
+    ledgers = [BUFFER, f"{DIR}/ledgers/BUFFER.md"] + [f"{d}BUFFER.md" for d in olds[f"{DIR}/ledgers/"]]
     rows = buffer_rows(at_rev(trunk, BUFFER))
     # The Metarepo pointers block already speaks for a path a cached pointer names.
     pointed = {p for _, p, _, _, _, _ in dangling(root)}
@@ -13659,7 +13672,7 @@ def plumb_commit(loc: Path, branch: str, path: str, text: str, message: str) -> 
     return ""
 
 
-BUFFER_HEAD = ("# BUFFER\n\n| Id | Metarepo claim (`<meta>/<path> § section`, at the pin) | This repo now "
+BUFFER_HEAD = ("# Buffer\n\n| Id | Metarepo claim (`<meta>/<path> § section`, at the pin) | This repo now "
                "(source, commit) | Decided (who, date) | State |\n|---|---|---|---|---|\n")
 
 
@@ -14617,8 +14630,10 @@ LAYOUT = [
     (f"{DIR}/handoffs/", ["jig/handoffs/", ".aidev/handoffs/", f"{CLAUDE_LANE}manifests/handoffs/"]),
     (f"{DIR}/specs/", ["jig/specs/", "specs/"]),
     (f"{DIR}/ledgers/", ["jig/ledgers/", "ledgers/"]),
-    (WORKAROUNDS, ["WORKAROUNDS.md"]),
-    (DEFERRED, ["DEFERRED.md"]),
+    (WORKAROUNDS, ["WORKAROUNDS.md", f"{DIR}/ledgers/WORKAROUNDS.md"]),
+    (DEFERRED, ["DEFERRED.md", f"{DIR}/ledgers/DEFERRED.md"]),
+    (BUFFER, [f"{DIR}/ledgers/BUFFER.md"]),
+    (PAGE_TEMPLATE, [f"{DIR}/docs-page.md"]),
     (f"{DIR}/scripts/", ["jig/scripts/"]),
     (f"{DIR}/scripts/check.sh", ["scripts/check.sh"]),
     (f"{DIR}/scripts/format.sh", ["scripts/format.sh"]),
@@ -14628,7 +14643,8 @@ LAYOUT = [
     ("docs/", ["jig/docs/"]),
 ]
 # Written from the running copy, never renamed: their content is jig's, not the repo's.
-TOOL_FILES = (f"{DIR}/jig.py", f"{DIR}/RULES.md", f"{DIR}/docs-page.md")
+TOOL_FILES = (f"{DIR}/jig.py", f"{DIR}/RULES.md",
+              *(f"{TEMPLATES}/{n}" for n in (*TEMPLATE_FILES, "handoff.md", "buffer.md", *JSON_TEMPLATES)))
 # jig's folder under its old names. Nothing moves by this alone — a file there that no row
 # names stays and is flagged — but a board glob over the whole folder meant jig's folder.
 OLD_DIRS = ("jig/", ".aidev/", CLAUDE_LANE)
@@ -15244,7 +15260,72 @@ def glossary_out_of_form(root: Path) -> list[str]:
     return [p for _, p in glossary_problems(text, (root / META).exists())]
 
 
+def template_sources(root: Path, here: Path) -> dict[str, "Path | bytes"]:
+    """{path under TEMPLATES: its source} for every template that applies to ROOT's kind: the
+    prose ones from HERE's templates/ folder, the JSON records' one example from
+    ROADMAP_RECORDS, and the buffer ledger's in a pararepo alone."""
+    out: dict[str, Path | bytes] = {f"{TEMPLATES}/{n}": here / "templates" / n for n in TEMPLATE_FILES
+                                    if (here / "templates" / n).is_file()}
+    out |= {f"{TEMPLATES}/{n}": roadmap_dumps(ROADMAP_RECORDS[k]).encode() for n, k in JSON_TEMPLATES.items()}
+    out[f"{TEMPLATES}/handoff.md"] = NOTE.format(
+        job="<job>", head="<the commit it hands off>", today="<YYYY-MM-DD>", spec=f"{DIR}/specs/<task>.md",
+        partial="", ran="", foldin="- [ ] <page> — updated / no change because ___").encode()
+    if (root / PARA).is_file():
+        out[f"{TEMPLATES}/buffer.md"] = BUFFER_TEMPLATE.encode()
+    return out
+
+
+def blob_of(src: "Path | bytes") -> bytes:
+    return src if isinstance(src, bytes) else src.read_bytes()
+
+
+def write_templates(root: Path) -> None:
+    """`jig init`'s share of the templates: those its copy of jig builds (the copied folder
+    brings the rest), and none of a kind the repo isn't."""
+    here = Path(__file__).resolve().parent
+    for dest, src in template_sources(root, here).items():
+        if not (root / dest).exists() or not isinstance(src, Path):
+            (root / dest).parent.mkdir(parents=True, exist_ok=True)
+            (root / dest).write_bytes(blob_of(src))
+    if not (root / PARA).is_file():
+        (root / TEMPLATES / "buffer.md").unlink(missing_ok=True)
+
+
+OLD_LEDGER_NAMES = {f"{DIR}/ledgers/DEFERRED.md": DEFERRED, f"{DIR}/ledgers/WORKAROUNDS.md": WORKAROUNDS,
+                    f"{DIR}/ledgers/BUFFER.md": BUFFER}
+
+
+def ledger_header_stale(root: Path) -> bool:
+    """The deferred ledger, at either name, still heads its second column `Lane / handoff`."""
+    # Read where it is now: update's moves bring it here from an older layout first.
+    return any((root / f).is_file() and "| Lane / handoff |" in read_raw(root / f)
+               for f in (DEFERRED, f"{DIR}/ledgers/DEFERRED.md", "ledgers/DEFERRED.md",
+                         "jig/ledgers/DEFERRED.md", ".aidev/ledgers/DEFERRED.md", "DEFERRED.md"))
+
+
+def agents_old_ledgers(root: Path) -> bool:
+    return (root / "AGENTS.md").is_file() and any(o in read_raw(root / "AGENTS.md") for o in OLD_LEDGER_NAMES)
+
+
+def rename_ledger_cites(root: Path, here: Path) -> None:
+    """The ledgers' new names where jig wrote the old: the deferred ledger's header cell, and
+    AGENTS.md's lines citing a ledger by path. No row changes."""
+    if (root / DEFERRED).is_file():
+        text = read_raw(root / DEFERRED)
+        write_raw(root / DEFERRED, text.replace("| Lane / handoff |", "| Job / handoff |", 1))
+        git("add", "--", DEFERRED, check=True, cwd=str(root))
+    if agents_old_ledgers(root):
+        text = read_raw(root / "AGENTS.md")
+        for o, n in OLD_LEDGER_NAMES.items():
+            text = text.replace(o, n)
+        write_raw(root / "AGENTS.md", text)
+        git("add", "--", "AGENTS.md", check=True, cwd=str(root))
+
+
 STEPS: list = [
+    (f"name the ledgers where jig cites them: the deferred ledger's header cell `Lane / handoff` "
+     f"as `Job / handoff`, and AGENTS.md's lines citing a ledger by its old capital name; no row changes",
+     lambda root, after: ledger_header_stale(root) or agents_old_ledgers(root), rename_ledger_cites),
     # save_board writes the split: the step names it, so the plan says what moves where.
     (f"move docmap, boards, deep_subsystems and not_docs from {CONFIG} to {DOCMAP}, each value "
      "unchanged: the docs tree's map is not configuration",
@@ -15424,6 +15505,8 @@ def plan_moves(files: list[str], board_at: str, version: int, extra: list | None
                 moved = True
             if moved:
                 rows.append((old, new))
+    # A ledger a folder move brings in under its old capital name lands at its name now.
+    moves = {o: OLD_LEDGER_NAMES.get(n, n) for o, n in moves.items()}
     home = next((d for d in OLD_DIRS if board_at.startswith(d)), None)
     gone = [f for f in files if home and f in GONE]
     after = sorted((set(files) - set(moves) - set(retire) - set(gone)) | set(moves.values())
@@ -16385,8 +16468,11 @@ def cmd_update(root: Path, args) -> int:
                      f"{ROADMAP} on trunk" for x in type_problems(phases, owners)]
     # plan_moves sees tracked files only; `git mv` onto an untracked one dies mid-apply, with
     # the renames before it staged.
+    # On a filesystem that folds case, a rename to the lowercase name finds the file itself
+    # there: that path is the one moving, not one in its way.
     occupied = [f"{n} (from {o})" for o, n in plan["moves"].items()
-                if (root / n).exists() or (root / n).is_symlink()]
+                if ((root / n).exists() or (root / n).is_symlink())
+                and not ((root / o).exists() and os.path.samefile(root / o, root / n))]
     # A script that finds the repo from its own folder (`cd "$(dirname "$0")/.."`) counts
     # levels, and a move that changes its depth breaks it. The line is the repo's to fix.
     selfref = re.compile(r"\$0\b|\$\{0\}|BASH_SOURCE|__file__|__FILE__|__dir__|__dirname|import\.meta\.url")
@@ -16411,13 +16497,20 @@ def cmd_update(root: Path, args) -> int:
                        f"..., \"files\": [...]}}}}), then update again: the pattern is how jig "
                        "knows which numbers are taken")
     sources = {f"{DIR}/jig.py": Path(__file__).resolve(), f"{DIR}/RULES.md": here / "RULES.md",
-               f"{DIR}/docs-page.md": here / "docs-page.md"}
+               **template_sources(root, here)}
     replace = []
     for dest, src in sources.items():
-        if not src.exists():
+        if isinstance(src, Path) and not src.exists():
             warnings.append(f"no {src.name} beside this jig.py: {dest} is left as it is")
-        elif plan["retire"] or not (root / dest).exists() or (root / dest).read_bytes() != src.read_bytes():
+        elif plan["retire"] or not (root / dest).exists() or (root / dest).read_bytes() != blob_of(src):
             replace.append(dest)
+    # A template of a kind the repo no longer is (a pararepo's buffer, say) leaves.
+    plan["gone"] += [f for f in files if f.startswith(TEMPLATES + "/") and f in TOOL_FILES and f not in sources]
+    if (own := root / f"{DIR}/specs/_template.md").is_file() and (here / "templates" / "spec.md").is_file() \
+            and own.read_bytes() != (here / "templates" / "spec.md").read_bytes():
+        warnings.append(f"{DIR}/specs/_template.md is this repo's own spec template, and differs from jig's "
+                        f"{SPEC_TEMPLATE}: /jig:spec copies {SPEC_TEMPLATE}, so carry what yours adds there "
+                        "or into the skill's instructions; update leaves it in place")
     steps = [(s[0](root) if callable(s[0]) else s[0], *s[1:]) for s in STEPS
              if s[1](root, set(plan["after"]))]
     # Everything that leaves the repo, named before anything is applied: removed files stay in
@@ -16685,10 +16778,11 @@ def cmd_update(root: Path, args) -> int:
     save_board(root, new_board)
     if not (root / JOBS).exists():
         (root / JOBS).write_text("{}\n")
-    blobs = {dest: sources[dest].read_bytes() for dest in replace}
+    blobs = {dest: blob_of(sources[dest]) for dest in replace}
     for r in plan["retire"] + plan["gone"]:
         git("rm", "-q", "-f", r, check=True)
     for dest, blob in blobs.items():
+        (root / dest).parent.mkdir(parents=True, exist_ok=True)
         (root / dest).write_bytes(blob)
     for s in steps:
         s[2](root, here)
@@ -17529,7 +17623,7 @@ def names_of(root: Path, gone: list[str]) -> list[tuple[str, int]]:
     if not gone:
         return []
     # The merge rewrites the config and meta.json itself.
-    skip = (f"{DIR}/jig.py", f"{DIR}/RULES.md", f"{DIR}/docs-page.md", LOG, CONFIG, META)
+    skip = (*TOOL_FILES, LOG, CONFIG, META)
     hits = git("grep", "-c", "-F", *[a for g in gone for a in ("-e", g)], "--").splitlines()
     out = []
     for h in hits:
@@ -18865,8 +18959,10 @@ def cmd_rig(root: Path, args) -> int:
 MOVE_IN = "move-in"
 # The buffer row step 1 writes, whose claim names the product: step 2 reads it back.
 MOVE_IN_NOW = "its phases and list, moving in"
-BUFFER_SEED = ("# BUFFER\n\n| Id | Metarepo claim (`<meta>/<path> § section`, at the pin) | This repo now "
+BUFFER_SEED = ("# Buffer\n\n| Id | Metarepo claim (`<meta>/<path> § section`, at the pin) | This repo now "
                "(source, commit) | Decided (who, date) | State |\n|---|---|---|---|---|\n")
+# The pararepo's buffer ledger as its template: written only where `para.json` is.
+BUFFER_TEMPLATE = "# Buffer\n\nThe sync buffer: every metarepo claim this pararepo has moved away from, one row each, made in the\ncommit that moves away (P2). A row records a claim the metarepo states, even when the fix there\nwill be a pointer to this repo rather than new text (RULES.md: What the metarepo holds). A change\nof mind edits the row's middle columns. `jig release` proposes every Open row at once, but a move-in row,\n`jig move-in`'s; `jig sync`\ncloses them when the metarepo releases that proposal. A row the metarepo answered some other way\ncloses by `jig sync --answered`, its State then `Closed (answered in <release>: <reason>)`. Ids\nare B1, B2, … in order; a row keeps its id.\n\n| Id | Metarepo claim (`<meta>/<path> § section`, at the pin) | This repo now (source, commit) | Decided (who, date) | State |\n|---|---|---|---|---|\n"
 
 
 def glossary_rules(meta: bool, staged: bool) -> list[str]:
@@ -19061,7 +19157,7 @@ def move_in_records(root: Path, meta: str) -> list[dict]:
     whose `## Buffer rows` lists a row its own table reads as `<meta>/.jig/roadmap.json §
     <Product>: none yet` (or roadmap.md, a row written before the conversion), moving in, with
     the `meta:` line naming its branch, live or withdrawn. The product is read from the spec's
-    own copy of the row: `jig sync` may close BUFFER.md's."""
+    own copy of the row: `jig sync` may close buffer.md's."""
     claim = re.compile(rf"{re.escape(meta)}/{ROADMAP_EITHER} § (.+): none yet")
     out = []
     for spec in sorted((root / SPECS).glob("*.md")):

@@ -106,7 +106,7 @@ a rename changes both of its paths: R3–R5, P1, P2 and P4 count each.
   adding a rule under an existing section, takes nothing. A counter marked `"unique"` also
   refuses a change that adds a second match of one number. Two branches that each take
   migration step 17 corrupt the first database that runs both.
-- **R7** A change adding a `WORKAROUND:` comment to code must stage `.jig/ledgers/WORKAROUNDS.md` too;
+- **R7** A change adding a `WORKAROUND:` comment to code must stage `.jig/ledgers/workarounds.md` too;
   its first row creates the file. jig's own `jig.py` quotes the marker and is not checked.
   Prose may quote the marker.
 - **R8** A job is gated only after the jobs in its `after` have merged.
@@ -262,7 +262,7 @@ Another repo's file (`<repo>/README.md`) and a code path are not root documents.
 that names one without a path ("listed in the root README") the hook can't judge; `jig survey`
 lists those lines too.
 
-Every page, in this order (`.jig/docs-page.md`, which `jig update` keeps
+Every page, in this order (`.jig/templates/page.md`, which `jig update` keeps
 current, is the skeleton):
 
 1. **A lead paragraph**, with no heading of its own: what the system is and why it exists.
@@ -288,7 +288,7 @@ thing (a status call, a state machine's states) is product. Work with no phase y
 mid-build (naming the pages it will touch) or not started, is a No phase item (`no_phase`) in
 `.jig/roadmap.json` (Roadmap), written only on the owner's word. An open
 product question is an idea in `.jig/ideas.md`, which the page may cite. Review
-findings not taken go in `.jig/ledgers/DEFERRED.md`. `jig survey` lists a `## Undefined`
+findings not taken go in `.jig/ledgers/deferred.md`. `jig survey` lists a `## Undefined`
 heading, jig's own retired one, with where its content goes; it searches no other heading,
 since a heading's word alone says nothing. A page that still carries a project section works as
 before until it is moved.
@@ -410,8 +410,8 @@ that name.
 Each kind of document has one home: rules in `AGENTS.md`, and the rules about documentation
 here; what the code is now and its invariants in `docs/`; a task in flight in
 `.jig/specs/`, removed once its job merges, its scopes kept on its handoff note; decisions that outlive their spec, and what a release changed, in
-`.jig/decisions.md`; the phases, scopes and parked work ahead in `.jig/roadmap.json`; patches in the code in `.jig/ledgers/WORKAROUNDS.md`; review findings not taken
-in `.jig/ledgers/DEFERRED.md`; a procedure an agent runs in a skill, and the rest of how the
+`.jig/decisions.md`; the phases, scopes and parked work ahead in `.jig/roadmap.json`; patches in the code in `.jig/ledgers/workarounds.md`; review findings not taken
+in `.jig/ledgers/deferred.md`; a procedure an agent runs in a skill, and the rest of how the
 repo is worked in `.jig/process.md`, never in `docs/`; what outsiders need in `README.md`;
 history in git.
 
@@ -560,7 +560,7 @@ is on trunk.
 the `docmap` key and `boards` entry naming the old path, drops the entry, and moves the page's
 other entries (an exception on its `contract` finding) to its new path. It drops an approval or
 a deferral whose finding no longer fires: that question is settled. What it can't do — a reference in another file, a
-`contract_paths` glob, a `BUFFER.md` row per cached pointer, an edit — it prints for the
+`contract_paths` glob, a `buffer.md` row per cached pointer, an edit — it prints for the
 session to make in the same commit, and an approved finding it can't carry out stays recorded.
 The usual refusals apply (open jobs, tracked changes), and it commits nothing. In a metarepo a
 page moves only in a job (M4): `--apply` lists the approved moves as the job's and makes none,
@@ -601,7 +601,7 @@ Ownership comes from `docmap` in `.jig/docmap.json`:
 
 `docmap` can name any file, config such as `sdkconfig` included; a page is asked about
 whenever a file it names changes. A changed source file nothing covers is listed as
-`UNOWNED` — add it to `docmap`, starting a new page from `.jig/docs-page.md`, or answer why
+`UNOWNED` — add it to `docmap`, starting a new page from `.jig/templates/page.md`, or answer why
 it needs no page.
 
 A decision entry and the pages citing it are one home, so a branch that adds, edits or removes
@@ -648,8 +648,8 @@ else stops with the files named, and a person resolves it.
    `Spec:` is `--spec`, as a path from the repo root, else the job's spec on the board:
    working alone, pass `--spec`. A chunk that doesn't finish its spec hands off with
    `--partial`. Fill every heading, commit the note with the work, tell the hubnode the job
-   and the commit. The note and the review's `.jig/ledgers/DEFERRED.md` rows may be one
-   commit after the reviewed one. DEFERRED.md is judged by its net change from the reviewed
+   and the commit. The note and the review's `.jig/ledgers/deferred.md` rows may be one
+   commit after the reviewed one. deferred.md is judged by its net change from the reviewed
    commit to the branch, not commit by commit: a row edited and restored later deleted
    nothing, and only a line the net change deletes, one trunk didn't delete, counts as a
    change since the check. A job may hand off several times, but not while trunk's board has
@@ -846,7 +846,7 @@ full review of the job is on HEAD's first-parent chain. The note carries a `Revi
 line beside `Review:` (an older note's `Recheck:` reads alike), and `jig gate` warns when
 either is below the spec's review line. A review-change widens to a review-work when the diff
 changes anything the findings didn't name. What needs no new review at all: a clean `jig sync`
-of a reviewed commit, and DEFERRED.md rows whose net change deletes no line (Handoff, gate,
+of a reviewed commit, and deferred.md rows whose net change deletes no line (Handoff, gate,
 merge). Working alone, a review-change leans only on a full review made since the last
 handoff note: history can't tell a new task from a fix after a note, so either gets a full
 review.
@@ -1161,7 +1161,7 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
   on the metarepo owner's yes, where the hook checks it as any trunk change.
 - **Edits.** No hubnode edits another repo's content. A pararepo's changes to its products'
   sections are buffered and reach the metarepo by the regular sync process, when the owner
-  decides: a `BUFFER.md` row and `jig propose`, the change written on its
+  decides: a `buffer.md` row and `jig propose`, the change written on its
   `propose/<repo>-<slug>` branch in the metarepo, never on its trunk, and merged there at the
   next sync the owner calls. A pararepo's merge writes nothing to the metarepo's roadmap.
   Labels, names and new products (the glossary product and its `Repo:` and `Kind:` lines) are the metarepo's
@@ -1184,12 +1184,12 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
   stand-alone repo it is refused, the term going in first. In the metarepo or a stand-alone
   repo the edit writes `.jig/roadmap.json` in the trunk checkout (refused elsewhere, R5, and while
   that file differs from trunk's), to commit on the owner's yes. In a pararepo it adds an Open
-  `BUFFER.md` row (`<meta>/.jig/roadmap.json § <phase>, …`; the scopes and items added, changed
+  `buffer.md` row (`<meta>/.jig/roadmap.json § <phase>, …`; the scopes and items added, changed
   or removed; `hubnode, <date>`) and commits the change on this repo's open roadmap proposal,
   an unmerged `propose/<repo>-roadmap-<date>` branch its spec `roadmap-<date>.md` cites, or a
   new one: by plumbing in the metarepo's checkout, so no checkout moves, replacing only this
   repo's sections, whole. The spec lists roadmap rows only, so `jig propose --buffer` and
-  `jig release` never sweep them; commit it and `BUFFER.md` here. Either way the draft is
+  `jig release` never sweep them; commit it and `buffer.md` here. Either way the draft is
   deleted. On a metarepo's `propose/<repo>-…` branch the hook refuses, as `--edit` does, a
   change to a section another repo owns, the proposing repo found by its `jig repos` name or
   its folder's, and a roadmap change on a branch naming no pararepo; a section that is
@@ -1210,7 +1210,7 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
      the metarepo's trunk, the same proposal carries it: `# <Product>` in its sorted place, with
      `Repo: <repo>`, `Kind: software` and the sentence `--definition` gives, and its line under `## Unreleased`
      `### Added`, so one yes decides the product and its phases. A term another repo owns, a
-     mapped phase the metarepo's roadmap already has is refused before anything is written. `--apply` adds one `BUFFER.md` row, opens `propose/<repo>-move-in`
+     mapped phase the metarepo's roadmap already has is refused before anything is written. `--apply` adds one `buffer.md` row, opens `propose/<repo>-move-in`
      carrying that row alone, listed in `.jig/specs/move-in.md` (the next free name, `move-in-2`
      and its branch, once a withdrawn proposal holds it), and commits the sections there in a
      temporary worktree of the metarepo, whose hook judges the commit. That spec is step 1's
@@ -1723,7 +1723,7 @@ refuses until the receiver's trunk has the moved-from line. Frozen citations of 
 resolving through the line, so nothing released is rewritten. A metarepo pointer to a page or
 section a pararepo moved away reads `(moved: <pointer>)` in `jig sync`, the release and P2,
 never as missing. The answer is a removal's: the metarepo's rewrite as a pointers proposal
-(`jig propose --pointers`), or a `BUFFER.md` row. A pararepo bumping its pin past such a release
+(`jig propose --pointers`), or a `buffer.md` row. A pararepo bumping its pin past such a release
 reads the pointer's new home in the pin-bump request.
 
 `jig move <what> --to <repo> [--as <path>]` does both ends, one step per `--apply`; without it,
@@ -1824,10 +1824,10 @@ bump with the term's new home, `<meta>/docs/glossary.md § <term>`.
 | M2 | in every repo, a `.jig/decisions.md` entry with a status in its heading, no status line (`Accepted (who, YYYY-MM-DD).`, `Open (YYYY-MM-DD).`, `Proposed (YYYY-MM-DD).`), a supersedes link to no entry in the log or in trunk's history of it, an id used twice, an `## Open` heading or an open or proposed entry the log adds (an idea goes in `.jig/ideas.md`), a `.jig/ideas.md` entry with a status in its heading, no `Open` or `Proposed` status line, a decided status, an id the log also has, or a section, or an entry or idea added or changed with no `Touches:` line, or one naming what is no docs page there, a `§` that is no term of that glossary, or a `none` line not written `none — <reason>`, or beside pages (Decision log) |
 | M3 | an entry file changed without a line or entry in `.jig/decisions.md` (of a `README.md` still listed, only its `## Glossary` section), judged on the branch since it left trunk: a line an earlier commit on the branch added covers this one, and a commit that drops the branch's only line is refused |
 | M4 | a commit on trunk that isn't a merge (jig's own files under `.jig/` excepted, but not `.jig/decisions.md`: a decision is reviewed work); a detached HEAD at trunk, or behind it, is trunk |
-| M5 | a merge into trunk of a commit `jig reviewed` never recorded. A commit counts as reviewed when a recorded one is its first-parent ancestor and nothing of the job's changed since: handoff notes and the rows they add to `.jig/ledgers/DEFERRED.md` (committed after the review by design) and syncs of trunk that `jig sync` would make don't count. A job's sync of trunk and the gate's scratch merge aren't merges into trunk; a merge on a detached HEAD at trunk, or behind it, is |
+| M5 | a merge into trunk of a commit `jig reviewed` never recorded. A commit counts as reviewed when a recorded one is its first-parent ancestor and nothing of the job's changed since: handoff notes and the rows they add to `.jig/ledgers/deferred.md` (committed after the review by design) and syncs of trunk that `jig sync` would make don't count. A job's sync of trunk and the gate's scratch merge aren't merges into trunk; a merge on a detached HEAD at trunk, or behind it, is |
 | M6 | a subject that doesn't start with the ids it touches (`D-022: …`, `GLOSSARY: …`; on a branch, `D-?store-ro: …`) |
 | P1 | an `AGENTS.md` header that differs from what `.jig/para.json` generates |
-| P2 | a contract-path change (an edit, a delete, or a rename from one) with none of: a row added or changed in `.jig/ledgers/BUFFER.md` in the same commit, or a spec saying `meta: buffered <row id>`, `meta: <name> proposal <branch>`, `meta: <name> pointers <branch>` or `meta: none — <reason>` (a spec the change touches, or the job's own: the board's `spec`, read as trunk has it, a one-line spec being its own text; in a merge, the one job whose branch tip is what is merged in, or whose own first-parent line holds it, and none for an octopus); the same for a change that deletes or renames a file a cached metarepo pointer names, or the heading its `§` names; a lost file counts even when its heading was already missing. Also, in `BUFFER.md`: a state other than `Open`, `Closed` or `Closed (answered in <release>: <reason>)`, a repeated id, an `Open` row deleted, or one closed with its other cells changed, in a commit that changes a contract path, or by anything but `jig sync`: a `Closed` row needs the pin to hold a proposal that carried it as it stands (checked against the metarepo's checkout), an answered one a release at or below the pin |
+| P2 | a contract-path change (an edit, a delete, or a rename from one) with none of: a row added or changed in `.jig/ledgers/buffer.md` in the same commit, or a spec saying `meta: buffered <row id>`, `meta: <name> proposal <branch>`, `meta: <name> pointers <branch>` or `meta: none — <reason>` (a spec the change touches, or the job's own: the board's `spec`, read as trunk has it, a one-line spec being its own text; in a merge, the one job whose branch tip is what is merged in, or whose own first-parent line holds it, and none for an octopus); the same for a change that deletes or renames a file a cached metarepo pointer names, or the heading its `§` names; a lost file counts even when its heading was already missing. Also, in `buffer.md`: a state other than `Open`, `Closed` or `Closed (answered in <release>: <reason>)`, a repeated id, an `Open` row deleted, or one closed with its other cells changed, in a commit that changes a contract path, or by anything but `jig sync`: a `Closed` row needs the pin to hold a proposal that carried it as it stands (checked against the metarepo's checkout), an answered one a release at or below the pin |
 | P4 | a contract-path change while a file targeting the metarepo is staged |
 | P3 | the metarepo's cache (`.jig/meta-cache/`) or its checkout committed into the pararepo |
 
@@ -1877,13 +1877,13 @@ refuses too.
 means the metarepo's pointers into this change are being rewritten on that metarepo branch, and
 no metarepo claim changes. A job answered that way merges without waiting for the release:
 cached pointers dangle against the pending branch until the pin moves, and `jig sync` and the
-release report them meanwhile. A claim change is a `BUFFER.md` row; a dependency on a metarepo
+release report them meanwhile. A claim change is a `buffer.md` row; a dependency on a metarepo
 change is `proposal <branch>`, which the gate waits for. P2 can't tell a pointer move from a claim
 change, so review holds a `pointers` spec to this sentence.
 
 **The sync buffer.** A pararepo may work ahead of its metarepo: change what a metarepo claim
 describes, as often as testing needs, and commit and push each change. Every such difference
-is a row in `.jig/ledgers/BUFFER.md` (the first row creates it from jig's ledger template): the
+is a row in `.jig/ledgers/buffer.md` (the first row creates it from jig's ledger template): the
 claim at the pin, what this repo does now, who decided, and a state, `Open` or `Closed`. A change
 of mind edits the row. `jig release` in the pararepo, before its build, puts every `Open` row
 no proposal carries yet, as it stands, but a move-in row (`jig move-in`'s alone), into one metarepo proposal (`jig propose --buffer`, also
@@ -2006,7 +2006,7 @@ a pararepo release with defaults: steps and artifacts are optional (any that are
 and must match), and jig's own checks run before the tag. A metarepo's are its history checks
 (above). A pararepo's refuse when the metarepo can't be reached (`jig repos add meta`), when the
 pin isn't one of its releases (`main`, a hand-made tag), when the `AGENTS.md` header isn't the
-generated one (P1), when `.jig/meta-cache/` is tracked (P3), or when a `BUFFER.md` row is neither
+generated one (P1), when `.jig/meta-cache/` is tracked (P3), or when a `buffer.md` row is neither
 Open nor Closed or shares its id (P2); a newer metarepo release, a cited path outside
 `contract_paths`, or a metarepo pointer to a file or heading this repo doesn't have, is reported as `jig sync` reports it and refuses nothing. So is a staged pin-bump request:
 the release names it, and isn't held by it. Then the release

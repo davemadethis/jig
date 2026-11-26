@@ -76,14 +76,14 @@ A recommendation is not an answer, and no question covers some findings and leav
 `findings` entry: it is its folder in `deep_subsystems`, with the rationale. Then run `--apply`: it carries out
 each approved move itself — the `git mv`, the `docmap` key, the `boards` entry, the entry
 dropped — and prints what is left to you for the same commit: the references in other files,
-`contract_paths`, the `BUFFER.md` rows. In a metarepo it lists the approved moves as a job's
+`contract_paths`, the `buffer.md` rows. In a metarepo it lists the approved moves as a job's
 (M4): ask the hubnode to open one and make them there. Everything else on
 the list (an edit, a fold, a nest) you make by hand on its yes; jig acts on the record, never
 on an answer in chat.
 
 Some of them are survey's home findings. A **rules** file off root: sort it line
 by line by the test in `.jig/RULES.md` (Homes): a rule every task needs into `AGENTS.md`, the
-rest of how the repo is worked into `.jig/process.md` (from `${CLAUDE_PLUGIN_ROOT}/templates/process.md`
+rest of how the repo is worked into `.jig/process.md` (from `.jig/templates/process.md`
 when absent, and add `AGENTS.md`'s pointer line naming its trigger ("Before a release, read `.jig/process.md` § Release")), and only a fact the product must keep into its page's Invariants; repoint the lines named, delete it — but a package's own rules
 file in a monorepo may stay on the owner's word, so ask before proposing the delete. A **copy** of `.jig/RULES.md`:
 delete it and point what names it at `.jig/RULES.md`. A page at home but **off the page contract** (no lead paragraph, an invariant with
@@ -107,7 +107,7 @@ they sit. A page
 that **covers no file** is a section of the page above it: propose the fold, with every line it
 touches, on a yes.
 Then make every line the proposal names in one commit — the `git mv`s, the docmap keys,
-`contract_paths`, the stale lines and, in a pararepo, a `BUFFER.md` row per cached pointer. Carry
+`contract_paths`, the stale lines and, in a pararepo, a `buffer.md` row per cached pointer. Carry
 out each finding on a yes. Never propose adding a line that restates `.jig/RULES.md`: point at it.
 
 **The project in the product** (`.jig/RULES.md`, Documentation: Product and project) comes off
@@ -207,7 +207,7 @@ the template's line that points at RULES.md instead. Every other line is the rep
 and there is no template diff to read.
 
 **Metarepo pointers**, in a pararepo, are the cached metarepo pointers that dangle. Show each
-line. One that names the commit that removed what it points to offers a `.jig/ledgers/BUFFER.md`
+line. One that names the commit that removed what it points to offers a `.jig/ledgers/buffer.md`
 row: ask, and add the row as offered only on a yes (the next `jig release` proposes it). One the
 repo never had is the metarepo's to fix, by `jig propose`. One that says "pending on <branch>"
 was covered by a `pointers` or `proposal` answer whose branch the pin doesn't hold yet: offer
@@ -216,7 +216,7 @@ missed it" is pinned and still dangling: offer its row like any other. Never edi
 here.
 
 **Contract removals**, beside it, are trunk commits that deleted or moved away a contract path
-with nothing answering them. Each offers one `BUFFER.md` row: add it only on a yes, and change
+with nothing answering them. Each offers one `buffer.md` row: add it only on a yes, and change
 `contract_paths` for a moved file only on the owner's word.
 
 ## After `--apply`

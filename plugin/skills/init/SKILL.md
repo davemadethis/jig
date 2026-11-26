@@ -31,14 +31,15 @@ at root, because tools look for them there. The repo's own `docs/` and `.claude/
 Copy, **never overwriting** a file that already exists:
 
 ```
-templates/jig/      → .jig/       (checker, rulebook, scripts, staging/.gitignore)
+templates/jig/      → .jig/       (checker, rulebook, scripts, templates, staging/.gitignore)
 templates/AGENTS.md → AGENTS.md
 templates/CLAUDE.md → CLAUDE.md
 ```
 
-Nothing else. The spec template, the two ledgers and `process.md` stay in the plugin until
-first used: `/jig:spec` copies the template, the first ledger row creates its ledger, and the
-first process placed there creates `.jig/process.md`.
+Nothing else. Each record's template is in `.jig/templates/` (a page, a spec, a handoff note,
+the process page, a hardware page, a skill, the ledgers, a glossary term and product, and the
+roadmap's records as JSON examples): `/jig:spec` copies the spec's, the first ledger row creates
+its ledger from its template, and the first process placed there creates `.jig/process.md`.
 
 Then run `python3 .jig/jig.py init` — it writes the board, the decision log, the roadmap's
 empty structure (`.jig/roadmap.json`: every stand-alone repo and metarepo keeps one, and a

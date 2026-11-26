@@ -51,7 +51,7 @@ pinned release holds it.
 
 A pararepo may work ahead of its metarepo while behavior settles. It can change what a metarepo
 claim describes, as often as testing needs. Every such difference is a row in
-`.jig/ledgers/BUFFER.md`: the claim at the pin, what the repo does now, who decided, and Open or
+`.jig/ledgers/buffer.md`: the claim at the pin, what the repo does now, who decided, and Open or
 Closed.
 
 Before its build, the pararepo's release puts every Open row into one metarepo proposal, except the
@@ -84,7 +84,7 @@ product it lists.
 
 `python3 .jig/jig.py roadmap --draft` writes the roadmap a repo plans from to a draft outside its
 tree, and `roadmap --edit` checks it and writes it. A pararepo may change only its own products'
-sections. Its edit lands as a `BUFFER.md` row and a commit on its open roadmap proposal in the
+sections. Its edit lands as a `buffer.md` row and a commit on its open roadmap proposal in the
 metarepo, so nothing moves on the metarepo's trunk until its owner merges it at the next sync. A
 label the metarepo's glossary lacks is left off and staged there as a new term.
 
