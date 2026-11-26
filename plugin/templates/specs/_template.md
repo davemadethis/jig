@@ -4,7 +4,9 @@ Source: <who asked or reported, when; for a bug, the symptom in their words>
 <!-- A line of its own here, `Scope: <phase>/<scope>, …`, naming the roadmap ids this task
      takes (`No phase/<id>` for an item). No id taken: no line. A spec takes only what it
      builds: a scope it builds only part of is split first, by a roadmap change on the owner's
-     yes, and the spec takes the new scope holding the built part. -->
+     yes, and the spec takes the new scope holding the built part. The rest stays in the
+     original scope, under its id, its text unchanged, and a wait on that id holds until the
+     rest is built. -->
 
 ## Intent
 One or two sentences. What should be true when this is done that isn't true now.

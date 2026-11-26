@@ -1098,7 +1098,7 @@ roadmap, the metarepo's (Products, below), so no scope exists in two copies to d
 - **Out of scope never defers.** An `## Out of scope` line is work nothing will do, or work
   another named spec, job or repo does; it closes with the spec. Work worth building later goes
   onto the roadmap as a scope or No phase item on the owner's word, and review blocks a deferral
-  written as prose. The hook refuses a spec carrying a `Later:` line, the retired form of a
+  written as prose. The hook refuses a spec carrying a `Later:` line in its header, the retired form of a
   deferral, and `jig update --apply` deletes one from each spec on trunk, naming it: each id it
   named is already on the roadmap. A handoff note's is history, left as it is.
 - **A spec is complete** when a handoff note naming it (`Spec:`) is on trunk and the commit it
