@@ -8357,7 +8357,7 @@ expect_refuse $J staging resolve un.md
 cp "$T/un.md" .jig/staging/un.md
 expect_pass sh -c "$J staging resolve un.md && test ! -e .jig/staging/un.md"
 msg="rules-staging.md § Staging: the target sentence and the Accepted warning"
-expect_pass sh -c "sed -n '/^## Staging/,$p' '$P/jig/rules/rules-staging.md' | tr '\n' ' ' > '$T/st' && grep -q 'repo that owns the subject' '$T/st' && grep -q 'warns on each entry of a .decisions. file whose status says Accepted' '$T/st'"
+expect_pass sh -c "sed -n '/^## Staging/,\$p' '$P/jig/rules/rules-staging.md' | tr '\n' ' ' > '$T/st' && grep -q 'repo that owns the subject' '$T/st' && grep -q 'warns on each entry of a .decisions. file whose status says Accepted' '$T/st'"
 }
 
 
