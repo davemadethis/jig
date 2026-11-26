@@ -7,6 +7,13 @@ A breaking change is one that a reader taking the release must act on: a `**Brea
 
 ## Unreleased
 
+### Changed
+- The glossary's one form opens with a `# Glossary` title, holding no term and no field line, above `# Basic terms`, every other heading at its level as before. The hook refuses a commit adding a first `#` heading that isn't `Glossary`, a `#` heading after the title that isn't `Basic terms`, or a heading or field line under the title; `jig init` and `jig update --glossary` write the title (the move leaves it to a later update while trunk's checker is older than it), and `jig glossary add` and the merge's re-sort keep it first. `jig update --apply` adds it to a glossary whose first heading is `# Basic terms`, on a second run once the update installing this checker is committed (a metarepo's is a job's). A glossary without it stays editable until then: the hook refuses only problems a commit adds.
+
+### Fixed
+- A spec named with dots matches itself by its bare name: a `Kept separate from` or `Build after` line naming `app-1.2-fixes` now means that spec, in `jig open`, `jig consolidate` and rig, as its path and file name already did.
+- In a metarepo, `jig update` no longer rewrites the glossary's `Owner:` lines on trunk, where M4 refuses the commit: it lists the rewrite as a job's, and `jig update --apply` in that job's worktree makes it, with the title where that is lacking.
+
 ## v0.17.0 - 2026-11-26
 
 ### Added

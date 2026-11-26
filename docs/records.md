@@ -25,13 +25,13 @@ Every page keeps the [page contract](glossary.md#page-contract):
 3. An optional Talks to section: what crosses the system's boundary.
 4. An optional Invariants section: only the facts that must hold, each saying why and what test holds it.
 
-A page stays a single file until it has something else to hold, like a datasheet or a
-subsystem's page. Only then does it get a folder. Your own words live in `docs/glossary.md`,
-one heading per term, so any page can point at one. It takes one form: `# Basic terms` first, then
-each product as a `#` heading with a `Repo:` line (the repo that builds it, or `none`) and a
-`Kind:` line (`software` or `hardware`), each feature as a `##` under its product, and each term
-as a `###`. A term belongs to the repo its product's `Repo:` names. The hook refuses a change
-that breaks the form, `jig merge` keeps it sorted, and `jig glossary` reads and adds terms.
+A page stays a single file until it has something else to hold, like a datasheet or a subsystem's
+page. Only then does it get a folder. Your own words live in `docs/glossary.md`, one heading per
+term, so any page can point at one. It takes one form: the `# Glossary` title first, then
+`# Basic terms`, then each product as a `#` heading with a `Repo:` line (the repo that builds it, or
+`none`) and a `Kind:` line (`software` or `hardware`), each feature as a `##` under its product, and
+each term as a `###`. A term belongs to the repo its product's `Repo:` names. The hook refuses a
+change that breaks the form, `jig merge` keeps it sorted, and `jig glossary` reads and adds terms.
 
 Docs point only at docs. The root files may point into `docs/`, but a page never points back
 out. A page also never names a plan, a [phase](glossary.md#phase) or a [handoff](glossary.md#handoff). The hook refuses those lines.
