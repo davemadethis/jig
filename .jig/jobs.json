@@ -1,7 +1,7 @@
 {
   "layout-and-formats": {
     "spec": ".jig/specs/layout-and-formats.md",
-    "state": "claimed",
+    "state": "gated",
     "after": [],
     "owns": [],
     "shares": [
