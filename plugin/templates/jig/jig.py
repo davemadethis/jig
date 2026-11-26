@@ -62,8 +62,9 @@ STATES = ["claimed", "building", "ready", "gated", "parked"]
 # The layout this copy of jig writes into the config's "version". Any change that adds a
 # LAYOUT row, a config default or an update STEP bumps it. Update branches on it twice: it
 # refuses to take a newer repo back to an older jig, and it converts roadmap.md only once
-# trunk's committed checker is ROADMAP_JSON_STAMP or newer (knows_roadmap_json).
-STAMP = 13
+# trunk's committed checker is ROADMAP_JSON_STAMP or newer (knows_roadmap_json), as it adds the
+# glossary's title only from GLOSSARY_TITLE_STAMP (knows_glossary_title).
+STAMP = 14
 BOARD_DEFAULTS = {
     "version": STAMP,
     "name": "",            # init and update fill it with the folder name; staging's targets match it
@@ -5133,12 +5134,16 @@ def carry_out(root: Path, board: dict, moves: list[dict], gone: list[str]) -> li
 
 
 # rules-docs.md (Documentation): a repo's terms are a docs file, docs/glossary.md, so pages that cite
-# a term point at a doc, never at the README, which is for outsiders. Its one form: `# Basic
-# terms`, then a product per H1, a feature per H2 and a term per H3. Each heading is a term, so
-# `docs/glossary.md § <term>` names one at any of the three levels.
+# a term point at a doc, never at the README, which is for outsiders. Its one form: the
+# `# Glossary` title, `# Basic terms`, then a product per H1, a feature per H2 and a term per H3.
+# Each heading below the title but `Basic terms` is a term, so `docs/glossary.md § <term>` names
+# one at any of the three levels.
 GLOSSARY = "docs/glossary.md"
 # The old home, a section of the root README, which update moves out (`--glossary`).
 README_GLOSSARY = "## Glossary"
+GLOSSARY_TITLE = "Glossary"
+# The first STAMP whose checker takes the title: 0.17.0's, on trunk, refuses a commit adding it.
+GLOSSARY_TITLE_STAMP = 14
 BASIC_TERMS = "Basic terms"
 # The field lines a glossary heading may carry: a product H1 its `Repo:` (the repo that builds
 # it, or `none`) and `Kind:`, a term in a metarepo's glossary `Binds:`. `Owner:` is the field
@@ -5148,10 +5153,10 @@ PRODUCT_KINDS = ("software", "hardware")
 
 
 def glossary_seed(name: str = "") -> str:
-    """The glossary init writes: `Basic terms`, and in a stand-alone repo its software product,
-    named for the board's NAME, so control and `--owner` work from the start."""
-    out = (f"# {BASIC_TERMS}\n\n<!-- A term every product uses, as an ### heading: what it means, and "
-           "what it is not. -->\n")
+    """The glossary init writes: the title, `Basic terms`, and in a stand-alone repo its software
+    product, named for the board's NAME, so control and `--owner` work from the start."""
+    out = (f"# {GLOSSARY_TITLE}\n\n# {BASIC_TERMS}\n\n"
+           "<!-- A term every product uses, as an ### heading: what it means, and what it is not. -->\n")
     if name:
         out += (f"\n# {name}\n\nRepo: {name}\nKind: software\n\n<!-- What {name} is. Its features "
                 "are ## headings under it, and its terms ### headings: under it before its first "
@@ -5226,10 +5231,12 @@ def glossary_entries(text: str) -> list[dict]:
     """Each heading of a glossary file, in order, fenced code skipped: its `level`, `name` (the
     term), 1-based `line`, the indices `start` and `end` of its own lines (to the next heading
     of any level), its `fields` ({key: value} of its field lines; a key written twice keeps
-    the first), and the `product` and `feature` it sits under ("" for none)."""
+    the first), the `product` and `feature` it sits under ("" for none), whether it is the
+    `title` (a first H1 named `Glossary`) and whether it sits `under_title`."""
     lines = text.splitlines()
     out: list[dict] = []
     product = feature = ""
+    seen_h1 = under_title = False
     for i, (line, prose) in enumerate(zip(lines, unfenced(lines))):
         m = re.match(r"^ {0,3}(#{1,6})[ \t]+(.*?)[ \t#]*$", line) if prose else None
         if not m:
@@ -5237,13 +5244,15 @@ def glossary_entries(text: str) -> list[dict]:
         level, name = len(m.group(1)), term_text(m.group(2))
         if out:
             out[-1]["end"] = i
+        title = level == 1 and not seen_h1 and name == GLOSSARY_TITLE
         if level == 1:
             product, feature = name, ""
+            seen_h1, under_title = True, title
         elif level == 2:
             feature = name
         out.append({"level": level, "name": name, "line": i + 1, "start": i, "end": len(lines),
                     "product": product if level > 1 else "", "feature": feature if level > 2 else "",
-                    "fields": {}})
+                    "title": title, "under_title": under_title and level > 1, "fields": {}})
     prose_at = unfenced(lines)
     for e in out:
         for j in range(e["start"] + 1, e["end"]):
@@ -5253,25 +5262,27 @@ def glossary_entries(text: str) -> list[dict]:
 
 
 def in_form(entries: list[dict]) -> bool:
-    """Whether a glossary is in the one form, as far as its products are read: its first H1 is
-    `Basic terms`. Until it is, any heading carrying `Repo:` reads as a product, so an older
-    glossary keeps its products after update's rewrite."""
-    return next((e["name"] for e in entries if e["level"] == 1), "") == BASIC_TERMS
+    """Whether a glossary is in the one form, as far as its products are read: its first H1
+    after any title is `Basic terms`, so one still lacking the title keeps its products. Until
+    it is, any heading carrying `Repo:` reads as a product, so an older glossary keeps its
+    products after update's rewrite."""
+    return next((e["name"] for e in entries if e["level"] == 1 and not e["title"]), "") == BASIC_TERMS
 
 
 def glossary_products(text: str) -> dict[str, dict[str, str]]:
     """{product: its fields} for each product of a glossary: an H1 other than `Basic terms`,
-    or out of the form any heading carrying `Repo:`."""
+    or out of the form any heading carrying `Repo:`. The title is never one."""
     entries = glossary_entries(text)
     form = in_form(entries)
-    return {e["name"]: e["fields"] for e in entries
-            if (e["level"] == 1 and e["name"] != BASIC_TERMS if form else "Repo" in e["fields"])}
+    return {e["name"]: e["fields"] for e in entries if not e["title"]
+            and (e["level"] == 1 and e["name"] != BASIC_TERMS if form else "Repo" in e["fields"])}
 
 
 def glossary_terms(text: str) -> list[str]:
     """The terms of a glossary file, in order: its H1, H2 and H3 headings, a product, a feature
-    and a term each one. `Basic terms` heads the shared terms and is none itself."""
-    return [e["name"] for e in glossary_entries(text) if e["level"] <= 3 and e["name"] != BASIC_TERMS]
+    and a term each one. The title and `Basic terms`, which heads the shared terms, are none."""
+    return [e["name"] for e in glossary_entries(text)
+            if e["level"] <= 3 and not e["title"] and e["name"] != BASIC_TERMS]
 
 
 def cmd_glossary_term(root: Path, args) -> int:
@@ -5302,7 +5313,8 @@ def cmd_glossary_term(root: Path, args) -> int:
         die('usage: jig glossary "<term>", or jig glossary add "<term>" …', 2)
     want = label_fold(words[0])
     entries = glossary_entries(text)
-    e = next((x for x in entries if x["level"] <= 3 and label_fold(x["name"]) == want), None)
+    e = next((x for x in entries if x["level"] <= 3 and not x["title"] and label_fold(x["name"]) == want),
+             None)
     if e is None:
         die(f"{GLOSSARY} has no term {words[0]}", 1)
     lines = text.splitlines()
@@ -5348,7 +5360,7 @@ def glossary_tree(text: str) -> tuple[list[str], dict]:
     root["pre"] = lines[:heads[0]["start"]]
     stack = [root]
     for e, nxt in zip(heads, heads[1:] + [None]):
-        node = {"level": e["level"], "name": e["name"], "start": e["start"], "kids": [],
+        node = {"level": e["level"], "name": e["name"], "title": e["title"], "start": e["start"], "kids": [],
                 "lines": lines[e["start"]:nxt["start"] if nxt else len(lines)]}
         while stack[-1]["level"] >= node["level"]:
             stack.pop()
@@ -5358,13 +5370,14 @@ def glossary_tree(text: str) -> tuple[list[str], dict]:
 
 
 def sibling_key(node: dict, parent: dict) -> tuple:
-    """Where NODE sorts among PARENT's children: under the root `Basic terms` first, then the
-    products; under an entry its own terms (H3) first, then its features (H2); each set in
-    alphabetical order, case folded. A heading above the first H1 keeps its place."""
+    """Where NODE sorts among PARENT's children: under the root the title first, then `Basic
+    terms`, then the products; under an entry its own terms (H3) first, then its features (H2);
+    each set in alphabetical order, case folded. A heading above the first H1 keeps its place."""
     if parent["level"] == 0:
         if node["level"] != 1:
             return (-1, "", node["start"])
-        return (0 if node["name"] == BASIC_TERMS else 1, node["name"].casefold(), 0)
+        rank = 0 if node["title"] else 1 if node["name"] == BASIC_TERMS else 2
+        return (rank, node["name"].casefold(), 0)
     return (0 if node["level"] == 3 else 1, node["name"].casefold(), 0)
 
 
@@ -5407,7 +5420,9 @@ def glossary_add(text: str, name: str, definition: str, under: str = "", binds: 
         block, level, parent = f"# {name}\n\n{fields}\n{definition}\n", 1, root
     else:
         path = [p.strip() for p in (under or BASIC_TERMS).split("/")]
-        parent = next((k for k in root["kids"] if k["level"] == 1 and k["name"].casefold() == path[0].casefold()), None)
+        # Nothing is written into the title.
+        parent = next((k for k in root["kids"] if k["level"] == 1 and not k["title"]
+                       and k["name"].casefold() == path[0].casefold()), None)
         if parent is not None and len(path) > 1:
             parent = next((k for k in parent["kids"] if k["level"] == 2 and k["name"].casefold() == path[1].casefold()), None)
         if parent is None or len(path) > 2:
@@ -5415,7 +5430,7 @@ def glossary_add(text: str, name: str, definition: str, under: str = "", binds: 
                 f"--under <product> or <product>/<feature>, a heading it has", 2)
         block = f"### {name}\n\n" + (f"Binds: {', '.join(binds)}\n\n" if binds else "") + f"{definition}\n"
         level = 3
-    new = {"level": level, "name": name, "start": -1, "kids": []}
+    new = {"level": level, "name": name, "title": False, "start": -1, "kids": []}
     key = sibling_key(new, parent)
     after = [k for k in parent["kids"] if sibling_key(k, parent) < key]
     def end_of(node: dict) -> int:
@@ -5437,9 +5452,14 @@ def glossary_problems(text: str, meta: bool) -> list[tuple[str, str]]:
     entries = glossary_entries(text)
     out: list[tuple[str, str]] = []
     h1s = [e for e in entries if e["level"] == 1]
-    if not h1s or h1s[0]["name"] != BASIC_TERMS:
-        out.append(("first", f"the first # heading is {h1s[0]['name'] if h1s else 'missing'}, not "
-                             f"`# {BASIC_TERMS}`: shared terms come first, then each product"))
+    if not h1s or not h1s[0]["title"]:
+        out.append(("title", f"the first # heading is {h1s[0]['name'] if h1s else 'missing'}, not "
+                             f"`# {GLOSSARY_TITLE}`: the title comes first, then `# {BASIC_TERMS}` and "
+                             "each product"))
+    # One lacking only the title is told that alone: its `Basic terms` is first, not yet second.
+    if not (h1s and h1s[0]["name"] == BASIC_TERMS) and [e["name"] for e in h1s[1:2]] != [BASIC_TERMS]:
+        out.append(("second", f"the second # heading is {h1s[1]['name'] if len(h1s) > 1 else 'missing'}, not "
+                              f"`# {BASIC_TERMS}`: shared terms come first, then each product"))
     lines = text.splitlines()
     prose = unfenced(lines)
     # Out of the form a product is a heading carrying `Repo:`, or the `Owner:` update rewrites
@@ -5451,6 +5471,16 @@ def glossary_problems(text: str, meta: bool) -> list[tuple[str, str]]:
         if e["level"] > 3:
             out.append((f"deep {e['name']}", f"{where} is deeper than ###: a product is #, a feature ##, "
                                              "a term ###"))
+        if e["title"]:
+            # One key whatever the field, so update's `Owner:` rewrite adds no problem here.
+            if e["fields"]:
+                out.append(("title fields", f"{where} carries " + ", ".join(f"`{f}:`" for f in sorted(e["fields"]))
+                            + ": the title carries no field line"))
+            continue
+        # Out of the form, headings under a title are the older glossary's terms.
+        if form and e["under_title"]:
+            out.append((f"titled {e['name']}", f"{where} is under `# {GLOSSARY_TITLE}`, which holds no term: "
+                                               f"a shared term is a ### under `# {BASIC_TERMS}`"))
         if e["level"] == 2 and e["product"] == BASIC_TERMS:
             out.append((f"basic {e['name']}", f"{where} is a feature under `# {BASIC_TERMS}`, which holds "
                                               "only ### terms"))
@@ -5476,14 +5506,15 @@ def glossary_problems(text: str, meta: bool) -> list[tuple[str, str]]:
         out.append(("table", "a table is no glossary form: each term is a heading, a product #, a feature ##, a term ###"))
     seen: dict[str, dict] = {}
     for e in entries:
-        if e["level"] <= 3:
+        if e["level"] <= 3 and not e["title"]:
             k = label_fold(e["name"])
             if k in seen:
                 out.append((f"twice {k}", f"line {e['line']}: {e['name']} and line {seen[k]['line']}: "
                                           f"{seen[k]['name']} are one term, as a label or pointer reads it"))
             else:
                 seen[k] = e
-    heads = {label_fold(e["name"]) for e in entries if e["level"] in (1, 2) and e["name"] != BASIC_TERMS}
+    heads = {label_fold(e["name"]) for e in entries
+             if e["level"] in (1, 2) and not e["title"] and e["name"] != BASIC_TERMS}
     for e in entries:
         for b in [x.strip().strip("`") for x in e["fields"].get("Binds", "").split(",") if x.strip()]:
             if label_fold(b) not in heads:
@@ -6441,7 +6472,7 @@ def cmd_meta_init(root: Path, args) -> int:
         print(f"added a ### heading per genre under # {BASIC_TERMS} in {GLOSSARY}")
         wrote.append(GLOSSARY)
     elif new:
-        print(f"{GLOSSARY} isn't in the one form (# {BASIC_TERMS} first), so no genre term was "
+        print(f"{GLOSSARY} isn't in the one form (# {GLOSSARY_TITLE}, then # {BASIC_TERMS}), so no genre term was "
               f"added: add {', '.join(new)} as ### terms under # {BASIC_TERMS} once it is")
     release_script(root, meta=True)
     trunk = Board.trunk_name(root)
@@ -9441,7 +9472,7 @@ def glossary_blocks(text: str) -> dict[str, list[str]]:
     lines = text.splitlines()
     heads = [e for e in glossary_entries(text) if e["level"] <= 3]
     return {e["name"]: [l for l in lines[e["start"] + 1:nxt["start"] if nxt else len(lines)] if l.strip()]
-            for e, nxt in zip(heads, heads[1:] + [None]) if e["name"] != BASIC_TERMS}
+            for e, nxt in zip(heads, heads[1:] + [None]) if not e["title"] and e["name"] != BASIC_TERMS}
 
 
 def glossary_at(loc: Path, rev: str) -> tuple[str, dict[str, list[str]]]:
@@ -13488,7 +13519,8 @@ def label_heads(fam: "Family", labels: set[str]) -> list[str]:
     out = {}
     for e in glossary_entries(fam.glossary or ""):
         # A shared term, under `Basic terms`, belongs to no product: no repo heads it.
-        if e["level"] <= 3 and label_fold(e["name"]) in labels and (e["product"] or e["level"] == 1) \
+        if e["level"] <= 3 and not e["title"] and label_fold(e["name"]) in labels \
+                and (e["product"] or e["level"] == 1) \
                 and e["product"] != BASIC_TERMS and e["name"] != BASIC_TERMS:
             product = e["name"] if e["level"] == 1 else e["product"]
             out[e["name"]] = fam.owners.get(product, "") or meta
@@ -15307,12 +15339,42 @@ def owner_step_label(root: Path) -> str:
                "the owner marks one `Kind: software` and the other `Kind: hardware`" if shared else ""))
 
 
+def glossary_titled(text: str) -> str:
+    """TEXT, a glossary, with the title written above its first heading where that is `# Basic
+    terms`, 0.17.0's form, no other line changed; any other comes back as it is."""
+    first = next(iter(glossary_entries(text)), None)
+    if first is None or first["level"] != 1 or first["name"] != BASIC_TERMS:
+        return text
+    lines = text.splitlines(keepends=True)
+    end = "\r\n" if lines[first["start"]].endswith("\r\n") else "\n"
+    lines.insert(first["start"], f"# {GLOSSARY_TITLE}{end}{end}")
+    return "".join(lines)
+
+
+def lacks_glossary_title(root: Path) -> bool:
+    if not (root / GLOSSARY).is_file():
+        return False
+    text = read_raw(root / GLOSSARY)
+    return glossary_titled(text) != text
+
+
+def knows_glossary_title(root: Path) -> bool:
+    """Whether trunk's committed checker takes the glossary's title: an older one refuses the
+    commit adding it, so the step waits for the commit installing this one."""
+    return (trunk_stamp(root) or 0) >= GLOSSARY_TITLE_STAMP
+
+
+def add_glossary_title(root: Path, here: Path) -> None:
+    write_raw(root / GLOSSARY, glossary_titled(read_raw(root / GLOSSARY)))
+    git("add", "--", GLOSSARY, check=True, cwd=str(root))
+
+
 def glossary_out_of_form(root: Path) -> list[str]:
-    """The problems ROOT's glossary has in the one form once update's rewrite is made: reported,
-    never re-formed, since its rebuild is the owner's."""
+    """The problems ROOT's glossary has in the one form once update's rewrite and title are made:
+    reported, never re-formed, since its rebuild is the owner's."""
     if not (root / GLOSSARY).is_file():
         return []
-    return [p for _, p in glossary_problems(owners_rewritten(root), (root / META).exists())]
+    return [p for _, p in glossary_problems(glossary_titled(owners_rewritten(root)), (root / META).exists())]
 
 
 def template_sources(root: Path, here: Path) -> dict[str, "Path | bytes"]:
@@ -15458,6 +15520,22 @@ STEPS: list = [
      "`jig update --apply` again to convert",
      lambda root, after: (root / OLD_ROADMAP).is_file() and not knows_roadmap_json(root), lambda root, here: None),
     (owner_step_label, lambda root, after: bool(owner_rewrites(root)), rewrite_owners),
+    (f"add the `# {GLOSSARY_TITLE}` heading to {GLOSSARY}, above `# {BASIC_TERMS}`: the glossary form's "
+     "first heading; no other line changes",
+     lambda root, after: lacks_glossary_title(root) and not (root / META).exists() and knows_glossary_title(root),
+     add_glossary_title),
+    (lambda root: f"{GLOSSARY} waits for its `# {GLOSSARY_TITLE}` heading: "
+     + ("trunk has no committed checker yet" if trunk_stamp(root) is None else
+        "the checker on trunk is older and refuses a commit adding it")
+     + ". Commit this update, which installs the checker that takes it, then run "
+     "`jig update --apply` again to add it",
+     lambda root, after: lacks_glossary_title(root) and not (root / META).exists()
+     and not knows_glossary_title(root), lambda root, here: None),
+    # A metarepo's pages change only in a job (M4), and update refuses while one is open.
+    (f"{GLOSSARY} lacks its `# {GLOSSARY_TITLE}` heading: in a metarepo a job's (M4). Once this update is "
+     f"committed, open one sharing {GLOSSARY} and {LOG}, add `# {GLOSSARY_TITLE}` and a blank line above "
+     f"`# {BASIC_TERMS}`, with its changelog line, and merge it",
+     lambda root, after: lacks_glossary_title(root) and (root / META).exists(), lambda root, here: None),
     (lambda root: "delete the `Later:` line from " + ", ".join(
         f"{f} ({named})" for f, named in later_lines(root))
      + ": work a spec doesn't build stays on the roadmap, unspecced, and the hook refuses the line. "
@@ -16721,8 +16799,8 @@ def cmd_update(root: Path, args) -> int:
     review += project_review(root, files, [f for f, _ in review])
     if problems := glossary_out_of_form(root):
         review.append((GLOSSARY, f"isn't in the one form ({RULES_DIR}/rules-docs.md, Documentation), and update "
-                       f"re-forms nothing: {'; '.join(problems)}. Rebuild it by hand: `# {BASIC_TERMS}` "
-                       "first, a product per #, a feature per ##, a term per ###"))
+                       f"re-forms nothing: {'; '.join(problems)}. Rebuild it by hand: `# {GLOSSARY_TITLE}` "
+                       f"first, then `# {BASIC_TERMS}`, a product per #, a feature per ##, a term per ###"))
     have_ignores = {l.strip() for l in ignore.read_text().splitlines()} if ignore.exists() else set()
     if (new_board.get("reference_files") == "ignore" and not ref_line
             and not set(REFERENCE_IGNORES) <= have_ignores):
@@ -18397,7 +18475,7 @@ def glossary_plan(root: Path) -> dict:
         first = next((i for i, l in enumerate(lines) if l.strip()), 0)
         body = moved_terms(lines[first + 1:] if lines and lines[first].startswith("# ") else lines, promote=True)
         plan["remove"].append("GLOSSARY.md")
-    gtext = f"# {BASIC_TERMS}\n\n" + "\n".join(body) + "\n"
+    gtext = f"# {GLOSSARY_TITLE}\n\n# {BASIC_TERMS}\n\n" + "\n".join(body) + "\n"
     plan["write"][GLOSSARY] = gtext
     plan["terms"] = glossary_terms(gtext)
     # What the one form refuses in the moved file is left for the session to rebuild before

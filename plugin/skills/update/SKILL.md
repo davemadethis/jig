@@ -180,22 +180,30 @@ owner first), each citation it rewrites and each it can't, the files still namin
 what it keeps (a template, the index's prose), and each line of the new entries the hook would
 refuse. On a yes, `--apply --merge-log`, edit those lines, and commit.
 
-The **glossary's** one form is `# Basic terms`, then a product per `#` with its `Repo:` and `Kind:`
-lines, a feature per `##` and a term per `###`. `jig update --apply` rewrites each `Owner:` line as
-`Repo:` and `Kind: software`; where two products name one repo, it leaves `Kind:` off both, so
-ask the owner which is the software and which the hardware, and write those lines. A glossary out
-of the form is reported and never re-formed: rebuilding it is the owner's call, a change of its own.
+The **glossary's** one form is the `# Glossary` title, then `# Basic terms`, then a product per
+`#` with its `Repo:` and `Kind:` lines, a feature per `##` and a term per `###`.
+`jig update --apply` adds the title to a glossary whose first heading is `# Basic terms`, changing
+no other line. The hook runs trunk's checker, so the run installing the new one only says the
+heading waits: commit it, then run `jig update --apply` again. In a metarepo the line is a job's
+(M4): open one sharing `docs/glossary.md` and the decision log, add `# Glossary` and a blank line
+above `# Basic terms` with its changelog line, and merge it. `jig update --apply` also rewrites
+each `Owner:` line as `Repo:` and `Kind: software`; where two products name one repo, it leaves
+`Kind:` off both, so ask the owner which is the software and which the hardware, and write those
+lines. A glossary out of the form is reported and never re-formed: rebuilding it is the owner's
+call, a change of its own.
 
 A **glossary** in the README's `## Glossary` section, or in a root `GLOSSARY.md`: its home is
 `docs/glossary.md`, since pages cite its terms and docs point only at docs. Show the owner
-`jig update --glossary`: the terms it moves, under `# Basic terms` as `###` headings (a table moved
-as it is, listed with what else the one form refuses, to rebuild before committing), and every line whose pointer to the old home it rewrites in the same change, then the
-pointers it can't rewrite. On a yes, `jig update --apply --glossary`, and commit what it staged.
-Then repoint, with the owner, each pointer it left. In a metarepo the move runs in a job's
-worktree (M4): `jig open glossary-move --shares README.md docs/glossary.md <the files it
-rewrites>`, the run there, and one changelog line (`GLOSSARY: moved to docs/glossary.md`); it
-rewrites `entry_files` too. Pararepos' citations of `<meta>/README.md § <term>` are theirs: each
-is named, with its new home, at that pararepo's pin bump.
+`jig update --glossary`: the terms it moves, below the `# Glossary` title, under `# Basic terms`
+as `###` headings (a table moved as it is, listed with what else the one form refuses, to rebuild
+before committing), and every line whose pointer to the old home it rewrites in the same change,
+then the pointers it can't rewrite. On a yes, `jig update --apply --glossary`, and commit what it
+staged. Then repoint, with the owner, each pointer it left. In a metarepo the move runs in a job's
+worktree (M4):
+`jig open glossary-move --shares README.md docs/glossary.md <the files it rewrites>`, the run
+there, and one changelog line (`GLOSSARY: moved to docs/glossary.md`); it rewrites `entry_files`
+too. Pararepos' citations of `<meta>/README.md § <term>` are theirs: each is named, with its new
+home, at that pararepo's pin bump.
 
 The **AGENTS.md** lines are the few the template still needs there: the Rulebook line, a
 Commands line for a `.jig/scripts/` file the repo has or this run adds, and a block jig retired

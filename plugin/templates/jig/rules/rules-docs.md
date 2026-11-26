@@ -268,8 +268,9 @@ needs stays; the rest of how the repo is worked, code style included, to a secti
 `.jig/process.md`; a release step to `.jig/scripts/release.sh`; a fact about the product to its
 system's page; history to git. How the repo is worked never goes to a page.
 
-A repo's terms are its glossary, `docs/glossary.md`, in one form, with no title heading:
-- `# Basic terms` first, holding the terms every product uses, each an `###` heading;
+A repo's terms are its glossary, `docs/glossary.md`, in one form:
+- `# Glossary` first, the title: it holds no term and carries no field line;
+- then `# Basic terms`, holding the terms every product uses, each an `###` heading;
 - then a product per `#` heading: the software a repo builds, or the hardware it runs on. Its
   own definition is the paragraph under it, and it carries a `Repo:` line (the repo that builds
   it, or `none`) and a `Kind:` line (`software` or `hardware`). A repo builds one software
@@ -277,50 +278,55 @@ A repo's terms are its glossary, `docs/glossary.md`, in one form, with no title 
 - under a product, its own terms as `###` headings before its first feature, then a feature per
   `##` heading, each with its own terms as `###` headings.
 
-A product, a feature and a term are each a term, and each heading says what it means and what
-it is not. A term may carry one field line, `Binds: <product or feature>, …`, naming where it
-applies beyond its own product, and only in a metarepo's glossary. A feature and `Basic terms`
+A product, a feature and a term are each a term, and each heading says what it means and what it
+is not. A term may carry one field line, `Binds: <product or feature>, …`, naming where it applies
+beyond its own product, and only in a metarepo's glossary. The title, a feature and `Basic terms`
 carry none. A term's controlling repo is its product's `Repo:`; a term under `Basic terms`, or
 under a product with `Repo: none`, is controlled by the repo whose glossary holds it. In a
-stand-alone repo the products are its software and the hardware it runs on, and the features
-its own; in a pararepo a product is one from the metarepo's glossary. `jig init` writes `Basic
-terms` and, in a stand-alone repo, its software product named for the board. `§` is written only
-in a pointer, `docs/glossary.md § <term>`, and names a heading at any of the three levels; a
-table row is no term.
+stand-alone repo the products are its software and the hardware it runs on, and the features its
+own; in a pararepo a product is one from the metarepo's glossary. `jig init` writes the title,
+`Basic terms` and, in a stand-alone repo, its software product named for the board. `§` is written
+only in a pointer, `docs/glossary.md § <term>`, and names a term's heading at any of the three
+levels; the title and a table row are no term.
 
 A commit changing the glossary is refused for each of these it adds: a first `#` heading that
-isn't `Basic terms`, an `##` under `Basic terms`, a heading deeper than `###`, a table, two
-headings that fold to one term (as a label folds), a product missing `Repo:` or `Kind:`, a field
-line its heading may not carry (an `Owner:` line's refusal names `Repo:`, the line it became), a
-`Binds:` naming no product or feature heading, two products naming one repo with `Kind:
-software`, and a product the roadmap includes or names dropped. One already there doesn't
-refuse the commit, so an older glossary stays editable until its rebuild; until it is in the
-form, any heading carrying `Repo:` reads as a product. Order isn't refused: `jig merge`
-re-sorts the glossary in the merge commit, `Basic terms` first, then the products in
+isn't `Glossary`, a second that isn't `Basic terms` (one lacking only the title is told that
+alone), a heading or a field line under the title, an `##` under `Basic terms`, a heading deeper
+than `###`, a table, two headings that fold to one term (as a label folds), a product missing
+`Repo:` or `Kind:`, a field line its heading may not carry (an `Owner:` line's refusal names
+`Repo:`, the line it became), a `Binds:` naming no product or feature heading, two products naming
+one repo with `Kind: software`, and a product the roadmap includes or names dropped. One already
+there doesn't refuse the commit, so an older glossary stays editable until its rebuild; until it
+is in the form, any heading carrying `Repo:` reads as a product. Order isn't refused: `jig merge`
+re-sorts the glossary in the merge commit, the title and `Basic terms` first, then the products in
 alphabetical order, and within each its own terms first, then its features, each set in
-alphabetical order. Whole entries move, within their parent, and no word changes; one already
-in order stays byte for byte. `jig glossary "<term>"` prints a term's heading path, its
-definition, its `Binds:` (a product's `Repo:` and `Kind:`) and its controlling repo, and `jig
-glossary add` writes one in its sorted place, refusing a duplicate. `jig update --apply`
-rewrites each `Owner: <repo>` line (`this repo` as the repo's own name) as `Repo: <repo>` and
-`Kind: software`; where two products name one repo, it writes `Repo:` on both, `Kind:` on
-neither, and says the owner marks one `software` and the other `hardware`. It reports a glossary
-out of the form, and re-forms nothing: its rebuild is the owner's. The glossary is no system's page: it is not in `docmap`,
-covers no files, and the page contract doesn't apply to it. No other glossary is a home: survey
-and update list a `## Glossary` section of the root `README.md`, or a root `GLOSSARY.md`, with
-`docs/glossary.md` as where it goes, and survey names each term in the glossary written as a
+alphabetical order. Whole entries move, within their parent, and no word changes; one already in
+order stays byte for byte. `jig glossary "<term>"` prints a term's heading path, its definition,
+its `Binds:` (a product's `Repo:` and `Kind:`) and its controlling repo, and `jig glossary add`
+writes one in its sorted place, refusing a duplicate. `jig update --apply` adds `# Glossary` above
+`# Basic terms` in a glossary whose first heading that is, changing no other line, once trunk's
+committed checker takes the title: the run installing it says the heading waits, and the next adds
+it. In a metarepo it is listed as a job's (M4). `jig update --apply` also rewrites each
+`Owner: <repo>` line (`this repo` as the repo's own name) as `Repo: <repo>` and `Kind: software`;
+where two products name one repo, it writes `Repo:` on both, `Kind:` on neither, and says the
+owner marks one `software` and the other `hardware`. It reports a glossary out of the form, and
+re-forms nothing: its rebuild is the owner's. The glossary is no system's page: it is not in
+`docmap`, covers no files, and the page contract doesn't apply to it. No other glossary is a home:
+survey and update list a `## Glossary` section of the root `README.md`, or a root `GLOSSARY.md`,
+with `docs/glossary.md` as where it goes, and survey names each term in the glossary written as a
 bold word opening a paragraph (`**term** — …`) rather than a heading.
-`jig update --apply --glossary`, on the owner's yes, moves it under `# Basic terms`: a README's
-`### <term>` stays `### <term>`, a GLOSSARY.md's `## <term>` becomes `### <term>`, a
-bold-paragraph term gets an `###` heading, and a table moves as the table, listed with what else
-the one form refuses, for the session to rebuild before committing; the old section or file removed, and in the same change every pointer to the old
-home rewritten (`README.md § <term>` to `docs/glossary.md § <term>`, a pointer to the
-section itself and `GLOSSARY.md` to `docs/glossary.md`). The dry run lists each line it rewrites; each pointer it
-can't (a section naming no term, prose naming the README), and each line the hook would refuse
-in the move's commit (a term's text naming a root document), which it leaves for the session
-to edit before committing; and each pointer in history, left as written: fenced code, a
-handoff, a released section of the decision log or of a root `CHANGELOG.md`. A README
-`## Glossary` section holding no term, only a link to `docs/glossary.md`, is no glossary.
+`jig update --apply --glossary`, on the owner's yes, moves it under `# Basic terms`, below the
+title: a README's `### <term>` stays `### <term>`, a GLOSSARY.md's `## <term>` becomes
+`### <term>`, a bold-paragraph term gets an `###` heading, and a table moves as the table, listed
+with what else the one form refuses, for the session to rebuild before committing; the old section
+or file removed, and in the same change every pointer to the old home rewritten
+(`README.md § <term>` to `docs/glossary.md § <term>`, a pointer to the section itself and
+`GLOSSARY.md` to `docs/glossary.md`). The dry run lists each line it rewrites; each pointer it
+can't (a section naming no term, prose naming the README), and each line the hook would refuse in
+the move's commit (a term's text naming a root document), which it leaves for the session to edit
+before committing; and each pointer in history, left as written: fenced code, a handoff, a
+released section of the decision log or of a root `CHANGELOG.md`. A README `## Glossary` section
+holding no term, only a link to `docs/glossary.md`, is no glossary.
 
 `jig survey` also reads each page at home under `docs/`, board pages included, against the
 contract above, and names a page in the old Now, Rules and Checks shape (convert it: fold

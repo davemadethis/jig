@@ -319,8 +319,8 @@ git add -A && git commit -qm init && $J init >/dev/null && git add -A && git com
 
 msg="init: root holds only AGENTS.md, CLAUDE.md, .jig/ and docs/: the roadmap is .jig/roadmap.json, with no view file"
 expect_pass test "$(ls -A | grep -v '^\.git$' | LC_ALL=C sort | tr '\n' ' ')" = ".jig AGENTS.md CLAUDE.md docs "
-msg="init: the glossary is seeded in the one form, no title: # Basic terms, then the repo's software product named for the board"
-expect_pass sh -c "test \"\$(ls docs)\" = glossary.md && head -1 docs/glossary.md | grep -qx '# Basic terms' && grep -qx '# '\"\$(python3 -c 'import json; print(json.load(open(\".jig/config.json\"))[\"name\"])')\" docs/glossary.md && grep -qx 'Kind: software' docs/glossary.md && $J glossary \"\$(python3 -c 'import json; print(json.load(open(\".jig/config.json\"))[\"name\"])')\" | grep -qx 'Kind: software'"
+msg="init: the glossary is seeded in the one form: # Glossary, then # Basic terms, then the repo's software product named for the board"
+expect_pass sh -c "test \"\$(ls docs)\" = glossary.md && head -1 docs/glossary.md | grep -qx '# Glossary' && grep '^# ' docs/glossary.md | sed -n 2p | grep -qx '# Basic terms' && grep -qx '# '\"\$(python3 -c 'import json; print(json.load(open(\".jig/config.json\"))[\"name\"])')\" docs/glossary.md && grep -qx 'Kind: software' docs/glossary.md && $J glossary \"\$(python3 -c 'import json; print(json.load(open(\".jig/config.json\"))[\"name\"])')\" | grep -qx 'Kind: software'"
 
 msg="init: .jig/ holds jig.py, the rulesets but the family two, config.json, docmap.json, jobs.json, decisions.md, ideas.md, roadmap.json, the five scripts, staging/.gitignore, inbox/.gitignore and the templates, nothing else"
 expect_pass test "$(find .jig -type f | LC_ALL=C sort | tr '\n' ' ')" = ".jig/config.json .jig/decisions.md .jig/docmap.json .jig/ideas.md .jig/inbox/.gitignore .jig/jig.py .jig/jobs.json .jig/roadmap.json .jig/rules/rules-decisions.md .jig/rules/rules-docs.md .jig/rules/rules-handoff.md .jig/rules/rules-inbox.md .jig/rules/rules-jobs.md .jig/rules/rules-release.md .jig/rules/rules-roadmap.md .jig/rules/rules-staging.md .jig/rules/rules-workflow.md .jig/scripts/check.sh .jig/scripts/derive.sh .jig/scripts/format.sh .jig/scripts/publish.sh .jig/scripts/release.sh .jig/scripts/setup.sh .jig/staging/.gitignore .jig/templates/deferred.md .jig/templates/glossary-product.md .jig/templates/glossary-term.md .jig/templates/handoff.md .jig/templates/hardware.md .jig/templates/no-phase-item.json .jig/templates/page.md .jig/templates/phase.json .jig/templates/process.md .jig/templates/scope.json .jig/templates/skill.md .jig/templates/spec.md .jig/templates/workarounds.md "
@@ -526,7 +526,7 @@ assert all(j.squeeze(l) in j.RETIRED for l in gone), gone"
   expect_pass sh -c "grep -q 'git show main:.jig/jig.py' .git/hooks/pre-commit && ! ls .git/hooks/*.local && test -f .git/jig/enabled && test ! -e .git/aidev && ! grep -q worktrees .gitignore"
 
   msg="update $name: nothing tracked is left in jig/, .aidev/, specs/ or ledgers/; the config is stamped 13, with release.sh, publish.sh, an empty decision log and its ideas file added"
-  expect_pass sh -c "test -z \"\$(git ls-files jig .aidev specs ledgers .jig/lanes.json)\" && ! grep -q payload .jig/config.json && grep -q '\"version\": 13' .jig/config.json && git ls-files --error-unmatch .jig/scripts/release.sh .jig/scripts/publish.sh .jig/decisions.md .jig/ideas.md"
+  expect_pass sh -c "test -z \"\$(git ls-files jig .aidev specs ledgers .jig/lanes.json)\" && ! grep -q payload .jig/config.json && grep -q '\"version\": 14' .jig/config.json && git ls-files --error-unmatch .jig/scripts/release.sh .jig/scripts/publish.sh .jig/decisions.md .jig/ideas.md"
 
   msg="update $name: publish.sh is added from the template, TODO line included, and staged"
   expect_pass sh -c "git diff --cached --name-status | grep -q '^A.\.jig/scripts/publish.sh$' && grep -q '^# TODO: publish steps\.' .jig/scripts/publish.sh && test -x .jig/scripts/publish.sh"
@@ -753,7 +753,7 @@ for line in subprocess.check_output(['git', 'diff', '--cached', '-M', '--name-st
       expect_pass sh -c "python3 -c \"import json; b = json.load(open('.jig/config.json')); assert b['trunk'] == 'main' and 'lanes' not in b and 'seen' not in b and 'main' not in b and 'next' not in b['reserve']['section'], b\" && test ! -e .claude/claude-lane && git diff --cached -M --name-status | grep -q '^R100.*old-2026-01-01.md'";;
     dot-jig-v7)
       msg="update $gen: the one-file board splits: config.json without jobs or log, an empty jobs.json, no lanes.json"
-      expect_pass sh -c "python3 -c \"import json; c = json.load(open('.jig/config.json')); assert c['version'] == 13 and not {'lanes', 'log'} & set(c) and json.load(open('.jig/jobs.json')) == {}, c\" && test ! -e .jig/lanes.json && echo \"\$0\" | grep -q 'board: lanes.old (merged)' && echo \"\$0\" | grep -q 'board: log'" "$out";;
+      expect_pass sh -c "python3 -c \"import json; c = json.load(open('.jig/config.json')); assert c['version'] == 14 and not {'lanes', 'log'} & set(c) and json.load(open('.jig/jobs.json')) == {}, c\" && test ! -e .jig/lanes.json && echo \"\$0\" | grep -q 'board: lanes.old (merged)' && echo \"\$0\" | grep -q 'board: log'" "$out";;
   esac
 
   msg="update $gen: a second update is up to date"
@@ -803,7 +803,7 @@ msg="init: config.json holds the settings, no jobs and no log; jobs.json is empt
 expect_pass python3 -c "
 import json; c = json.load(open('.jig/config.json')); j = json.load(open('.jig/jobs.json'))
 assert sorted(c) == sorted(['version', 'name', 'trunk', 'common', 'append_files', 'reserve', 'release', 'reference_files']), c
-assert c['version'] == 13 and j == {}, (c, j)"
+assert c['version'] == 14 and j == {}, (c, j)"
 python3 - <<'EOF'
 import json; c = json.load(open('.jig/config.json'))
 c['reserve'] = {'section': {'pattern': r'^## (\d+) ', 'files': ['docs/**']}, 'loose': {}}
@@ -969,7 +969,7 @@ dry=$($UP 2>&1); $UP --apply >/dev/null 2>&1
 expect_pass sh -c "echo \"\$0\" | grep -q 'move docmap, boards, deep_subsystems and not_docs from .jig/config.json to .jig/docmap.json' && python3 -c \"
 import json; c = json.load(open('.jig/config.json')); d = json.load(open('.jig/docmap.json'))
 assert d == json.load(open('$T/dm-before.json')), d
-assert not {'docmap', 'not_docs', 'boards', 'deep_subsystems'} & set(c) and c['version'] == 13, c\" && git diff --cached --name-only | grep -qx .jig/docmap.json" "$dry"
+assert not {'docmap', 'not_docs', 'boards', 'deep_subsystems'} & set(c) and c['version'] == 14, c\" && git diff --cached --name-only | grep -qx .jig/docmap.json" "$dry"
 msg="docmap: a second update reports nothing to do"
 git commit -qm update --no-verify
 expect_pass test "$($UP 2>&1 | head -1)" = "up to date"
@@ -1041,7 +1041,7 @@ M="$T/meta"; mkdir -p "$M" && cd "$M" && git init -q -b main && git config user.
 cp -r "$P/jig" .jig && cp "$P/AGENTS.md" "$P/CLAUDE.md" . && git add -A && git commit -qm init
 $J init --meta --name docs >/dev/null && git add -A && git commit -qm "meta-init"
 msg="meta: init --meta writes docs/glossary.md, no GLOSSARY.md or README.md, and entry_files names the glossary, not README.md"
-expect_pass sh -c "test ! -e GLOSSARY.md && test ! -e README.md && grep -qx '# Basic terms' docs/glossary.md && grep -q '\"docs/glossary.md\"' .jig/meta.json && ! grep -q '\"README.md\"' .jig/meta.json"
+expect_pass sh -c "test ! -e GLOSSARY.md && test ! -e README.md && test \"\$(grep '^#' docs/glossary.md | tr '\n' '|')\" = '# Glossary|# Basic terms|' && grep -q '\"docs/glossary.md\"' .jig/meta.json && ! grep -q '\"README.md\"' .jig/meta.json"
 msg="meta: init --meta writes the decision log, and no CHANGELOG.md or DECISIONS.md"
 expect_pass sh -c "grep -qx '## Unreleased' .jig/decisions.md && test ! -e CHANGELOG.md && test ! -e DECISIONS.md"
 
@@ -4784,8 +4784,8 @@ msg="glossary: the dry run lists both pointer lines it rewrites, lists README.md
 out=$($J update --glossary 2>&1)
 expect_pass sh -c "echo \"\$0\" | sed -n '/^Pointers rewritten/,/^Pointers left/p' | grep -q '^  docs/a.md:5: ' && echo \"\$0\" | sed -n '/^Pointers rewritten/,/^Pointers left/p' | grep -q '^  docs/a.md:7: ' && echo \"\$0\" | sed -n '/^Pointers left/,\$p' | grep -q '^  docs/a.md:9: README.md § gone: names no glossary term' && test -z \"\$(git status --porcelain)\" && test ! -e docs/glossary.md" "$out"
 $J update --apply --glossary >/dev/null 2>&1
-msg="glossary: --apply --glossary writes each ### term under # Basic terms, its text byte for byte, and removes the README section"
-expect_pass sh -c "test \"\$(cat docs/glossary.md)\" = \"\$(printf '# Basic terms\n\n### mote\nA speck, \`x\`.\n\n### seam\n\nA join — see mote.')\" && ! grep -q Glossary README.md && grep -qx 'run it' README.md"
+msg="glossary: --apply --glossary writes each ### term under # Basic terms, below the title, its text byte for byte, and removes the README section"
+expect_pass sh -c "test \"\$(cat docs/glossary.md)\" = \"\$(printf '# Glossary\n\n# Basic terms\n\n### mote\nA speck, \`x\`.\n\n### seam\n\nA join — see mote.')\" && ! grep -q Glossary README.md && grep -qx 'run it' README.md"
 msg="glossary: and rewrites README.md § mote to docs/glossary.md § mote and the GLOSSARY.md link, leaving README.md § gone"
 expect_pass sh -c "sed -n 5p docs/a.md | grep -qF '(docs/glossary.md § mote)' && sed -n 7p docs/a.md | grep -qF '[glossary](glossary.md)' && sed -n 9p docs/a.md | grep -qF 'README.md § gone'"
 msg="glossary: the move commits through the hook, and survey then has no glossary finding"
@@ -4798,7 +4798,7 @@ GG="$T/gl-file"; pcnew "$GG" && git add -A && git commit -qm init && $J init >/d
 printf '# Glossary\n\nOur words.\n\n**grain** — wood, not sand\n\n## mote\nA speck.\n' > GLOSSARY.md && git add -A && git commit -qm glossary
 $J update --apply --glossary >/dev/null 2>&1
 msg="glossary: a root GLOSSARY.md folds into docs/glossary.md under # Basic terms, its ## terms as ###, a bold term gaining an ### heading, its text unchanged"
-expect_pass sh -c "test ! -e GLOSSARY.md && test \"\$(cat docs/glossary.md)\" = \"\$(printf '# Basic terms\n\nOur words.\n\n### grain\n\n**grain** — wood, not sand\n\n### mote\nA speck.')\""
+expect_pass sh -c "test ! -e GLOSSARY.md && test \"\$(cat docs/glossary.md)\" = \"\$(printf '# Glossary\n\n# Basic terms\n\nOur words.\n\n### grain\n\n**grain** — wood, not sand\n\n### mote\nA speck.')\""
 
 GT="$T/gl-table"; pcnew "$GT" && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board && git rm -q docs/glossary.md && nohook "a repo from before the glossary"
 printf '# App\n\n## Glossary\n\nThe words we use.\n\n| Term | Means | Owner |\n|---|---|---|\n| `mote` | a speck | ann |\n| **seam** | a join, not a weld | bo |\n' > README.md && git add -A && git commit -qm glossary
@@ -6318,7 +6318,7 @@ expect_pass sh -c "$J roadmap | grep -qE '^  a/s +open' && test -z \"\$($J roadm
 git -C "$R" show 485c13e:plugin/templates/jig/jig.py > "$T/jig-485c13e.py"
 msg="migration: an older plugin's update refuses the folded repo, so it can't reinstall the old checker"
 out=$(python3 "$T/jig-485c13e.py" update --apply 2>&1); rc=$?
-expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'this jig writes 10' && grep -q '^STAMP = 13' .jig/jig.py && git diff --quiet" "$out"
+expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'this jig writes 10' && grep -q '^STAMP = 14' .jig/jig.py && git diff --quiet" "$out"
 
 # The one list's waits: a spec on a blocked item, and a scope waiting on a page-less item.
 pcnew "$T/rl20" && mkdir -p docs && printf '# X\n\nX is.\n' > docs/x.md && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
@@ -12253,8 +12253,34 @@ msg="glossary form: the seed is in the form and a glossary in it has no problems
 expect_pass python3 -c "
 import importlib.util; sp = importlib.util.spec_from_file_location('j', '.jig/jig.py'); j = importlib.util.module_from_spec(sp); sp.loader.exec_module(j)
 assert j.glossary_problems(open('docs/glossary.md').read(), False) == []"
-msg="glossary form: a first # heading other than Basic terms is refused"
-gtry "s = '# Zed\n\nRepo: zed\nKind: hardware\n\nZ.\n\n' + s"; expect_pass refused "the first # heading is Zed, not .# Basic terms."
+msg="glossary form: a first # heading other than Glossary is refused"
+gtry "s = '# Zed\n\nRepo: zed\nKind: hardware\n\nZ.\n\n' + s"; expect_pass refused "the first # heading is Zed, not .# Glossary."
+msg="glossary form: a second # heading other than Basic terms is refused"
+gtry "s = s.replace('# Basic terms\n', '# Zed\n\nRepo: zed\nKind: hardware\n\nZ.\n\n# Basic terms\n', 1)"; expect_pass refused "the second # heading is Zed, not .# Basic terms."
+msg="glossary form: a term or a feature under the title is refused"
+gtry "s = s.replace('# Basic terms\n', '### loose\n\nL.\n\n## feat\n\nF.\n\n# Basic terms\n', 1)"; expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '### loose is under .# Glossary., which holds no term' && echo \"\$0\" | grep -q '## feat is under .# Glossary.'" "$out"
+msg="glossary form: a field line on the title is refused"
+gtry "s = s.replace('# Glossary\n', '# Glossary\n\nRepo: x\n', 1)"; expect_pass refused "# Glossary carries .Repo:.: the title carries no field line"
+msg="glossary form: prose under the title commits, and the title is no term"
+gtry "s = s.replace('# Glossary\n', '# Glossary\n\nOur words.\n', 1)"; expect_pass test $rc = 0
+expect_pass sh -c "! $J glossary Glossary 2>/dev/null"
+msg="glossary form: # Glossary then # Basic terms has neither heading problem, a glossary lacking only the title has that one, one in neither order both"
+expect_pass python3 -c "
+import importlib.util; sp = importlib.util.spec_from_file_location('j', '.jig/jig.py'); j = importlib.util.module_from_spec(sp); sp.loader.exec_module(j)
+keys = lambda t: [k for k, _ in j.glossary_problems(t, False)]
+app = '# app\n\nRepo: none\nKind: software\n'
+assert keys('# Glossary\n\n# Basic terms\n\n' + app) == [], keys('# Glossary\n\n# Basic terms\n\n' + app)
+assert keys('# Basic terms\n\n' + app) == ['title'], keys('# Basic terms\n\n' + app)
+assert keys('# Basic terms\n') == ['title'] and keys('# Glossary\n') == ['second'], 'one heading'
+assert keys(app + '\n# Basic terms\n') == ['title'], keys(app + '\n# Basic terms\n')
+assert keys('# Glossary\n\n' + app + '\n# Basic terms\n') == ['second'], 'order'
+assert keys(app) == ['title', 'second'], keys(app)
+t = '# Glossary\n\n# Basic terms\n\n### Glossary\n\nThis file.\n'
+assert keys(t) == [] and j.glossary_terms(t) == ['Glossary'] and j.glossary_products(t) == {}, keys(t)"
+msg="glossary form: jig's own docs/glossary.md, titled # Glossary, has no title problem"
+expect_pass python3 -c "
+import importlib.util; sp = importlib.util.spec_from_file_location('j', '.jig/jig.py'); j = importlib.util.module_from_spec(sp); sp.loader.exec_module(j)
+assert 'title' not in [k for k, _ in j.glossary_problems(open('$P/../../docs/glossary.md').read(), False)]"
 msg="glossary form: an ## under Basic terms is refused"
 gtry "s = s.replace('# Basic terms\n', '# Basic terms\n\n## feat\n\nF.\n', 1)"; expect_pass refused "## feat is a feature under .# Basic terms."
 msg="glossary form: a heading deeper than ### is refused"
@@ -12276,7 +12302,7 @@ gtry "s += '\n# A1\n\nRepo: x\nKind: software\n\nA.\n\n# A2\n\nRepo: x\nKind: ha
 msg="glossary form: a glossary made where none was is held to the whole form: one in the old form is refused"
 git rm -q docs/glossary.md && git commit -qm "no glossary" >/dev/null 2>&1
 mkdir -p docs && printf '# Glossary\n\n## mote\n\nA speck.\n' > docs/glossary.md && git add -A; out=$(git commit -qm "GLOSSARY: old" 2>&1); rc=$?; git reset -q --hard
-expect_pass refused "the first # heading is Glossary, not .# Basic terms."
+expect_pass refused "the second # heading is missing, not .# Basic terms."
 mkdir -p docs
 msg="glossary form: an older glossary out of the form stays editable: a commit adding no problem passes"
 printf '# Glossary\n\n## mote\n\nOwner: `x`.\n\nA speck.\n' > docs/glossary.md && git add -A && git -c core.hooksPath=/dev/null commit -qm "an older glossary"
@@ -12293,12 +12319,14 @@ out=$($UP 2>&1); $UP --apply >/dev/null 2>&1
 expect_pass sh -c "echo \"\$0\" | grep -q 'y names more than one product' && test \$(grep -cx 'Repo: y' docs/glossary.md) = 2 && test \$(grep -c '^Kind:' docs/glossary.md) = 1 && grep -qx \"Repo: \$(python3 -c 'import json; print(json.load(open(\".jig/config.json\"))[\"name\"])')\" docs/glossary.md" "$out"
 git add -A && git commit -qm "jig update" >/dev/null 2>&1
 git rm -q docs/glossary.md && git commit -qm "no glossary" >/dev/null 2>&1
-mkdir -p docs && printf '# Basic terms\n\n### mote\n\nA speck.\n\n# app\n\nRepo: none\nKind: software\n\nThe app.\n' > docs/glossary.md && git add -A && git commit -qm "GLOSSARY: in the form"
+mkdir -p docs && printf '# Glossary\n\n# Basic terms\n\n### mote\n\nA speck.\n\n# app\n\nRepo: none\nKind: software\n\nThe app.\n' > docs/glossary.md && git add -A && git commit -qm "GLOSSARY: in the form"
 msg="glossary form: jig glossary add writes a term in its sorted place, under a product, and a product with its fields"
 $J glossary add seam --text "A join." >/dev/null && $J glossary add bolt --under app --text "A bolt." >/dev/null && $J glossary add Gear --repo none --kind hardware --text "A gear." >/dev/null
-expect_pass sh -c "test \"\$(grep '^#' docs/glossary.md | tr '\n' '|')\" = '# Basic terms|### mote|### seam|# app|### bolt|# Gear|' && grep -A4 '^# Gear' docs/glossary.md | grep -qx 'Kind: hardware' && git add -A && git commit -qm 'GLOSSARY: adds'"
+expect_pass sh -c "test \"\$(grep '^#' docs/glossary.md | tr '\n' '|')\" = '# Glossary|# Basic terms|### mote|### seam|# app|### bolt|# Gear|' && grep -A4 '^# Gear' docs/glossary.md | grep -qx 'Kind: hardware' && git add -A && git commit -qm 'GLOSSARY: adds'"
 msg="glossary form: glossary add refuses a duplicate, as a term folds, and a parent the glossary lacks"
 expect_pass sh -c "! $J glossary add Seam --text x 2>/dev/null && ! $J glossary add q --under nowhere --text x 2>/dev/null && git diff --quiet"
+msg="glossary form: glossary add writes nothing into the title, and a product sorting before it by name lands after Basic terms"
+expect_pass sh -c "! $J glossary add q --under Glossary --text x 2>/dev/null && git diff --quiet && $J glossary add Axle --repo none --kind hardware --text 'An axle.' >/dev/null && test \"\$(grep '^# ' docs/glossary.md | tr '\n' '|')\" = '# Glossary|# Basic terms|# app|# Axle|# Gear|' && git checkout -q -- docs/glossary.md"
 msg="glossary form: jig glossary prints a term's path, definition, fields and controlling repo"
 expect_pass sh -c "$J glossary bolt | head -1 | grep -qx 'app > bolt' && $J glossary bolt | grep -qx 'A bolt.' && $J glossary Gear | grep -qx 'Kind: hardware' && $J glossary mote | grep -q '^controlled by: '"
 msg="glossary form: the sort keeps one in order byte for byte, and orders one out of order within each parent, words unchanged"
@@ -12308,14 +12336,17 @@ t = open('docs/glossary.md').read(); assert j.glossary_sorted(t) == t
 m = '# Basic terms\n\n### z\nz\n### a\na\n\n# Zed\n\nRepo: zed\nKind: software\n\n## feat\n\n### q\nq\n\n### b\nb\n\n### own\no\n\n# App\n\nRepo: app\nKind: software\n'
 o = j.glossary_sorted(m)
 assert [l for l in o.splitlines() if l.startswith('#')] == ['# Basic terms', '### a', '### z', '# App', '# Zed', '## feat', '### b', '### own', '### q'], o
-assert sorted(l for l in o.splitlines() if l.strip()) == sorted(l for l in m.splitlines() if l.strip()) and j.glossary_sorted(o) == o"
+assert sorted(l for l in o.splitlines() if l.strip()) == sorted(l for l in m.splitlines() if l.strip()) and j.glossary_sorted(o) == o
+t = '# Glossary\n\nOur words.\n\n# App\n\nRepo: app\nKind: software\n\n# Basic terms\n\n### a\na\n'
+o = j.glossary_sorted(t)
+assert o.startswith('# Glossary\n\nOur words.\n\n# Basic terms\n\n### a\na\n\n# App\n'), o"
 msg="glossary form: jig merge re-sorts the glossary in the merge commit"
 mkdir -p .jig/specs && printf '# gs\n\nSource: smoke\n\n## Intent\nx\n' > .jig/specs/gs.md && git add -A && git commit -qm "specs: gs"
 $J open GS --spec .jig/specs/gs.md --owns "GS/**" >/dev/null && git add -A && git commit -qm "open GS" \
   && ( cd .git/jig/worktrees/GS && python3 -c "p='docs/glossary.md'; s=open(p).read(); open(p,'w').write(s.replace('# Basic terms\n', '# Basic terms\n\n### zinc\n\nA metal.\n', 1))" && git add -A && git commit -qm "GLOSSARY: zinc" \
        && $J reviewed >/dev/null && $J handoff --spec .jig/specs/gs.md >/dev/null 2>&1 && pcfold && git add -A && git commit -qm "note GS" )
 gated GS; out=$($J merge GS 2>&1); rc=$?; [ $rc = 0 ] || echo "$out"
-expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -qx 'sorted docs/glossary.md' && test \"\$(grep '^#' docs/glossary.md | tr '\n' '|')\" = '# Basic terms|### mote|### seam|### zinc|# app|### bolt|# Gear|' && git show --name-only --format= HEAD | grep -qx docs/glossary.md" "$out"
+expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -qx 'sorted docs/glossary.md' && test \"\$(grep '^#' docs/glossary.md | tr '\n' '|')\" = '# Glossary|# Basic terms|### mote|### seam|### zinc|# app|### bolt|# Gear|' && git show --name-only --format= HEAD | grep -qx docs/glossary.md" "$out"
 msg="glossary form: jig merge leaves a glossary out of the form in its order"
 expect_pass python3 -c "
 import importlib.util, pathlib, tempfile, subprocess
@@ -12323,6 +12354,26 @@ sp = importlib.util.spec_from_file_location('j', '.jig/jig.py'); j = importlib.u
 d = pathlib.Path(tempfile.mkdtemp()); (d / 'docs').mkdir(); old = '# Glossary\n\n## zed\n\nZ.\n\n## ant\n\nA.\n'
 (d / 'docs/glossary.md').write_text(old); subprocess.run(['git', 'init', '-q'], cwd=d); j.sort_glossary(d)
 assert (d / 'docs/glossary.md').read_text() == old"
+git rm -q docs/glossary.md && nohook "no glossary"
+mkdir -p docs && printf '# Basic terms\n\nOur words.\n\n### mote\n\nA speck.\n\n# app\n\nRepo: none\nKind: software\n\nThe app.\n' > docs/glossary.md && git add -A && nohook "GLOSSARY: as 0.17.0 wrote it"
+msg="glossary title: a 0.17.0-form glossary stays editable, and keeps its products and sorted adds"
+$J glossary add seam --text "A join." >/dev/null && git add -A; out=$(git commit -qm "GLOSSARY: seam" 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && test \"\$(grep '^#' docs/glossary.md | tr '\n' '|')\" = '# Basic terms|### mote|### seam|# app|'" "$out"
+cp docs/glossary.md "$T/gf-017.md"
+msg="glossary title: update names the heading it adds, reports no form problem, and --apply adds it at the top, changing no other line"
+out=$($UP 2>&1); $UP --apply >/dev/null 2>&1
+expect_pass sh -c "echo \"\$0\" | grep -q 'add the .# Glossary. heading to docs/glossary.md' && ! echo \"\$0\" | grep -q \"isn't in the one form\" && { printf '# Glossary\n\n'; cat '$T/gf-017.md'; } | cmp -s - docs/glossary.md && git diff --cached --name-only | grep -qx docs/glossary.md" "$out"
+msg="glossary title: its commit passes the hook, and update then has no glossary step"
+expect_pass sh -c "git commit -qm 'jig update' && ! $UP 2>&1 | grep -q 'heading'"
+printf '# Basic terms\r\n\r\n### mote\r\n' > docs/glossary.md && nohook_all() { git add -A && nohook "$1"; }; nohook_all "GLOSSARY: crlf, untitled"
+sed -i.bak 's/^STAMP = 14$/STAMP = 13/' .jig/jig.py && rm .jig/jig.py.bak && nohook_all "an older checker on trunk"
+msg="glossary title: with an older checker on trunk, update says the heading waits for this update's commit, and adds nothing"
+out=$($UP 2>&1); $UP --apply >/dev/null 2>&1
+expect_pass sh -c "echo \"\$0\" | grep -q 'docs/glossary.md waits for its .# Glossary. heading: the checker on trunk is older' && test \"\$(head -1 docs/glossary.md | tr -d '\r')\" = '# Basic terms'" "$out"
+git commit -qm "jig update" >/dev/null 2>&1
+msg="glossary title: run again it adds the heading, the file's line endings kept"
+$UP --apply >/dev/null 2>&1
+expect_pass sh -c "printf '# Glossary\r\n\r\n# Basic terms\r\n\r\n### mote\r\n' | cmp -s - docs/glossary.md && git commit -qm 'jig update: title'"
 msg="glossary form: jig decision --page prints each entry whose Touches: names the page or a term on it"
 ulog "$(printf '### D-?pg Pages\nAccepted (owner, 2026-11-25).\nTouches: docs/glossary.md § mote\n\nMotes are small.')" && ulog "$(printf '### D-?other Other\nAccepted (owner, 2026-11-25).\nTouches: none — smoke\n\nNot here.')" && git add -A && git commit -qm "log: two entries" >/dev/null 2>&1
 out=$($J decision --page docs/glossary.md 2>&1)
