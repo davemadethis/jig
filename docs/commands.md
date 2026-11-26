@@ -41,7 +41,7 @@ yourself. Each one changes the repo, tags a release, writes your repo list, spea
 - `/jig:repos` lists, adds, renames or aliases the repos jig knows by name. **Owner-only.**
 - `/jig:relay <repo> <text>` marks pasted text as that repo's hubnode talking, in another chat, and a reply is owed. **Owner-only.**
 - `/jig:send` shows the reply for you to edit and send, then drops it in the repo's [inbox](glossary.md#inbox). **Owner-only.**
-- `/jig:rigger <repo>` makes this chat the repo's [rigger](glossary.md#rigger). **Owner-only.**
+- `/jig:designer <repo>` makes this chat the repo's [designer](glossary.md#designer). **Owner-only.**
 
 ## Release and feedback
 
@@ -105,7 +105,7 @@ Records:
 Across repos:
 
 - `python3 .jig/jig.py repos` lists, or adds to, where your repos live.
-- `python3 .jig/jig.py rigger <repo>` sets up a rigger's folder for a repo.
+- `python3 .jig/jig.py designer <repo>` sets up a designer's folder for a repo.
 - `python3 .jig/jig.py propose <spec> <slug>` opens a proposal branch on the [metarepo](glossary.md#metarepo).
 - `python3 .jig/jig.py move-in --product <Name>` moves a pararepo's [roadmap](glossary.md#roadmap) into its metarepo's. It shows each step and its state. `--apply` does the next one.
 - `python3 .jig/jig.py move <what> --to <repo>` moves a decision entry, a page or a section to another repo of its family, both ends. It shows each step and its state. `--apply` does the next one.

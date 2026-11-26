@@ -1412,7 +1412,7 @@ msg="staging: and a job's commit of it passes M3 and R3, the entry being its lin
 cd "$M"
 
 msg="plugin: only the skills that change the repo, tag, write user config, speak for the owner or report on jig are user-only; read-only ones stay listed"
-expect_pass test "$(grep -l '^disable-model-invocation: true' $P/../skills/*/SKILL.md | xargs -n1 dirname | xargs -n1 basename | sort | tr '\n' ' ')" = "adopt feedback init redocument relay release repos rigger send update "
+expect_pass test "$(grep -l '^disable-model-invocation: true' $P/../skills/*/SKILL.md | xargs -n1 dirname | xargs -n1 basename | sort | tr '\n' ' ')" = "adopt feedback init redocument relay release repos designer send update "
 
 msg="plugin: no skill description holds angle brackets (the desktop app reads them as XML tags)"
 expect_refuse grep -lE '^description:.*[<>]' $P/../skills/*/SKILL.md $P/skills/*/SKILL.md
@@ -8307,7 +8307,7 @@ expect_pass sh -c "f='$P/../skills/stage/SKILL.md'; grep -q 'repo that owns the 
 msg="stage skill: a batch gets a second reader at tier 2, effort 2, from a verbatim record, and a host with no worker stages it unreviewed, which Resolving names"
 expect_pass sh -c "f='$P/../skills/stage/SKILL.md'; sed -n '/^### A batch/,/^## Resolving/p' \"\$f\" | tr '\n' ' ' > '$T/sr' && grep -q 'Second reader' '$T/sr' && grep -q 'tier 2, effort 2' '$T/sr' && grep -q 'tiers.json' '$T/sr' && grep -q 'messages verbatim' '$T/sr' && grep -q '; unreviewed' '$T/sr' && sed -n '/^## Resolving/,\$p' \"\$f\" | grep -q 'unreviewed' && ! grep -qiE 'opus|sonnet|haiku' \"\$f\""
 msg="stage skill: the reader reads drafts before staging; no reader, or a record that isn't verbatim, means ; unreviewed from the start, and source: is final once written"
-expect_pass sh -c "sed -n '/^### A batch/,/^## Resolving/p' '$P/../skills/stage/SKILL.md' | tr '\n' ' ' | tr -s ' ' > '$T/sr2' && grep -q 'Before you write anything into the target.s .\.jig/staging/., start a fresh worker' '$T/sr2' && grep -q 'Only then write the files into staging' '$T/sr2' && grep -q 'errors, times out or returns no report), write each file with its .source:. ending .; unreviewed.' '$T/sr2' && grep -q \"can't give the owner's messages verbatim\" '$T/sr2' && grep -q 'A summary is not this record, and neither is a rigger.s .record/.' '$T/sr2' && grep -q 'final once written' '$T/sr2' && grep -q 'never add or remove .; unreviewed. afterwards' '$T/sr2' && ! grep -q 'remove .; unreviewed. from each file' '$T/sr2' && sed -n '/^## Resolving/,\$p' '$P/../skills/stage/SKILL.md' | tr '\n' ' ' | grep -q 'staged with no reader, or against a record that wasn.t verbatim'"
+expect_pass sh -c "sed -n '/^### A batch/,/^## Resolving/p' '$P/../skills/stage/SKILL.md' | tr '\n' ' ' | tr -s ' ' > '$T/sr2' && grep -q 'Before you write anything into the target.s .\.jig/staging/., start a fresh worker' '$T/sr2' && grep -q 'Only then write the files into staging' '$T/sr2' && grep -q 'errors, times out or returns no report), write each file with its .source:. ending .; unreviewed.' '$T/sr2' && grep -q \"can't give the owner's messages verbatim\" '$T/sr2' && grep -q 'A summary is not this record, and neither is a designer.s .record/.' '$T/sr2' && grep -q 'final once written' '$T/sr2' && grep -q 'never add or remove .; unreviewed. afterwards' '$T/sr2' && ! grep -q 'remove .; unreviewed. from each file' '$T/sr2' && sed -n '/^## Resolving/,\$p' '$P/../skills/stage/SKILL.md' | tr '\n' ' ' | grep -q 'staged with no reader, or against a record that wasn.t verbatim'"
 msg="stage skill: Staging a file writes only after the Second reader, one file is a batch of one, and a session that compacts before the findings are shown has no reader"
 expect_pass sh -c "tr '\n' ' ' < '$P/../skills/stage/SKILL.md' | tr -s ' ' > '$T/sr3' && grep -q 'Draft it first and write it there only after the Second reader (A batch): one file is a batch of one' '$T/sr3' && ! grep -q 'Write it into the target.s .\.jig/staging/., found with' '$T/sr3' && grep -q 'A session that compacts after handing over the drafts, before the findings are fixed and shown, has no reader either' '$T/sr3'"
 msg="staging: a request staged ; unreviewed resolves against a spec carrying that exact source, and no longer does once the mark is taken off"
@@ -11277,7 +11277,7 @@ $J repos add repo --name app >/dev/null && $J repos alias app ap >/dev/null
 msg="inbox: init makes .jig/inbox/.gitignore"
 expect_pass test -f .jig/inbox/.gitignore
 msg="inbox: a message written there leaves git status empty"
-imsg() { printf -- '---\ninbox: true\nto: %s\nfrom: rigger session\nsent: %s\n---\n> the question\n\n%s\n' "$2" "$3" "$4" > "$1"; }
+imsg() { printf -- '---\ninbox: true\nto: %s\nfrom: designer session\nsent: %s\n---\n> the question\n\n%s\n' "$2" "$3" "$4" > "$1"; }
 imsg .jig/inbox/2026-11-17-b.md app "2026-11-17 11:00" "second answer"
 imsg .jig/inbox/2026-11-17-a.md app "2026-11-17 09:00" "first answer"
 expect_pass test -z "$(git status --porcelain)"
@@ -11363,9 +11363,9 @@ $UP --apply >/dev/null 2>&1
 expect_pass test -f .jig/inbox/.gitignore
 }
 
-# ---------------------------------------------------------------- rigger
-sec_rigger() {
-export JIG_CONFIG="$T/rigger-repos.json"
+# ---------------------------------------------------------------- designer
+sec_designer() {
+export JIG_CONFIG="$T/designer-repos.json"
 PJ="python3 $P/jig/jig.py"           # the plugin's copy, outside any repo, as the skill runs it
 mkdir -p "$T/rg" && cd "$T/rg"
 for r in app other x; do mkdir -p "$T/rg-$r/.jig/staging" "$T/rg-$r/.jig/inbox"; done
@@ -11377,44 +11377,48 @@ for r in app other x; do $PJ repos add $r "$T/rg-$r" >/dev/null; done
 $PJ repos add meta "$T/rg-m" --name m >/dev/null
 $PJ repos add para "$T/rg-p1" --name p1 >/dev/null && $PJ repos add para "$T/rg-p2" --name p2 >/dev/null
 $PJ repos alias app ap >/dev/null
-msg="rigger: no --folder with no rigger folder set anywhere is refused, asking for --folder"
-out=$($PJ rigger app 2>&1); rc=$?
+msg="designer: no --folder with no designer folder set anywhere is refused, asking for --folder"
+out=$($PJ designer app 2>&1); rc=$?
 expect_pass sh -c "test $rc = 2 && echo \"\$0\" | grep -q -- '--folder'" "$out"
-msg="rigger: --folder creates record/, drafts/, staged/ and handoff.md, and writes the rigger key, the alias kept"
-$PJ rigger app --folder "$T/_riggers/app" >/dev/null
-expect_pass sh -c "test -d $T/_riggers/app/record && test -d $T/_riggers/app/drafts && test -d $T/_riggers/app/staged && test -f $T/_riggers/app/handoff.md && python3 -c \"import json; e = json.load(open('$JIG_CONFIG'))['app']; assert e['rigger'] == '$T/_riggers/app' or e['rigger'].endswith('/_riggers/app'), e; assert e['aliases'] == ['ap'], e\""
-msg="rigger: a second run with no --folder reuses the pointer and keeps what handoff.md holds"
-echo "open thread: x" >> "$T/_riggers/app/handoff.md"
-out=$($PJ rigger app)
-expect_pass sh -c "echo \"\$0\" | grep -q '_riggers/app' && grep -q 'open thread: x' $T/_riggers/app/handoff.md && echo \"\$0\" | grep -q 'created: nothing'" "$out"
-msg="rigger: APP takes app's entry"
-expect_pass sh -c "$PJ rigger APP | grep -q '^rigger for app:'"
-msg="rigger: a_pp is refused, naming app"
-out=$($PJ rigger a_pp 2>&1); rc=$?
+msg="designer: --folder creates record/, drafts/, staged/ and handoff.md, and writes the designer key, the alias kept"
+$PJ designer app --folder "$T/_designers/app" >/dev/null
+expect_pass sh -c "test -d $T/_designers/app/record && test -d $T/_designers/app/drafts && test -d $T/_designers/app/staged && test -f $T/_designers/app/handoff.md && python3 -c \"import json; e = json.load(open('$JIG_CONFIG'))['app']; assert e['designer'] == '$T/_designers/app' or e['designer'].endswith('/_designers/app'), e; assert e['aliases'] == ['ap'], e\""
+msg="designer: a second run with no --folder reuses the pointer and keeps what handoff.md holds"
+echo "open thread: x" >> "$T/_designers/app/handoff.md"
+out=$($PJ designer app)
+expect_pass sh -c "echo \"\$0\" | grep -q '_designers/app' && grep -q 'open thread: x' $T/_designers/app/handoff.md && echo \"\$0\" | grep -q 'created: nothing'" "$out"
+msg="designer: APP takes app's entry"
+expect_pass sh -c "$PJ designer APP | grep -q '^designer for app:'"
+msg="designer: a_pp is refused, naming app"
+out=$($PJ designer a_pp 2>&1); rc=$?
 expect_pass sh -c "test $rc = 2 && echo \"\$0\" | grep -q 'did you mean app'" "$out"
-msg="rigger: an unknown repo is refused"
-expect_refuse $PJ rigger nope
-msg="rigger: a metarepo is refused"
-out=$($PJ rigger m 2>&1); rc=$?
+msg="designer: an unknown repo is refused"
+expect_refuse $PJ designer nope
+msg="designer: a metarepo is refused"
+out=$($PJ designer m 2>&1); rc=$?
 expect_pass sh -c "test $rc = 2 && echo \"\$0\" | grep -q 'metarepo'" "$out"
-msg="rigger: app's alias works"
-expect_pass sh -c "$PJ rigger ap | grep -q '^rigger for app:'"
-msg="rigger: other with no --folder makes its folder beside app's"
-$PJ rigger other >/dev/null
-expect_pass sh -c "test -d $T/_riggers/other/record && python3 -c \"import json; assert json.load(open('$JIG_CONFIG'))['other']['rigger'].endswith('/_riggers/other')\""
-out=$($PJ rigger p1)
-msg="rigger: for pararepo p1, it marks p1 yours, m its metarepo, p2 a pararepo of m, and x on request"
+msg="designer: app's alias works"
+expect_pass sh -c "$PJ designer ap | grep -q '^designer for app:'"
+msg="designer: other with no --folder makes its folder beside app's"
+$PJ designer other >/dev/null
+expect_pass sh -c "test -d $T/_designers/other/record && python3 -c \"import json; assert json.load(open('$JIG_CONFIG'))['other']['designer'].endswith('/_designers/other')\""
+out=$($PJ designer p1)
+msg="designer: for pararepo p1, it marks p1 yours, m its metarepo, p2 a pararepo of m, and x on request"
 expect_pass sh -c "echo \"\$0\" | grep -qE '^  p1 +yours\$' && echo \"\$0\" | grep -qE '^  m +reads: its metarepo\$' && echo \"\$0\" | grep -qE '^  p2 +reads: a pararepo of m\$' && echo \"\$0\" | grep -qE '^  x +on request\$'" "$out"
-msg="rigger: it lists the file staged in p1 with its source"
+msg="designer: it lists the file staged in p1 with its source"
 expect_pass sh -c "echo \"\$0\" | grep -qE '^  s.md +source: another chat / 2026-11-17\$'" "$out"
-msg="rigger: it says whether the repo has .jig/staging/ and .jig/inbox/"
+msg="designer: it says whether the repo has .jig/staging/ and .jig/inbox/"
 expect_pass sh -c "echo \"\$0\" | grep -q 'p1 has .jig/staging/: yes; .jig/inbox/: no'" "$out"
-msg="rigger: jig repos shows each entry's rigger folder"
-expect_pass sh -c "$PJ repos | grep -q 'rigger: .*_riggers/p1'"
-msg="rigger: a folder inside the repo's checkout is refused"
-expect_refuse $PJ rigger x --folder "$T/rg-x/notes"
-msg="rigger: a folder inside another listed repo's checkout is refused, and no pointer is written"
-expect_pass sh -c "! $PJ rigger x --folder $T/rg-app/notes >/dev/null 2>&1 && test ! -e $T/rg-app/notes && python3 -c \"import json; assert 'rigger' not in json.load(open('$JIG_CONFIG'))['x']\""
+msg="designer: jig repos shows each entry's designer folder"
+expect_pass sh -c "$PJ repos | grep -q 'designer: .*_designers/p1'"
+msg="designer: a folder inside the repo's checkout is refused"
+expect_refuse $PJ designer x --folder "$T/rg-x/notes"
+msg="designer: a folder inside another listed repo's checkout is refused, and no pointer is written"
+expect_pass sh -c "! $PJ designer x --folder $T/rg-app/notes >/dev/null 2>&1 && test ! -e $T/rg-app/notes && python3 -c \"import json; assert 'designer' not in json.load(open('$JIG_CONFIG'))['x']\""
+msg="designer: a folder set under the old rigger key is read as the designer's, and the next save writes it as designer"
+mkdir -p "$T/_old/x" && python3 -c "import json,sys; f=sys.argv[1]; d=json.load(open(f)); d['x']['rigger']=sys.argv[2]; json.dump(d, open(f,'w'), indent=2)" "$JIG_CONFIG" "$T/_old/x"
+out=$($PJ designer x 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -q '_old/x' && test -d $T/_old/x/record && python3 -c \"import json; e = json.load(open('$JIG_CONFIG'))['x']; assert e['designer'].endswith('/_old/x') and 'rigger' not in e, e\"" "$out"
 }
 
 sec_queue() {
@@ -12273,7 +12277,7 @@ out=$($J decision --page docs/glossary.md 2>&1)
 expect_pass sh -c "echo \"\$0\" | grep -q 'Pages' && ! echo \"\$0\" | grep -q 'Other' && $J decision --page docs/none.md | grep -q 'no decision entry'" "$out"
 }
 
-UNITS="rules merge_derived update board_split docmap worktree_setup metarepo,staging pararepo release r6_takes,r6_ints merge_after_sync repos workflow init_old_board ledger_rows hardware update_per_file pararepo_commands entry_globs report_fixes sync_buffer buffer_answered pointers removals feedback slash_names homes structure meta_docs agents_lines page_contract roadmap labels family family_report roadmap_edit phase_types boundary decisions ideas ideas_fold ideas_meta ideas_labels supersede touches,touches_terms sweep staging_batches merge_log findings glossary glossary_form headings check_levels role_line consolidate cheaper_rounds next svg update_roles holders rig rig_batch close versioning pin_bump moves move movein claims inbox rigger queue"
+UNITS="rules merge_derived update board_split docmap worktree_setup metarepo,staging pararepo release r6_takes,r6_ints merge_after_sync repos workflow init_old_board ledger_rows hardware update_per_file pararepo_commands entry_globs report_fixes sync_buffer buffer_answered pointers removals feedback slash_names homes structure meta_docs agents_lines page_contract roadmap labels family family_report roadmap_edit phase_types boundary decisions ideas ideas_fold ideas_meta ideas_labels supersede touches,touches_terms sweep staging_batches merge_log findings glossary glossary_form headings check_levels role_line consolidate cheaper_rounds next svg update_roles holders rig rig_batch close versioning pin_bump moves move movein claims inbox designer queue"
 
 if [ "${1:-}" = --list ]; then echo $UNITS | tr ' ,' '\n\n'; exit 0; fi
 if [ "${1:-}" = --unit ]; then        # --unit <run folder> <unit>: one unit, its output to a file

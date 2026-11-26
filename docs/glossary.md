@@ -151,7 +151,7 @@ share. It holds no code and copies nothing from them.
 A code, firmware or hardware repo that cites a metarepo at a released tag. It changes the
 metarepo only through a proposal branch. It isn't a fork or a submodule.
 
-## Rigger
+## Designer
 
 A design session for one product repo, kept outside it. It holds the owner's running record
 of the product and reaches the repo only through staging and the inbox. It never edits the repo.

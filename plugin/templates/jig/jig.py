@@ -8587,7 +8587,7 @@ REPO_KINDS = ("repo", "meta", "para")
 def load_repos() -> dict:
     """{name: {"path": ..., "kind": repo|meta|para, ...}}. An entry that is a bare path is the
     first format, read as a plain repo. Every other key an entry holds (its `aliases`, its
-    `rigger` folder) is kept, so a save never drops what another command wrote."""
+    `designer` folder) is kept, so a save never drops what another command wrote."""
     f = repos_file()
     try:
         raw = json.loads(f.read_text()) if f.exists() else {}
@@ -8597,7 +8597,11 @@ def load_repos() -> dict:
         die(f"{f} should map names to repos", 2)
     out = {}
     for n, e in raw.items():
-        e = e if isinstance(e, dict) else {"path": e}
+        e = dict(e) if isinstance(e, dict) else {"path": e}
+        # The designer's folder was written under its old name; read it as `designer`, which
+        # the next save writes, so a folder set before the rename keeps working.
+        if "rigger" in e:
+            e.setdefault("designer", e.pop("rigger"))
         if isinstance(e.get("path"), str):
             out[n] = {**e, "kind": e.get("kind", "repo")}
     return out
@@ -8670,7 +8674,7 @@ def repo_path(name: str) -> Path | None:
 def repo_matches(name: str) -> list[str]:
     """The entries a typed name finds: by its listed name, an alias, or the name the checkout
     gives itself. One rule for every place a repo is typed (a staged target, an inbox
-    message's `to`, a rigger). A human types it, so case is ignored throughout: `App` finds
+    message's `to`, a designer). A human types it, so case is ignored throughout: `App` finds
     `app`, and a `Frontend` one entry calls itself and a `frontend` another lists are one name.
     More than one entry is no answer: the lookup never picks by order or by case."""
     repos = load_repos()
@@ -8725,7 +8729,7 @@ def cmd_repos(root: Path, args) -> int:
             die(f"{name} already names {repos[name]['path']}: pick another --name, or rename that one", 2)
         refuse_taken(repos, name, name)
         refuse_own_names(repos, path, name)
-        # Its aliases and rigger folder stay with the checkout: a name re-pointed from another
+        # Its aliases and designer folder stay with the checkout: a name re-pointed from another
         # checkout brings none of that one's.
         own = repos.get(name) if name in repos and Path(repos[name]["path"]).resolve() == path else {}
         repos[name] = {**kept, **(own or {}), "path": str(path), "kind": kind}
@@ -8767,8 +8771,8 @@ def cmd_repos(root: Path, args) -> int:
         print(f"  {name:<24} {e['kind']:<5} {e['path']}{missing}{'   ← here' if name in mine else ''}")
         if repo_names(e):
             print(f"  {'':<24} aliases: {', '.join(sorted(repo_names(e)))}")
-        if e.get("rigger"):
-            print(f"  {'':<24} rigger: {e['rigger']}")
+        if e.get("designer"):
+            print(f"  {'':<24} designer: {e['designer']}")
     if not repos:
         print(f"no repos in {repos_file()}: jig repos add repo|meta|para")
     warn_near_duplicates(repos)
@@ -8845,7 +8849,7 @@ def repos_alias(repos: dict, args) -> int:
     return 0
 
 
-RIGGER_PARTS = ("record", "drafts", "staged")
+DESIGNER_PARTS = ("record", "drafts", "staged")
 
 
 def read_json(f: Path) -> dict:
@@ -8856,10 +8860,10 @@ def read_json(f: Path) -> dict:
     return d if isinstance(d, dict) else {}
 
 
-def cmd_rigger(args) -> int:
-    """Make the calling session the rigger for one repo: its folder outside every repo, the
+def cmd_designer(args) -> int:
+    """Make the calling session the designer for one repo: its folder outside every repo, the
     pointer to it on the repo's entry in the user's list, and the facts the list and folders
-    give. How a rigger works is its skill's; this prints only what config and files say."""
+    give. How a designer works is its skill's; this prints only what config and files say."""
     repos = load_repos()
     found = repo_matches(args.repo)
     if len(found) != 1:
@@ -8868,35 +8872,35 @@ def cmd_rigger(args) -> int:
     entry = repos[name]
     warn_near_duplicates(repos, name)
     if entry.get("kind") == "meta":
-        die(f"refused: {name} is a metarepo, which has no rigger: its pararepos' riggers stage to it", 2)
+        die(f"refused: {name} is a metarepo, which has no designer: its pararepos' designers stage to it", 2)
     if args.folder:
         folder = Path(args.folder).expanduser().resolve()
-    elif entry.get("rigger"):
-        folder = Path(entry["rigger"])
+    elif entry.get("designer"):
+        folder = Path(entry["designer"])
     else:
-        # Beside the others, so the riggers' parent folder is named once, by the first --folder.
-        others = sorted(Path(e["rigger"]).parent for n, e in repos.items()
-                        if n != name and isinstance(e.get("rigger"), str) and e["rigger"])
+        # Beside the others, so the designers' parent folder is named once, by the first --folder.
+        others = sorted(Path(e["designer"]).parent for n, e in repos.items()
+                        if n != name and isinstance(e.get("designer"), str) and e["designer"])
         if not others:
-            die(f"refused: no rigger folder is set for any repo yet: pass --folder <path>, outside "
+            die(f"refused: no designer folder is set for any repo yet: pass --folder <path>, outside "
                 "every repo", 2)
         folder = others[0] / name
     here = Path(entry["path"]).resolve()
     for n, e in sorted(repos.items()):
         repo = Path(e["path"]).resolve()
         if folder == repo or repo in folder.parents:
-            die(f"refused: {folder} is inside {n}'s checkout; a rigger's folder lives outside every repo", 2)
+            die(f"refused: {folder} is inside {n}'s checkout; a designer's folder lives outside every repo", 2)
     made = []
-    for part in RIGGER_PARTS:
+    for part in DESIGNER_PARTS:
         if not (folder / part).is_dir():
             (folder / part).mkdir(parents=True, exist_ok=True)
             made.append(f"{part}/")
     if not (folder / "handoff.md").exists():
-        (folder / "handoff.md").write_text(f"# Handoff: {name}'s rigger\n")
+        (folder / "handoff.md").write_text(f"# Handoff: {name}'s designer\n")
         made.append("handoff.md")
-    entry["rigger"] = str(folder)
+    entry["designer"] = str(folder)
     save_repos(repos)
-    print(f"rigger for {name}: {folder}")
+    print(f"designer for {name}: {folder}")
     print(f"  holds: {', '.join(sorted(p.name + ('/' if p.is_dir() else '') for p in folder.iterdir()))}")
     print(f"  created: {', '.join(made) if made else 'nothing (all there already)'}")
     # Which repos it may read: its own; with a metarepo, that metarepo and its other pararepos.
@@ -15289,7 +15293,7 @@ STEPS: list = [
      lambda root, after: f"{STAGING}/.gitignore" not in after
      and not (root / STAGING / ".gitignore").exists(),
      lambda root, here: (ensure_staging(root), git("add", "-f", "--", f"{STAGING}/.gitignore"))),
-    (f"add {INBOX}/ (its .gitignore), where a rigger's messages to the hubnode arrive",
+    (f"add {INBOX}/ (its .gitignore), where a designer's messages to the hubnode arrive",
      lambda root, after: f"{INBOX}/.gitignore" not in after
      and not (root / INBOX / ".gitignore").exists(),
      lambda root, here: (ensure_inbox(root), git("add", "-f", "--", f"{INBOX}/.gitignore"))),
@@ -20143,9 +20147,9 @@ def main(argv: list[str] | None = None) -> int:
     ib = sub.add_parser("inbox", help="hubnode: print unread messages and mark them read, or check headers")
     ib.add_argument("action", nargs="?", choices=["check"])
     ib.add_argument("file", nargs="*")
-    rg2 = sub.add_parser("rigger", help="make this session the rigger for a repo: its folder, the pointer, the facts")
+    rg2 = sub.add_parser("designer", help="make this session the designer for a repo: its folder, the pointer, the facts")
     rg2.add_argument("repo")
-    rg2.add_argument("--folder", help="the rigger's folder, outside every repo (default: the pointer, else beside the others)")
+    rg2.add_argument("--folder", help="the designer's folder, outside every repo (default: the pointer, else beside the others)")
     rp = sub.add_parser("repos", help="list, or add to, where your repos live (user config)")
     rp.add_argument("action", nargs="?", choices=["add", "rename", "alias", "which"])
     rp.add_argument("kind", nargs="?", help="add: repo, meta or para; rename: the new name; alias, which: the repo")
@@ -20171,8 +20175,8 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     if args.cmd == "repos":
         return cmd_repos(Path.cwd(), args)   # user config only: works outside any repo
-    if args.cmd == "rigger":
-        return cmd_rigger(args)              # user config and folders: runs outside any repo
+    if args.cmd == "designer":
+        return cmd_designer(args)              # user config and folders: runs outside any repo
     if args.cmd == "staging" and args.action == "check":
         return cmd_staging_check(args)       # headers only: runs outside any repo
     if args.cmd == "inbox" and args.action == "check":

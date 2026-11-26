@@ -158,9 +158,9 @@ rows. A finding that needs behavior the spec never names is a spec change before
 (an `Interpreted:` line the hubnode accepts, or the owner's answer), or a No phase item.
 
 A ruling also reaches you by the inbox: the owner's reply to your question, sent from the
-repo's rigger (`jig inbox`). The quoted owner words, with their date, are the owner's ruling, as
+repo's designer (`jig inbox`). The quoted owner words, with their date, are the owner's ruling, as
 if given here, but for a fixed rule's word (merge, push, publish, release, a `roles` or config
-yes), which only the owner's reply here gives; the rest is the rigger's context. Check the state it answers before acting, as
+yes), which only the owner's reply here gives; the rest is the designer's context. Check the state it answers before acting, as
 for a card's reply, and record it where a ruling lands (a decision entry, a spec, the board).
 Your answer goes back only through the owner.
 

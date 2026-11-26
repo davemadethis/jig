@@ -99,7 +99,7 @@ stale. It writes nothing. `rig` prints one line pointing at it when there's some
 
 ## Design sessions
 
-A [rigger](glossary.md#rigger) is a design session for one product repo, kept outside it. It
+A [designer](glossary.md#designer) is a design session for one product repo, kept outside it. It
 keeps the owner's running record of the product and drafts what the repo will get. It reaches
-the repo only by staging files and writing to its [inbox](glossary.md#inbox). A metarepo has no rigger of its own:
-its pararepos' riggers stage to it.
+the repo only by staging files and writing to its [inbox](glossary.md#inbox). A metarepo has no designer of its own:
+its pararepos' designers stage to it.

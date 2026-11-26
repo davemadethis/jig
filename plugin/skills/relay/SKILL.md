@@ -24,7 +24,7 @@ disable-model-invocation: true
 
 3. **Open the thread.** Say in one line: a reply is owed to `<repo>`'s hubnode, and
    `/jig:send` sends it once it's settled. Then work through it with the owner as usual. The
-   thread lives in this conversation until it is sent; a rigger also lists it in its
+   thread lives in this conversation until it is sent; a designer also lists it in its
    `handoff.md`.
 
 Several threads may be open at once, one per relay. A second relay for the same repo opens a

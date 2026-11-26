@@ -91,7 +91,7 @@ that spec carries the mark.
   worker found is not in front of it. So too if you can't give the owner's messages verbatim (after
   compaction, say): hand the worker what you have, say so, and write every file with
   `; unreviewed`, since a reader working from a paraphrase can't catch a misquote copied into
-  both. A summary is not this record, and neither is a rigger's `record/`. A file's `source:` is
+  both. A summary is not this record, and neither is a designer's `record/`. A file's `source:` is
   final once written: a spec, page or commit made from it carries that line exactly as its
   mark, so never add or remove `; unreviewed` afterwards.
 - **Check before you say it's staged.** Run the plugin's copy on every file of the batch at once:
