@@ -26,7 +26,7 @@ That is a dry run. It changes nothing, and its exit code says what you have:
   ahead. A warning is something `update` can leave as it is and still produce a working
   repo: a file at an old path, an unknown board key, a hook jig didn't write, code that names
   a moved path.
-- **2, refused or blocked.** A refusal has a fix the user knows: merge each open job
+- **2, refused or blocked.** A refusal has a fix the owner knows: merge each open job
   (`jig merge`) or delete its entry from `.jig/jobs.json` on trunk, give each counter a
   `pattern` and `files`, move an untracked file out of a move's way, or update the plugin.
   Each worktree line names its own command — `git worktree remove` for one that is there,
@@ -35,7 +35,7 @@ That is a dry run. It changes nothing, and its exit code says what you have:
   uncommitted in it. Run each only on a yes; `update` runs none. A gate's scratch checkout
   (`gate-<job>`, detached) isn't a refusal: the plan lists it as gate scratch and `--apply`
   removes it, unless it holds tracked changes or a merge, which make it a refusal like the rest. A refusing dry run still prints
-  the plan below the refusal: show it too, so the user sees what follows the fix. A block means the layout is one
+  the plan below the refusal: show it too, so the owner sees what follows the fix. A block means the layout is one
   jig doesn't recognize. Say why the update would fail, then show the owner the drafted
   problem: the change to jig that would recognize it — which `LAYOUT` row, board default or
   `STEPS` entry to add, with a done-when the plugin owner can test. Save nothing; on the
@@ -183,15 +183,15 @@ refuse. On a yes, `--apply --merge-log`, edit those lines, and commit.
 The **glossary's** one form is `# Basic terms`, then a product per `#` with its `Repo:` and `Kind:`
 lines, a feature per `##` and a term per `###`. `jig update --apply` rewrites each `Owner:` line as
 `Repo:` and `Kind: software`; where two products name one repo, it leaves `Kind:` off both, so
-ask the user which is the software and which the hardware, and write those lines. A glossary out
-of the form is reported and never re-formed: rebuilding it is the user's call, a change of its own.
+ask the owner which is the software and which the hardware, and write those lines. A glossary out
+of the form is reported and never re-formed: rebuilding it is the owner's call, a change of its own.
 
 A **glossary** in the README's `## Glossary` section, or in a root `GLOSSARY.md`: its home is
-`docs/glossary.md`, since pages cite its terms and docs point only at docs. Show the user
+`docs/glossary.md`, since pages cite its terms and docs point only at docs. Show the owner
 `jig update --glossary`: the terms it moves, under `# Basic terms` as `###` headings (a table moved
 as it is, listed with what else the one form refuses, to rebuild before committing), and every line whose pointer to the old home it rewrites in the same change, then the
 pointers it can't rewrite. On a yes, `jig update --apply --glossary`, and commit what it staged.
-Then repoint, with the user, each pointer it left. In a metarepo the move runs in a job's
+Then repoint, with the owner, each pointer it left. In a metarepo the move runs in a job's
 worktree (M4): `jig open glossary-move --shares README.md docs/glossary.md <the files it
 rewrites>`, the run there, and one changelog line (`GLOSSARY: moved to docs/glossary.md`); it
 rewrites `entry_files` too. Pararepos' citations of `<meta>/README.md § <term>` are theirs: each
@@ -223,8 +223,8 @@ with nothing answering them. Each offers one `BUFFER.md` row: add it only on a y
 
 `update` stages its changes, commits nothing, and runs `.jig/scripts/check.sh`. Then:
 
-1. Fix the stale references in code with the user, in the same uncommitted change, until the
-   check passes. Those are the repo's files: you edit them with the user; `jig.py` never does.
+1. Fix the stale references in code with the owner, in the same uncommitted change, until the
+   check passes. Those are the repo's files: you edit them with the owner; `jig.py` never does.
    Stale references in Markdown are worth fixing too — offer the list, don't sweep it unasked.
    A warning that a moved file finds paths from its own location (`$0`, `BASH_SOURCE`,
    `__file__`, `__dirname`, `import.meta.url`, ...) is code to fix the same way: its folder depth changed, so a

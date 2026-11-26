@@ -48,24 +48,24 @@ so, and its content moves into `.jig/roadmap.json` first, with `jig roadmap --dr
 Jobs' worktrees go in `.git/jig/worktrees/`, so nothing needs gitignoring.
 
 **A metarepo** holds shared definitions, decisions and conventions for several other repos, and
-no code. If the user says this repo is one, or it has no code and other repos cite it, ask
+no code. If the owner says this repo is one, or it has no code and other repos cite it, ask
 first. Its pages sit in genre folders, `docs/<genre>/<name>.md` (`.jig/RULES.md`, Metarepo and
 pararepos), so ask which genres it uses, offering two templates:
 
 - **product ecosystem**: `products`, `features`, `principles`, `concepts`;
-- **custom**: the folder names the user gives.
+- **custom**: the folder names the owner gives.
 
 Then run `python3 .jig/jig.py init --meta --genres product-ecosystem`, or
 `--genres <a,b,c>`, in place of the plain `init`. It writes `.jig/meta.json` with the genres, and
 an `### <genre>` term for each under `# Basic terms` in `docs/glossary.md`, where each genre is defined
-once: a genre gets no page of its own. Fill each heading's TODO with the user, or name it as
+once: a genre gets no page of its own. Fill each heading's TODO with the owner, or name it as
 remaining. It also writes the metarepo block under `AGENTS.md`'s title: jig's lines for the rules
 every commit meets (`.jig/RULES.md`, Metarepo and pararepos), kept current by rerunning
 `init --meta` (in a job's worktree once `.jig/meta.json` is on trunk), so write none of them by hand. Commit `AGENTS.md` with the rest.
 
 Then:
 
-1. **Firmware?** If the repo has `sdkconfig`, `platformio.ini`, `idf_component.yml`, `west.yml`, `*.ino`, or a `main/` with C, keep the "Firmware" section of `AGENTS.md` and copy nothing else for it: when a board is ready to spec, `/jig:hardware` writes its page from a definition the user gives, and installs the skills it lists. Otherwise delete the "Firmware" section. If unsure, ask one question.
+1. **Firmware?** If the repo has `sdkconfig`, `platformio.ini`, `idf_component.yml`, `west.yml`, `*.ino`, or a `main/` with C, keep the "Firmware" section of `AGENTS.md` and copy nothing else for it: when a board is ready to spec, `/jig:hardware` writes its page from a definition the owner gives, and installs the skills it lists. Otherwise delete the "Firmware" section. If unsure, ask one question.
 2. `chmod +x .jig/scripts/*.sh`.
 3. **Fill what the code tells you.** In `AGENTS.md` Commands and `.jig/scripts/check.sh`: detect the build system (`package.json`, `Cargo.toml`, `pyproject.toml`, `CMakeLists.txt`, `idf.py`, `platformio.ini`) and replace the matching `TODO` lines. Leave anything you can't infer as `TODO` — don't guess.
    `check.sh` has two parts: the quick one (build, lint, fast unit tests) runs on every stop;
@@ -79,7 +79,7 @@ Then:
    gitignored `.env` in the main checkout → the copy line. Install, never link, unless the
    user asks: a linked environment hides an undeclared dependency from the gate.
    Leave `.jig/scripts/release.sh` as the template: in a plain repo the first `jig release` refuses until
-   it is filled, and `/jig:release` fills it with the user then. A metarepo or pararepo releases
+   it is filled, and `/jig:release` fills it with the owner then. A metarepo or pararepo releases
    with jig's defaults. Leave `.jig/scripts/publish.sh` as the template too: until its TODO line
    goes, a release skips it, and `/jig:release` asks what a release publishes on the next release.
    Leave `.jig/scripts/derive.sh` as the template unless a tracked file passes the test in
@@ -89,7 +89,7 @@ Then:
    each one's generator, judge it by that test, and show each with its verdict and reason.
    Propose `derive.sh` only for those that pass; if none does, ask nothing. The generator goes there, never in `setup.sh`, which must leave tracked files alone,
    and every file it writes is listed in `derived_files` in `.jig/config.json`.
-4. Write one sentence for the Project line in `AGENTS.md` from the README or the code. Mark it `(inferred)` so the user corrects it.
+4. Write one sentence for the Project line in `AGENTS.md` from the README or the code. Mark it `(inferred)` so the owner corrects it.
 5. If the repo already has a `CLAUDE.md` with content, don't replace it; append `@AGENTS.md` and say so.
 6. Offer to register the repo with `/jig:repos add repo` (or `add meta` / `add para`), so a chat can find its `.jig/staging/`.
 7. Report: files created, TODOs remaining, the git hooks installed, and that jobs are available (`/jig:hubnode`, `/jig:subnode`) but need no setup until a second session starts.

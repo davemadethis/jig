@@ -9,7 +9,7 @@ are the survey and its reading; the plan (step 4) is the spec role's, written as
 says; step 6's stages are Jobs, each with its own work role.
 
 Produce a migration plan. Steps 1–5 **change nothing**: the deliverable is
-`.jig/specs/adopt-<repo>.md`, which the user reads and approves before step 6 carries out any
+`.jig/specs/adopt-<repo>.md`, which the owner reads and approves before step 6 carries out any
 of it.
 
 ## 1. Measure

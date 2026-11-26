@@ -33,12 +33,12 @@ Each Q and A under 180 characters. Symptom first, no guessing past what you've r
 
 ## 2. Givens
 Everything known about the problem. Tag each line:
-- `[seen]` — a log line, a test result, a file you read, something the user watched happen
+- `[seen]` — a log line, a test result, a file you read, something the owner watched happen
 - `[assumed]` — plausible, not observed
 
 Every `[assumed]` given the fix depends on gets converted before step 5: go read the log, run the thing, or ask one question. If it can't be converted, say so and treat it as a risk, not a fact.
 
-Reproducing in a throwaway repo? There, set both variables on every jig command, not by one `export`: an agent's shell may not keep it to the next command. Point them at a folder `<dir>` beside the repo, not inside its working tree, so jig's files never show as untracked there: `JIG_CONFIG=<dir>/repos.json XDG_CONFIG_HOME=<dir>/config python3 .jig/jig.py …`. That keeps the user's own jig config untouched.
+Reproducing in a throwaway repo? There, set both variables on every jig command, not by one `export`: an agent's shell may not keep it to the next command. Point them at a folder `<dir>` beside the repo, not inside its working tree, so jig's files never show as untracked there: `JIG_CONFIG=<dir>/repos.json XDG_CONFIG_HOME=<dir>/config python3 .jig/jig.py …`. That keeps the owner's own jig config untouched.
 
 ## 3. One layer up
 - Is there a sibling path (another mode, caller, handler) that does the same job? Does it have this problem?

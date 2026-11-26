@@ -353,7 +353,7 @@ A part whose behavior the code touches is a subsystem with its own page. A vendo
 datasheets, a dev board's spec sheet, app notes, reference manuals — sit in a `datasheets/`
 folder in the folder of the page that leans on them: a part documented only by its datasheet is
 a file in its page's `datasheets/`, and a board's own spec sheet is in `docs/<board>/datasheets/`.
-A file the repo wrote, its own schematic or a definition the user wrote, sits in the page's
+A file the repo wrote, its own schematic or a definition the owner wrote, sits in the page's
 folder itself. A datasheet two pages use lives in the `datasheets/` of the nearest folder both
 pages sit under: two subsystems of one system share the system's `datasheets/`, two systems
 share `docs/datasheets/`. Both pages link it; it moves there when the second page starts using
@@ -1282,7 +1282,7 @@ a phase is the roadmap's, never an entry, and an entry names no spec, handoff or
 
 ```
 ### D-012 Store opens graph.sqlite read-only
-Accepted (Dave, 2026-11-10). Supersedes D-007.
+Accepted (the owner, 2026-11-10). Supersedes D-007.
 Touches: docs/store/store.md
 
 When anything but the indexer opens graph.sqlite, it opens it read-only. …
@@ -1675,7 +1675,7 @@ answers to, or, for a file already in a listed repo's inbox, a `to` naming anoth
 
 A **designer** is a design session for one product repo, kept outside it: it holds the owner's
 running record of the product and drafts what the repo will get. Its folder lives outside every
-repo, so no repo session can open it, and the user's repos list points to it from the repo's
+repo, so no repo session can open it, and the owner's repos list points to it from the repo's
 entry (`jig designer <repo>`, run by the designer when it starts). A designer reaches its repo only
 by staging and by the inbox; it never edits a repo. A metarepo has no designer: its pararepos'
 designers stage to it.

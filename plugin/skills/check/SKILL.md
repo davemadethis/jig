@@ -30,7 +30,7 @@ checkout; a failure nobody can reproduce is reported with that path, so it can b
 
 Run the complete check once, through the queue: `(cd <checkout> && python3 .jig/jig.py queue
 --full -- ./.jig/scripts/check.sh --full)`, output to `<out>`, timed. It waits for a slot and for
-any other complete check; jig holds the slot and never chooses what runs. When the suite makes repos, in any throwaway repo set both variables on every jig command, not by one `export`: an agent's shell may not keep it to the next command. Point them at a folder `<dir>` beside the repo, not inside its working tree, so jig's files never show as untracked there: `JIG_CONFIG=<dir>/repos.json XDG_CONFIG_HOME=<dir>/config python3 .jig/jig.py …`. That keeps the user's own jig config untouched.
+any other complete check; jig holds the slot and never chooses what runs. When the suite makes repos, in any throwaway repo set both variables on every jig command, not by one `export`: an agent's shell may not keep it to the next command. Point them at a folder `<dir>` beside the repo, not inside its working tree, so jig's files never show as untracked there: `JIG_CONFIG=<dir>/repos.json XDG_CONFIG_HOME=<dir>/config python3 .jig/jig.py …`. That keeps the owner's own jig config untouched.
 
 It outlasts your shell's foreground limit: start it in the background with its output to the
 file, and act on its exit notice. Where the shell gives no notice, start it with

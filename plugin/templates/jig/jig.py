@@ -6572,7 +6572,7 @@ def entries_at(rev: str, cwd: str | None = None) -> str:
 
 
 def status_parts(status: str, prefix: str) -> tuple[str, str, str, list[str]] | None:
-    """(status, who, date, superseded ids) from `Accepted (Dave, 2026-11-10). Supersedes D-007.`
+    """(status, who, date, superseded ids) from `Accepted (the owner, 2026-11-10). Supersedes D-007.`
     Who is any text before the last date, as a register row's note was: `Proposed (runtime team,
     from the 2026-10-27 research, 2026-10-27).` So every row the old M2 took converts to a line
     this one takes."""
@@ -8573,7 +8573,7 @@ def with_header(text: str, header: str) -> str:
 
 
 def repos_file() -> Path:
-    """The user's list of where their repos live. A path is one machine's layout, so it lives
+    """The owner's list of where their repos live. A path is one machine's layout, so it lives
     here, never in a repo; no hook or gate reads it."""
     if os.environ.get("JIG_CONFIG"):
         return Path(os.environ["JIG_CONFIG"]).expanduser()
@@ -8862,7 +8862,7 @@ def read_json(f: Path) -> dict:
 
 def cmd_designer(args) -> int:
     """Make the calling session the designer for one repo: its folder outside every repo, the
-    pointer to it on the repo's entry in the user's list, and the facts the list and folders
+    pointer to it on the repo's entry in the owner's list, and the facts the list and folders
     give. How a designer works is its skill's; this prints only what config and files say."""
     repos = load_repos()
     found = repo_matches(args.repo)
@@ -11177,7 +11177,7 @@ def resolve_register(root: Path, path: Path, dest: str, change: str, body: str, 
             and not l.lstrip().startswith(("|---", "| Id", "#", "<!--"))]
     if rest:
         die(f"{len(rest)} line{'s' if len(rest) > 1 else ''} in {path.name} aren't decision "
-            "rows: apply them with the user, delete them from the staged file, then resolve "
+            "rows: apply them with the owner, delete them from the staged file, then resolve "
             "again", 1)
     if not rows:
         die(f"no decision rows in {path.name}", 1)
@@ -11326,7 +11326,7 @@ AFTER = re.compile(r"\s*\(after(?:\s+([^()]*))?\)\s*$")
 
 # `(needed by App alpha/pairing)` on a scope, or a line of its own in a phase: the waits on
 # it this section confirms. Another product's `(after …)` it doesn't confirm is flagged for the
-# owner, never blocking (the owner, 2026-11-21: "flag when they dont so the user can rule on it").
+# owner, never blocking: the owner, 2026-11-21, asked jig to flag them for the owner to rule on.
 NEEDED = re.compile(r"\s*\(needed by(?:\s+([^()]*))?\)\s*$")
 
 
@@ -14043,7 +14043,7 @@ def added_lines(trunk: str, staged: bool, files: list[str]) -> list[tuple[str, i
     so a moved page's old lines aren't new, and a line counts as added only while the file's
     diff adds its text more times than it removes it, so a line moved within a file isn't new
     either: a line diff shows every move as a delete plus an add. The prefixes are fixed,
-    whatever the user's diff settings."""
+    whatever the owner's diff settings."""
     # Both sides of every rename are in the pathspec, or git can't see the rename.
     gone = [f for f in changed_paths(trunk, staged, removed=True) if f.endswith(".md") and f not in files]
     diff = git_raw("-c", "core.quotePath=false", "diff", "-M", "-U0", "--no-ext-diff", "--no-color",

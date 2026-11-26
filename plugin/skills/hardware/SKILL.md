@@ -1,12 +1,12 @@
 ---
 name: hardware
-description: Spec a board from a hardware definition the user supplies, as its own page under docs/, in a folder named for the board once it holds files, check it against the code, and install the skills the page lists. Use when a board is ready to spec, when a handoff's fold-in asks for a board page, or when asked to install hardware skills.
+description: Spec a board from a hardware definition the owner supplies, as its own page under docs/, in a folder named for the board once it holds files, check it against the code, and install the skills the page lists. Use when a board is ready to spec, when a handoff's fold-in asks for a board page, or when asked to install hardware skills.
 ---
 
 A standalone tool; the page it writes is the spec role's work, at its settings (`jig roles`).
 
 A board page records what a board is, so the code can be checked against it. It is written
-from a hardware definition the user gives you, never from the code alone: a page copied from
+from a hardware definition the owner gives you, never from the code alone: a page copied from
 the code always matches it, and the check at the gate would catch nothing.
 
 ## Spec a board
@@ -30,13 +30,13 @@ the code always matches it, and the check at the gate would catch nothing.
    `<home><board>.md` appears below, it is that path; it moves into its folder with a
    `git mv` in the change that saves its first file. Its `boards` and `docmap` keys stay as
    they are: either form names the page:
-   - **The definition.** A file the user wrote is saved to `<home>`. A vendor's (a dev
+   - **The definition.** A file the owner wrote is saved to `<home>`. A vendor's (a dev
      board's spec sheet, a reference manual) is saved to `<home>datasheets/`, with its source
      URL beside the link, in either `reference_files` mode: a board is not a part of itself.
      The lead's `Defined from:` links the file and gives the first 12 hex of its sha256
      (`sha256sum`, or `shasum -a 256`). Pasted: `pasted <date>`. A URL: the URL and a commit
      or hash, since the page behind it changes.
-   - **Each datasheet** the user gives, or the checks lean on, is saved to
+   - **Each datasheet** the owner gives, or the checks lean on, is saved to
      `<home>datasheets/`, named for the part in lowercase with dashes. One another page
      already uses moves (`git mv`) to the `datasheets/` of the nearest folder both pages sit
      under: the system's for two subsystems of one system, `docs/datasheets/` for two

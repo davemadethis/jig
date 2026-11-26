@@ -31,11 +31,11 @@ repos list (`jig repos` prints where), which `jig staging` lists too.
 **Target, kind, status.** The target is the repo that owns the subject: the one that builds it,
 or in a set, the metarepo for a product, definition or contract the set shares (`.jig/RULES.md`,
 What the metarepo holds). Never the repo just because the chat runs there: when the owner isn't
-this repo, ask the user one question naming the candidate. Pick the kind by what the content is,
+this repo, ask the owner one question naming the candidate. Pick the kind by what the content is,
 not by what's nearest: a spec is a task the target will build; a doc is a page in the target's
 shape; a decision entry says `Accepted (who, date).` only for what that person accepted in this
 chat, else `Proposed` or `Open`. Material that is none of these is no file for the nearest kind:
-ask the user where it lives.
+ask the owner where it lives.
 
 **Whose words.** Where the owner asked for something, the file quotes the owner exactly, with
 the date: `The owner, <YYYY-MM-DD>: "<exact words>"`. Everything else is plain information,
@@ -46,8 +46,8 @@ The file goes into the target's `.jig/staging/`, found with `jig repos`, which r
 `~/.config/jig/`. Draft it first and write it there only after the Second reader (A batch): one
 file is a batch of one. Request access to each folder you need with the host's folder-access tool (in
 the Claude desktop app, `request_directory`): `~/.config/jig/` first if you can't read it, then
-exactly `<repo>/.jig/staging/`. If the host has no such tool, ask the user to add the folder to
-the session. Never stop at "no access": the folder is the user's to grant. If the repo has no
+exactly `<repo>/.jig/staging/`. If the host has no such tool, ask the owner to add the folder to
+the session. Never stop at "no access": the folder is the owner's to grant. If the repo has no
 `.jig/staging/` yet, there is nothing to grant: say so and suggest `/jig:update` in that repo;
 don't create the folder. Say `new` or `update`, and make `destination` as precise as you can,
 never an absolute path.
@@ -99,9 +99,9 @@ that spec carries the mark.
   any repo and names each bad header: an unknown kind, a missing key, a destination outside the
   target, a target `jig repos` doesn't list, an `after` naming no file in the batch, a cycle. Fix
   each, run it again, and say the batch is staged only once it passes. A warning that the target
-  has a near-identical name beside it doesn't fail the check: confirm with the user that the
+  has a near-identical name beside it doesn't fail the check: confirm with the owner that the
   target is the repo they mean. Nor does a warning on each Accepted decision entry: confirm with
-  the user that they accepted it; one they didn't becomes `Proposed`.
+  the owner that they accepted it; one they didn't becomes `Proposed`.
 - **Roles.** Leave a spec's `## Roles` empty: you can't run `jig roles` against the
   target's config, and `resolve` fills it.
 - **A sweep** that skips work the target already has must read its `.jig/specs/`,
@@ -117,19 +117,19 @@ names: resolve them in that order. A file whose `after` names one no longer stag
 resolve: that file was resolved, dropped or forwarded. A cycle is listed as one: show the
 user, and fix one header's `after:` with them. A new spec whose `## Roles` (or an older `## Workflow`) is
 empty or missing resolves with `jig roles`' lines in it, or is refused while
-`jig roles` refuses. Before a file's route, read it and ask the user two questions: does this
+`jig roles` refuses. Before a file's route, read it and ask the owner two questions: does this
 repo own the subject, and is it as settled as it says? A file whose `source:` ends
 `unreviewed` was staged with no reader, or against a record that wasn't verbatim: say so when
 you ask the second. Not this repo's: change `target` with
-the user, and `resolve` forwards it. Not settled: back to `Proposed` or `Open`, with the user,
-before `resolve`. The user says; don't judge alone. A note in the file that asks what the
+the owner, and `resolve` forwards it. Not settled: back to `Proposed` or `Open`, with the owner,
+before `resolve`. The owner says; don't judge alone. A note in the file that asks what the
 owner's quoted words state is answered by them, and one that asks a fact about the repo is
 settled by reading the repo: neither goes to the owner (`/jig:decision-cards`, Is it open?).
-For each file, with the user:
+For each file, with the owner:
 
 - **spec / doc, new**: `jig staging resolve <file>` writes it, with its source.
 - **spec / doc, update**: find the page — the path, else search for the filename, else ask
-  from the description. Merge the content in with the user, add the line
+  from the description. Merge the content in with the owner, add the line
   `Source: <source> (staged as <file name>)` as provenance, then `resolve`. A root rules file
   (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`) is loaded on every turn, so the line never goes in
   it: commit the edit with the line in the message (on trunk, or in a job merged to trunk),
@@ -138,7 +138,7 @@ For each file, with the user:
   body is entries, each `### D-?<slug> <title>` with its status line under it (`.jig/RULES.md`,
   Decision log). `resolve` adds an open or proposed one as an idea in `.jig/ideas.md` and an
   accepted one under `## Unreleased`. Lines before the first entry (doc edits listed with them) are refused:
-  apply those with the user, delete them from the staged file, resolve again. An `update`
+  apply those with the owner, delete them from the staged file, resolve again. An `update`
   changes an idea in `.jig/ideas.md` in place, or supersedes an accepted one with a new accepted
   entry that removes it in the same commit; write it, then `resolve`. The entry is the change's line, so M3 needs no other.
 - **roadmap**: `destination: .jig/roadmap.json`, `change: update`; the body says what to add,
