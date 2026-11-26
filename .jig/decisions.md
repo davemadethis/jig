@@ -7,6 +7,8 @@ A breaking change is one that a reader taking the release must act on: a `**Brea
 
 ## Unreleased
 
+## v0.17.0 - 2026-11-26
+
 ### Added
 - `jig docmap <page or path>…` queries the docs tree's map: a page's globs and whether it is a board or an approved deep subsystem, or the pages covering a file.
 - `jig roadmap --json [filters] [--id <id>…]` prints only the roadmap records asked for, each with its key and derived state: an agent asks jig rather than reading the file.
