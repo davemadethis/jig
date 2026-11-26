@@ -4,11 +4,14 @@ Source: Dave (owner), 2026-11-26, in jig's hubnode session, answering the proces
 
 Source: Dave (owner), 2026-11-26, in jig's hubnode session, after `jig open fixes-0.17.1` ignored a `Kept separate from jig-0.17.0-upgrade:` line, on the hubnode's explanation that `Path(name).stem` cuts a bare dotted name at its last dot: "why does it drop it, should we fix that too?", then "yep add it"
 
+Source: Dave (owner), 2026-11-26, in jig's hubnode session, on the work role's note that update's `Owner:` to `Repo:` rewrite is not skipped in a metarepo, where M4 would refuse the glossary on trunk: "I think it'd be best to do it through the job anyway"
+
 Kept separate from .jig/specs/jig-0.17.0-upgrade.md: 0.17.1 ships first, and the upgrade then runs on it (owner, 2026-11-26: "make that one fix, release 0.17.1, then I'll run jig update here").
 
 ## Intent
-Each fix 0.17.1 ships is a labelled group below: the glossary's title, and a spec named with
-dots matching itself wherever a spec names another.
+Each fix 0.17.1 ships is a labelled group below: the glossary's title, a spec named with dots
+matching itself wherever a spec names another, and a metarepo's `Owner:` rewrite going
+through a job.
 
 ## Done when
 From the glossary's title:
@@ -44,6 +47,18 @@ From a spec named with dots:
 - [ ] `python3 .jig/jig.py queue -- .jig/scripts/check.sh` and the smoke sections that cover
   consolidate, `Build after` and rig pass.
 
+From a metarepo's `Owner:` rewrite:
+- [ ] First, reproduced or not: in a throwaway metarepo on 0.17.0 whose glossary carries
+  `Owner:` lines, the 0.17.1 update's `--apply` on trunk and its commit. The handoff says what
+  happened, and the fix below is built only if the commit is refused or the rewrite lands on
+  trunk outside a job.
+- [ ] In a metarepo, `jig update` lists the `Owner:` rewrite as a job's (M4), as it does the
+  title, and `--apply` on trunk writes nothing to the glossary; `jig update --apply` in the
+  job's worktree makes it (smoke). Outside a metarepo it runs on trunk as in 0.17.0 (smoke,
+  unchanged).
+- [ ] The update skill's glossary paragraph says the rewrite is a job's in a metarepo.
+- [ ] `.jig/decisions.md` Unreleased has a Fixed line.
+
 ## Out of scope
 - Any other change to the glossary's form.
 - Renaming the specs or branches jig builds from a spec's name (`spec.stem` for a file jig
@@ -51,7 +66,8 @@ From a spec named with dots:
 
 ## Touches
 - `plugin/templates/jig/jig.py` (`glossary_problems`, `glossary_seed`, the glossary insertion
-  and re-sort, the update step; `kept_separate`, `built_after`, rig's overlap check)
+  and re-sort, the update step; `kept_separate`, `built_after`, rig's overlap check;
+  `rewrite_owners` and its update step)
 - `plugin/templates/jig/rules/rules-docs.md`, `plugin/skills/update/SKILL.md`
 - `plugin/templates/jig/templates/glossary-term.md`, `glossary-product.md` (if they show the file's top)
 - `docs/records.md`, `docs/commands.md`
