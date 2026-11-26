@@ -91,7 +91,7 @@ a rename changes both of its paths: R3–R5, P1, P2 and P4 count each.
 
 - **R1** The trunk checkout stays on trunk. Work in `.git/jig/worktrees/<branch>`.
 - **R2** A job is built in its own worktree. Off trunk, a branch on no job is refused while
-  jobs are open, except a `propose/` branch in a metarepo (`rules-pararepo.md`, Pararepo, rule 1).
+  jobs are open, except a `propose/` branch in a metarepo (`rules-metarepo.md`, Metarepo, rule 1).
 - **R3** A job changes only its `owns`, its `shares`, `common`, or files new to the repo, and
   adds to `.jig/decisions.md` (`rules-decisions.md`, Decision log), whatever its lists say. There it changes in place
   only a line it added itself, and removes an entry only in adding the accepted one that

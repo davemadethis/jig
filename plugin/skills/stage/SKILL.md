@@ -115,7 +115,7 @@ that spec carries the mark.
 `python3 .jig/jig.py staging` lists what's there, each file after the ones its `after:`
 names: resolve them in that order. A file whose `after` names one no longer staged is free to
 resolve: that file was resolved, dropped or forwarded. A cycle is listed as one: show the
-user, and fix one header's `after:` with them. A new spec whose `## Roles` (or an older `## Workflow`) is
+owner, and fix one header's `after:` with them. A new spec whose `## Roles` (or an older `## Workflow`) is
 empty or missing resolves with `jig roles`' lines in it, or is refused while
 `jig roles` refuses. Before a file's route, read it and ask the owner two questions: does this
 repo own the subject, and is it as settled as it says? A file whose `source:` ends

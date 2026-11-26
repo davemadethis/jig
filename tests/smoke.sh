@@ -2669,6 +2669,30 @@ msg="ledger names: AGENTS.md's line citing a ledger by its old name names it low
 expect_pass sh -c "grep -q 'ledgers/deferred.md' AGENTS.md && ! grep -q 'ledgers/DEFERRED.md' AGENTS.md"
 msg="templates: update writes a missing template back and removes one of a kind the repo isn't (a buffer outside a pararepo), and its commit passes"
 expect_pass sh -c "cmp -s .jig/templates/page.md '$P/jig/templates/page.md' && test ! -e .jig/templates/buffer.md && git commit -qm 'jig update' && $UP | grep -qx 'up to date'"
+msg="rulesets: survey reports each ruleset over 200 lines, rules-decisions.md among them, and refuses nothing"
+out=$($J survey 2>&1); rc=$?
+expect_pass sh -c "echo \"\$0\" | sed -n '/^Rulesets over 200 lines/,/^\$/p' | grep -qE '^  .jig/rules/rules-decisions.md +[0-9]+ lines' && ! echo \"\$0\" | sed -n '/^Rulesets over 200 lines/,/^\$/p' | grep -q 'rules-inbox.md'" "$out"
+msg="rulesets: update cites rules-release.md in the log header and the rulesets in staging's and inbox's .gitignore, where jig wrote the old file, and is then up to date"
+python3 - <<'PY'
+import sys; sys.path.insert(0, '.jig'); import jig
+p = '.jig/decisions.md'; s = open(p).read(); open(p, 'w').write(s.replace(jig.LOG_HEAD, jig.RULES_MD_LOG_HEAD, 1))
+for f, (old, new) in jig.OLD_IGNORE_LINES.items():
+    s = open(f).read(); open(f, 'w').write(s.replace(new, old, 1))
+PY
+git add -A && git -c core.hooksPath=/dev/null commit -qm "an older jig's citations"
+$UP --apply >/dev/null 2>&1
+expect_pass sh -c "grep -q 'rules/rules-release.md' .jig/decisions.md && ! grep -q 'RULES.md' .jig/decisions.md .jig/staging/.gitignore .jig/inbox/.gitignore && git commit -qm 'jig update' && $UP | grep -qx 'up to date'"
+RM_="$T/rules-meta"; pcnew "$RM_" && git add -A && git commit -qm init && $J init --meta --name rmeta >/dev/null 2>&1 && git add -A && git commit -qm meta-init && $J release >/dev/null 2>&1
+msg="rulesets: init --meta writes rules-metarepo.md and no rules-pararepo.md"
+expect_pass sh -c "test -f .jig/rules/rules-metarepo.md && test ! -e .jig/rules/rules-pararepo.md && test -f .jig/rules/rules-jobs.md"
+RP_="$T/rules-para"; pcnew "$RP_" && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
+$J init --para rmeta --location "$RM_" >/dev/null 2>&1 && git add -A && git commit -qm para-init >/dev/null 2>&1
+msg="rulesets: a plain init then init --para writes rules-pararepo.md and no rules-metarepo.md"
+expect_pass sh -c "test -f .jig/rules/rules-pararepo.md && test ! -e .jig/rules/rules-metarepo.md"
+msg="rulesets: update removes a ruleset of a kind the repo isn't (a metarepo's, in a pararepo), and its commit passes"
+cp "$P/jig/rules/rules-metarepo.md" .jig/rules/ && git add -A && git -c core.hooksPath=/dev/null commit -qm "a stray ruleset"
+$UP --apply >/dev/null 2>&1
+expect_pass sh -c "test ! -e .jig/rules/rules-metarepo.md && test -f .jig/rules/rules-pararepo.md && git commit -qm 'jig update' && $UP | grep -qx 'up to date'"
 }
 
 # ---------------------------------------------------------------- hardware reference files

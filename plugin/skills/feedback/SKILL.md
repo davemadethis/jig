@@ -42,7 +42,7 @@ Then:
    access to each folder you need with the host's folder-access tool (in the Claude desktop app,
    `request_directory`), `~/.config/jig/` first if you can't read it; if the host has none, ask
    the owner to add the folder to the session. Never stop at "no access": the folder is the
-   user's to grant. If it is registered, write the file into `<its path>/.jig/staging/`
+   owner's to grant. If it is registered, write the file into `<its path>/.jig/staging/`
    (request exactly that folder; if it has no `.jig/staging/` yet, say so and suggest
    `/jig:update` in that repo, and don't create it). If not, write it into the `feedback/`
    folder beside your repos list (`jig repos` prints where; `~/.config/jig/feedback/` by

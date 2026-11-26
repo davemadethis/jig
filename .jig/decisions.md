@@ -25,7 +25,7 @@ A breaking change is one that a reader taking the release must act on: a `**Brea
 - **Breaking:** the hook refuses a spec carrying a `Later:` line in its header. `jig update --apply` deletes the line from each spec on trunk and names it; each id it named is already on the roadmap. Handoff notes keep theirs, as history nothing reads.
 - The glossary takes one form: `# Basic terms`, then a product per `#` heading with `Repo:` (the repo that builds it, or `none`) and `Kind:` (`software` or `hardware`), a feature per `##`, a term per `###`, a term in a metarepo's glossary perhaps carrying `Binds:`. A term's controlling repo is its product's `Repo:`. The hook refuses a commit adding a form problem, `jig merge` re-sorts the glossary in the merge commit, `jig init` seeds it with `Basic terms` and the repo's software product, and `jig move-in` writes the moved product's `Repo:` and `Kind:`.
 - **Breaking:** a glossary's table rows are no longer terms: a label, a `§` pointer or a Touches term naming one is refused until it is a heading. `Owner:` lines aren't read: `jig update --apply` rewrites each as `Repo:` and `Kind: software` (two products naming one repo get `Repo:` and no `Kind:`, for the owner to mark), and reports a glossary out of the form for the owner to rebuild.
-- The rigger, the chat session that designs a product outside its repo, is the designer: `/jig:designer` and `jig designer <repo>`, and RULES' § Designers. `/jig:rig` and `jig rig` are unchanged.
+- The rigger, the chat session that designs a product outside its repo, is the designer: `/jig:designer` and `jig designer <repo>`, and `rules-inbox.md` § Designers. `/jig:rig` and `jig rig` are unchanged.
 - **Breaking:** `/jig:rigger` and `jig rigger` are gone: run `/jig:designer` and `jig designer <repo>`. The per-machine repos list's `rigger` key is read as `designer`, and the next save writes it as `designer`: a tool reading the key reads `designer`.
 - The ledgers are `.jig/ledgers/deferred.md`, `workarounds.md` and `buffer.md`; `/jig:spec` copies `.jig/templates/spec.md`, and the page template is `.jig/templates/page.md`.
 - **Breaking:** the ledgers' capital names and `.jig/docs-page.md` are gone. `jig update --apply` renames each ledger with `git mv`, rewrites the deferred ledger's header cell `Lane / handoff` as `Job / handoff` (no row changes) and the agent instructions' lines citing a ledger's old name, and moves the page template. A tool citing the old names reads the new ones. A spec template of the repo's own stays where it is, named by update when it differs from jig's.
@@ -37,6 +37,10 @@ A breaking change is one that a reader taking the release must act on: a `**Brea
 - `ROADMAP.md`, the generated view, with `jig roadmap --view` and `--write`: no command writes it, and `jig update --apply` removes one jig generated. A repo's own `ROADMAP.md` is left alone.
 - `Later:` on specs: the gate's later lines under "Closes with the spec at merge:" (it keeps the spec's `## Out of scope` lines), the merge carrying the line to the note, and rig's Left for later with its `--json` `later` key.
 - `Owner:` on glossary terms, and `this repo` as its value: a product's `Repo:` names its repo.
+- `.jig/RULES.md`, and its command list: `.jig/rules/` holds the rules, and `jig -h` lists the commands.
+- `jig rigger` and `/jig:rigger`: `jig designer` and `/jig:designer`.
+- `.jig/docs-page.md`: the page template is `.jig/templates/page.md`.
+- The ledgers' capital names `DEFERRED.md`, `WORKAROUNDS.md` and `BUFFER.md`: `deferred.md`, `workarounds.md`, `buffer.md`.
 
 ## v0.16.0 - 2026-11-24
 

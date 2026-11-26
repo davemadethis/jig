@@ -78,7 +78,7 @@ Then:
    `pip install -r`; each `package-lock.json`, `pnpm-lock.yaml` or `yarn.lock` → that tool's
    install in its directory; `.gitmodules` → `git submodule update --init --recursive`; a
    gitignored `.env` in the main checkout → the copy line. Install, never link, unless the
-   user asks: a linked environment hides an undeclared dependency from the gate.
+   owner asks: a linked environment hides an undeclared dependency from the gate.
    Leave `.jig/scripts/release.sh` as the template: in a plain repo the first `jig release` refuses until
    it is filled, and `/jig:release` fills it with the owner then. A metarepo or pararepo releases
    with jig's defaults. Leave `.jig/scripts/publish.sh` as the template too: until its TODO line

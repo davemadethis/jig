@@ -7395,8 +7395,9 @@ def outside_open_deleted(old: str, new: str) -> bool:
     where its open entries change in place: elsewhere the log only grows,
     but for an entry NEW supersedes, which it removes, and an entry's Touches line, which may
     change. The swap of the old versioning header for the new one, word for word, is no rewrite."""
-    if OLD_LOG_HEAD in old and OLD_LOG_HEAD not in new and LOG_HEAD in new:
-        old = old.replace(OLD_LOG_HEAD, LOG_HEAD, 1)
+    for was in (OLD_LOG_HEAD, RULES_MD_LOG_HEAD):
+        if was in old and was not in new and LOG_HEAD in new:
+            old = old.replace(was, LOG_HEAD, 1)
     old, bare = removed_entries(old, new)
     if bare:
         return True
@@ -15022,9 +15023,33 @@ def swap_log_head(root: Path, here: Path) -> None:
     if (root / META).exists():
         return
     text = read_raw(root / LOG)
-    if OLD_LOG_HEAD in log_head(root):
-        write_raw(root / LOG, text.replace(OLD_LOG_HEAD, LOG_HEAD, 1))
-        git("add", "--", LOG, check=True)
+    for was in (OLD_LOG_HEAD, RULES_MD_LOG_HEAD):
+        if was in log_head(root):
+            write_raw(root / LOG, text.replace(was, LOG_HEAD, 1))
+            git("add", "--", LOG, check=True)
+            return
+
+
+# The first line of the .gitignore jig wrote in staging/ and inbox/, as it read before the
+# rulebook became rulesets: rewritten where it is jig's text, word for word.
+OLD_IGNORE_LINES = {
+    f"{DIR}/staging/.gitignore": ("# Staged files are never committed: see Staging in .jig/RULES.md.",
+                                  "# Staged files are never committed: see .jig/rules/rules-staging.md."),
+    f"{DIR}/inbox/.gitignore": ("# Messages are never committed: see Inbox in .jig/RULES.md.",
+                                "# Messages are never committed: see .jig/rules/rules-inbox.md."),
+}
+
+
+def old_ignore_lines(root: Path) -> list[str]:
+    return [f for f, (old, _) in OLD_IGNORE_LINES.items()
+            if (root / f).is_file() and old in read_raw(root / f).splitlines()]
+
+
+def rewrite_ignore_lines(root: Path, here: Path) -> None:
+    for f in old_ignore_lines(root):
+        old, new = OLD_IGNORE_LINES[f]
+        write_raw(root / f, read_raw(root / f).replace(old, new, 1))
+        git("add", "--", f, check=True, cwd=str(root))
 
 
 def up_next_heading(text: str) -> bool:
@@ -15482,11 +15507,18 @@ STEPS: list = [
                    + (f"; in a metarepo a job's (M4): open one sharing {LOG} and make that swap there, "
                       "word for word, since trunk takes it only by merge" if (root / META).exists() else ""))
      if OLD_LOG_HEAD in log_head(root) else
+     (f"cite {DIR}/rules/rules-release.md in {LOG}'s header, where it cites the rulebook's old file"
+      + (f"; in a metarepo a job's (M4): open one sharing {LOG} and make that swap there, word for word"
+         if (root / META).exists() else ""))
+     if RULES_MD_LOG_HEAD in log_head(root) else
      (f"{LOG}'s header still names Semantic Versioning, in words of its own: edit it by hand to "
       "say what `.jig/rules/rules-release.md` § Versioning says" + (", in a job (M4)" if (root / META).exists() else "")
       + "; nothing is rewritten"),
-     lambda root, after: (root / LOG).is_file() and "Semantic Versioning" in log_head(root),
+     lambda root, after: (root / LOG).is_file() and ("Semantic Versioning" in log_head(root)
+                                                     or RULES_MD_LOG_HEAD in log_head(root)),
      swap_log_head),
+    (f"cite the rulesets in the .gitignore jig wrote in {DIR}/staging/ and {DIR}/inbox/, where it "
+     f"names the rulebook's old file", lambda root, after: bool(old_ignore_lines(root)), rewrite_ignore_lines),
     (f"add {LOG}, the decision log: no CHANGELOG.md or register here to merge into it",
      lambda root, after: LOG not in after and not (root / LOG).exists() and not log_sources(root),
      lambda root, here: ((root / LOG).write_text(LOG_SEED), git("add", "--", LOG))),
