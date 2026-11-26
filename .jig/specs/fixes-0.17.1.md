@@ -63,7 +63,7 @@ From a spec named with dots:
   owner: "the glossary's first h1 *should* be \"Glossary\" and this is a gap in 0.17.0".
   [seen: the owner's words above]
 - `# Glossary` as a title with the rest one level down (`## Basic terms`, `##` products):
-  rejected, since it would change every product, feature and term's level in every repo. [assumed]
+  rejected, since it would change every product, feature and term's level in every repo. [seen: rules-docs.md, the glossary's form: a product per `#` heading]
 - Write spec names by path in Kept and Build after lines, as a rule: rejected, because the rules
   promise a path, a file name and a bare name are one spec, and the bare form is what people
   write [seen: `kept_separate`'s docstring, and the existing Kept lines on trunk].
