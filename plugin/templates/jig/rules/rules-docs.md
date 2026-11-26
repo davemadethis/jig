@@ -305,28 +305,30 @@ move, within their parent, and no word changes; one already in order stays byte 
 `Repo:` and `Kind:`) and its controlling repo, and `jig glossary add` writes one in its sorted
 place, refusing a duplicate. `jig update --apply` adds `# Glossary` above `# Basic terms` in a
 glossary whose first heading that is, changing no other line, once trunk's committed checker takes
-the title: the run installing it says the heading waits, and the next adds it. In a metarepo it is
-listed as a job's (M4). `jig update --apply` also rewrites each `Owner: <repo>` line (`this repo`
-as the repo's own name) as `Repo: <repo>` and `Kind: software`; where two products name one repo,
-it writes `Repo:` on both, `Kind:` on neither, and says the owner marks one `software` and the
-other `hardware`. It reports a glossary out of the form, and re-forms nothing: its rebuild is the
-owner's. The glossary is no system's page: it is not in `docmap`, covers no files, and the page
-contract doesn't apply to it. No other glossary is a home: survey and update list a `## Glossary`
-section of the root `README.md`, or a root `GLOSSARY.md`, with `docs/glossary.md` as where it
-goes, and survey names each term in the glossary written as a bold word opening a paragraph
-(`**term** — …`) rather than a heading. `jig update --apply --glossary`, on the owner's yes, moves
-it under `# Basic terms`, below the title (left out while trunk's committed checker is older than
-it, for a later `jig update --apply` to add): a README's `### <term>` stays `### <term>`, a
-GLOSSARY.md's `## <term>` becomes `### <term>`, a bold-paragraph term gets an `###` heading, and a
-table moves as the table, listed with what else the one form refuses, for the session to rebuild
-before committing; the old section or file removed, and in the same change every pointer to the
-old home rewritten (`README.md § <term>` to `docs/glossary.md § <term>`, a pointer to the section
-itself and `GLOSSARY.md` to `docs/glossary.md`). The dry run lists each line it rewrites; each
-pointer it can't (a section naming no term, prose naming the README), and each line the hook would
-refuse in the move's commit (a term's text naming a root document), which it leaves for the
-session to edit before committing; and each pointer in history, left as written: fenced code, a
-handoff, a released section of the decision log or of a root `CHANGELOG.md`. A README
-`## Glossary` section holding no term, only a link to `docs/glossary.md`, is no glossary.
+the title: the run installing it says the heading waits, and the next adds it.
+`jig update --apply` also rewrites each `Owner: <repo>` line (`this repo` as the repo's own name)
+as `Repo: <repo>` and `Kind: software`; where two products name one repo, it writes `Repo:` on
+both, `Kind:` on neither, and says the owner marks one `software` and the other `hardware`. In a
+metarepo both changes are a job's (M4): update on trunk lists them, and `jig update --apply` in
+the job's worktree makes them and nothing else. It reports a glossary out of the form, and
+re-forms nothing: its rebuild is the owner's. The glossary is no system's page: it is not in
+`docmap`, covers no files, and the page contract doesn't apply to it. No other glossary is a home:
+survey and update list a `## Glossary` section of the root `README.md`, or a root `GLOSSARY.md`,
+with `docs/glossary.md` as where it goes, and survey names each term in the glossary written as a
+bold word opening a paragraph (`**term** — …`) rather than a heading.
+`jig update --apply --glossary`, on the owner's yes, moves it under `# Basic terms`, below the
+title (left out while trunk's committed checker is older than it, for a later `jig update --apply`
+to add): a README's `### <term>` stays `### <term>`, a GLOSSARY.md's `## <term>` becomes
+`### <term>`, a bold-paragraph term gets an `###` heading, and a table moves as the table, listed
+with what else the one form refuses, for the session to rebuild before committing; the old section
+or file removed, and in the same change every pointer to the old home rewritten
+(`README.md § <term>` to `docs/glossary.md § <term>`, a pointer to the section itself and
+`GLOSSARY.md` to `docs/glossary.md`). The dry run lists each line it rewrites; each pointer it
+can't (a section naming no term, prose naming the README), and each line the hook would refuse in
+the move's commit (a term's text naming a root document), which it leaves for the session to edit
+before committing; and each pointer in history, left as written: fenced code, a handoff, a
+released section of the decision log or of a root `CHANGELOG.md`. A README `## Glossary` section
+holding no term, only a link to `docs/glossary.md`, is no glossary.
 
 `jig survey` also reads each page at home under `docs/`, board pages included, against the
 contract above, and names a page in the old Now, Rules and Checks shape (convert it: fold

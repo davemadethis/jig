@@ -12422,10 +12422,23 @@ msg="glossary title: run again it adds the heading, the file's line endings kept
 $UP --apply >/dev/null 2>&1
 expect_pass sh -c "printf '# Glossary\r\n\r\n# Basic terms\r\n\r\n### mote\r\n' | cmp -s - docs/glossary.md && git commit -qm 'jig update: title'"
 GM="$T/gform-meta"; pcnew "$GM" && git add -A && git commit -qm init && $J init --meta >/dev/null && git add -A && git commit -qm "meta-init" \
-  && printf '# Basic terms\n\n### mote\n\nA speck.\n' > docs/glossary.md && git add -A && nohook "GLOSSARY: as 0.17.0 wrote it"
-msg="glossary title: in a metarepo, update lists the heading as a job's (M4), and --apply writes nothing to the glossary"
+  && printf '# Basic terms\n\n### mote\n\nA speck.\n\n# app\n\nOwner: `pa`.\n\nThe app.\n' > docs/glossary.md && git add -A && nohook "GLOSSARY: as an older jig wrote it"
+msg="glossary job: in a metarepo, update lists the Owner: rewrite and the title as a job's (M4)"
 out=$($UP 2>&1); $UP --apply >/dev/null 2>&1
-expect_pass sh -c "echo \"\$0\" | grep -q 'docs/glossary.md lacks its .# Glossary. heading: in a metarepo a job.s (M4)' && ! echo \"\$0\" | grep -q 'add the .# Glossary. heading' && test -z \"\$(git status --porcelain)\" && test \"\$(head -1 docs/glossary.md)\" = '# Basic terms'" "$out"
+expect_pass sh -c "echo \"\$0\" | grep -q 'docs/glossary.md.s .Owner:. lines: their rewrite is in a metarepo a job.s (M4).*app → Repo: pa' && echo \"\$0\" | grep -q 'docs/glossary.md lacks its .# Glossary. heading: in a metarepo a job.s (M4)' && ! echo \"\$0\" | grep -q '^  rewrite each' && ! echo \"\$0\" | grep -q '^  add the .# Glossary. heading'" "$out"
+msg="glossary job: and --apply on trunk writes nothing to the glossary"
+expect_pass sh -c "test -z \"\$(git status --porcelain)\" && grep -qx 'Owner: \`pa\`.' docs/glossary.md && test \"\$(head -1 docs/glossary.md)\" = '# Basic terms'"
+mkdir -p .jig/specs && printf '# gj\n\nSource: smoke\n\n## Intent\nx\n' > .jig/specs/gj.md && git add -A && git commit -qm "GLOSSARY: spec gj"
+$J open GJ --spec .jig/specs/gj.md --shares docs/glossary.md .jig/decisions.md >/dev/null && git add -A && git commit -qm "GLOSSARY: open GJ"
+cd .git/jig/worktrees/GJ
+msg="glossary job: in the job's worktree, a dry run names both and changes nothing"
+out=$($UP 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q '^  rewrite each .Owner:. line' && echo \"\$0\" | grep -q '^  add the .# Glossary. heading' && test -z \"\$(git status --porcelain)\"" "$out"
+msg="glossary job: update --apply there makes both and nothing else, and the job's commit passes the hook"
+out=$($UP --apply 2>&1); rc=$?
+c1() { test $rc = 0 && test "$(git diff --cached --name-only)" = docs/glossary.md && test "$(cat docs/glossary.md)" = "$(printf '# Glossary\n\n# Basic terms\n\n### mote\n\nA speck.\n\n# app\n\nRepo: pa\nKind: software\n\nThe app.')" \
+  && ulog '- GLOSSARY: the title, and Owner: as Repo:' && git add -A && git commit -qm "GLOSSARY: title and Repo:" || { echo "$out"; false; }; }
+expect_pass c1
 cd "$GF"
 msg="glossary form: jig decision --page prints each entry whose Touches: names the page or a term on it"
 ulog "$(printf '### D-?pg Pages\nAccepted (owner, 2026-11-25).\nTouches: docs/glossary.md § mote\n\nMotes are small.')" && ulog "$(printf '### D-?other Other\nAccepted (owner, 2026-11-25).\nTouches: none — smoke\n\nNot here.')" && git add -A && git commit -qm "log: two entries" >/dev/null 2>&1

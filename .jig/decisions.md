@@ -12,6 +12,7 @@ A breaking change is one that a reader taking the release must act on: a `**Brea
 
 ### Fixed
 - A spec named with dots matches itself by its bare name: a `Kept separate from` or `Build after` line naming `app-1.2-fixes` now means that spec, in `jig open`, `jig consolidate` and rig, as its path and file name already did.
+- In a metarepo, `jig update` no longer rewrites the glossary's `Owner:` lines on trunk, where M4 refuses the commit: it lists the rewrite as a job's, and `jig update --apply` in that job's worktree makes it, with the title where that is lacking.
 
 ## v0.17.0 - 2026-11-26
 

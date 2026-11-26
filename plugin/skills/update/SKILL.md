@@ -184,13 +184,15 @@ The **glossary's** one form is the `# Glossary` title, then `# Basic terms`, the
 `#` with its `Repo:` and `Kind:` lines, a feature per `##` and a term per `###`.
 `jig update --apply` adds the title to a glossary whose first heading is `# Basic terms`, changing
 no other line. The hook runs trunk's checker, so the run installing the new one only says the
-heading waits: commit it, then run `jig update --apply` again. In a metarepo the line is a job's
-(M4): open one sharing `docs/glossary.md` and the decision log, add `# Glossary` and a blank line
-above `# Basic terms` with its changelog line, and merge it. `jig update --apply` also rewrites
+heading waits: commit it, then run `jig update --apply` again. `jig update --apply` also rewrites
 each `Owner:` line as `Repo:` and `Kind: software`; where two products name one repo, it leaves
 `Kind:` off both, so ask the owner which is the software and which the hardware, and write those
-lines. A glossary out of the form is reported and never re-formed: rebuilding it is the owner's
-call, a change of its own.
+lines. In a metarepo both changes, the title and the `Owner:` rewrite, are a job's (M4): trunk's
+run lists them and writes neither. Once that update is committed, open a job sharing
+`docs/glossary.md` and the decision log, run `jig update --apply` in its worktree, which makes
+them and nothing else, and commit with a changelog line, the subject starting `GLOSSARY:`. A
+glossary out of the form is reported and never re-formed: rebuilding it is the owner's call, a
+change of its own.
 
 A **glossary** in the README's `## Glossary` section, or in a root `GLOSSARY.md`: its home is
 `docs/glossary.md`, since pages cite its terms and docs point only at docs. Show the owner

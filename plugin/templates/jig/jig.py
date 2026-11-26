@@ -15376,6 +15376,43 @@ def add_glossary_title(root: Path, here: Path) -> None:
     git("add", "--", GLOSSARY, check=True, cwd=str(root))
 
 
+TITLE_STEP = (f"add the `# {GLOSSARY_TITLE}` heading to {GLOSSARY}, above `# {BASIC_TERMS}`: the glossary form's "
+              "first heading; no other line changes")
+# How trunk's update lists a metarepo's glossary change, which M4 keeps off trunk.
+GLOSSARY_BY_JOB = (f"in a metarepo a job's (M4). Once this update is committed, open one sharing {GLOSSARY} and "
+                   f"{LOG}, run `jig update --apply` in its worktree, and merge it with its changelog line")
+
+
+def glossary_job_steps(root: Path) -> list[tuple]:
+    """(label, action) for each glossary change `jig update` makes in a metarepo job's worktree,
+    where M4 puts them; none anywhere else."""
+    if not ((root / META).is_file() and (root / CONFIG).is_file()
+            and Board.load(root).job_for_branch(git("branch", "--show-current"))[0]):
+        return []
+    steps = [(owner_step_label(root), rewrite_owners)] if owner_rewrites(root) else []
+    if lacks_glossary_title(root) and knows_glossary_title(root):
+        steps.append((TITLE_STEP, add_glossary_title))
+    return steps
+
+
+def cmd_glossary_job(root: Path, steps: list, apply: bool) -> int:
+    """`jig update` in a metarepo job's worktree: the glossary's STEPS and nothing else, since the
+    rest of an update is trunk's, which refuses to run while a job is open."""
+    print("This metarepo job's glossary changes (M4):")
+    for label, _ in steps:
+        print(f"  {label}")
+    if not apply:
+        print("\nDry run: nothing changed. Run again with --apply.")
+        return 0
+    if git("status", "--porcelain", "--untracked-files=no"):
+        die("commit or stash tracked changes first: update edits files by name", 2)
+    for _, act in steps:
+        act(root, Path(__file__).resolve().parent)
+    print(f"\nStaged {GLOSSARY}, nothing committed: commit it here, its subject starting `GLOSSARY:`, "
+          f"with a line under ## Unreleased in {LOG}.")
+    return 0
+
+
 def glossary_out_of_form(root: Path) -> list[str]:
     """The problems ROOT's glossary has in the one form once update's rewrite and title are made:
     reported, never re-formed, since its rebuild is the owner's."""
@@ -15526,9 +15563,12 @@ STEPS: list = [
      + ". Commit this update, which installs the checker that reads it, then run "
      "`jig update --apply` again to convert",
      lambda root, after: (root / OLD_ROADMAP).is_file() and not knows_roadmap_json(root), lambda root, here: None),
-    (owner_step_label, lambda root, after: bool(owner_rewrites(root)), rewrite_owners),
-    (f"add the `# {GLOSSARY_TITLE}` heading to {GLOSSARY}, above `# {BASIC_TERMS}`: the glossary form's "
-     "first heading; no other line changes",
+    (owner_step_label, lambda root, after: bool(owner_rewrites(root)) and not (root / META).exists(),
+     rewrite_owners),
+    (lambda root: f"{GLOSSARY}'s `Owner:` lines: their rewrite is {GLOSSARY_BY_JOB}. It will "
+     + owner_step_label(root),
+     lambda root, after: bool(owner_rewrites(root)) and (root / META).exists(), lambda root, here: None),
+    (TITLE_STEP,
      lambda root, after: lacks_glossary_title(root) and not (root / META).exists() and knows_glossary_title(root),
      add_glossary_title),
     (lambda root: f"{GLOSSARY} waits for its `# {GLOSSARY_TITLE}` heading: "
@@ -15538,10 +15578,7 @@ STEPS: list = [
      "`jig update --apply` again to add it",
      lambda root, after: lacks_glossary_title(root) and not (root / META).exists()
      and not knows_glossary_title(root), lambda root, here: None),
-    # A metarepo's pages change only in a job (M4), and update refuses while one is open.
-    (f"{GLOSSARY} lacks its `# {GLOSSARY_TITLE}` heading: in a metarepo a job's (M4). Once this update is "
-     f"committed, open one sharing {GLOSSARY} and {LOG}, add `# {GLOSSARY_TITLE}` and a blank line above "
-     f"`# {BASIC_TERMS}`, with its changelog line, and merge it",
+    (f"{GLOSSARY} lacks its `# {GLOSSARY_TITLE}` heading: {GLOSSARY_BY_JOB}",
      lambda root, after: lacks_glossary_title(root) and (root / META).exists(), lambda root, here: None),
     (lambda root: "delete the `Later:` line from " + ", ".join(
         f"{f} ({named})" for f, named in later_lines(root))
@@ -16589,6 +16626,8 @@ def cmd_update(root: Path, args) -> int:
         return cmd_fold_ideas(root, args.apply)
     if getattr(args, "glossary", False):
         return cmd_glossary(root, args.apply)
+    if steps := glossary_job_steps(root):
+        return cmd_glossary_job(root, steps, args.apply)
     here = Path(__file__).resolve().parent
     files = tracked(root)
     board_row = next(olds for new, olds in LAYOUT if new == CONFIG)
