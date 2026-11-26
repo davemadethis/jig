@@ -2,10 +2,12 @@
 
 Source: <who asked or reported, when; for a bug, the symptom in their words>
 <!-- A line of its own here, `Scope: <phase>/<scope>, …`, naming the roadmap ids this task
-     takes (`No phase/<id>` for an item). No id taken: no line. -->
-<!-- A line of its own here, `Later: <id>, …`, naming the roadmap ids this task leaves for
-     later work, each already on trunk's roadmap (a roadmap change on the owner's yes puts a
-     new one there). Nothing left for later: no line. -->
+     takes (`No phase/<id>` for an item). No id taken: no line. A spec takes only what it
+     builds: a scope it builds only part of is split first, by a roadmap change on the owner's
+     yes, and the spec takes the new scope holding the built part
+     whole, in its own words if it likes. The rest stays in the
+     original scope, under its id, its text unchanged, and a wait on that id holds until the
+     rest is built. -->
 
 ## Intent
 One or two sentences. What should be true when this is done that isn't true now.
@@ -15,8 +17,10 @@ One or two sentences. What should be true when this is done that isn't true now.
 - [ ] observable check 2
 
 ## Out of scope
-<!-- Work nothing will do, or work another named spec, job or repo does, each with why. Work
-     left for later is a `Later:` id, never a line here: this section closes with the spec. -->
+<!-- Work nothing will do, or work another named spec, job or repo does, each with why. Out of
+     scope never defers: this section closes with the spec. Work worth building later goes
+     onto the roadmap as a scope or No phase item on the owner's word, and stays there,
+     unspecced, until a spec takes it. -->
 - what this task deliberately does not touch
 
 ## Touches

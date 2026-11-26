@@ -3,6 +3,7 @@ name: review
 description: The review role - an adversarial fresh-context review of a job's diff (review-work) or of what changed since its last review (review-change), recorded with its blocking findings. Use when `jig next` names review-work or review-change, or working alone after the checks pass, before the handoff note.
 ---
 
+Read `.jig/rules/rules-handoff.md`, `rules-docs.md` and `rules-decisions.md` first, and in a metarepo or a pararepo its `rules-metarepo.md` or `rules-pararepo.md`.
 Your settings are the review role's (`jig roles`). Your steps are review-work, the job's whole
 diff once per handoff, and review-change, only what changed since the last recorded review
 after a fix or a hand-resolved sync. Always a fresh context: never the session that built it.
@@ -46,9 +47,13 @@ Its job is to find the reason this change is wrong. Its questions:
 
 1. Does every "done when" item have evidence? Name it, or it isn't done. Does "done when"
    cover the symptom in the spec's `Source:` line? A fix spec whose "done when" doesn't, and whose
-   `Out of scope` doesn't say why, is blocking. So is an `Out of scope` line that leaves work for
-   later, in any wording ("later", "a follow-up", "once this lands"), with no `Later:` id naming
-   it: that line closes with the spec, and the work with it.
+   `Out of scope` doesn't say why, is blocking. Out of scope never defers: a deferral written as prose is blocking, in
+   any wording ("later", "a follow-up", "once this lands"), whether in `Out of scope`, another
+   section of the spec, or the handoff note. That prose closes with the spec or sits in a note
+   nothing reads, and the work with it; work worth building later goes onto the roadmap
+   as a scope or No phase item on the owner's word. So is a spec taking a scope it builds only
+   part of: a spec takes only what it builds, and a roadmap change on the owner's yes splits the
+   scope first.
 2. Did anything change outside "touches" / "out of scope"?
 3. Is there a sibling path that does the same job differently now? Asymmetry is a finding.
 4. If this is a fix: is `Alternatives considered` filled, and is each rejection reason
@@ -82,12 +87,12 @@ Its job is to find the reason this change is wrong. Its questions:
 9. For each decision entry and each page change the diff adds, ask: is this about the product, about when and in what order we build it, or about how the
    repository is worked? A page line about how the repo is worked (its commands, code style,
    review, jig's `.jig/` files, build, CI or release steps, not what the product does with them)
-   is blocking: it goes to its home by the test in `.jig/RULES.md` (Homes), often `.jig/process.md`. An entry or a page
+   is blocking: it goes to its home by the test in `.jig/rules/rules-docs.md` (Homes), often `.jig/process.md`. An entry or a page
    line that is the project (a priority order, a delivery queue, a phase, build status, "not
-   built yet", parked work) is blocking: it goes to `.jig/roadmap.md` (`## No phase` for work
+   built yet", parked work) is blocking: it goes to `.jig/roadmap.json` (No phase for work
    with no phase yet, parked mid-build naming its pages or not started), and the
    page or entry keeps only what the product does today
-   (`.jig/RULES.md`, Documentation, Product and project). Judge by what it says, never by a
+   (`.jig/rules/rules-docs.md`, Documentation, Product and project). Judge by what it says, never by a
    heading or a word: a `## Status` section describing a status call, or a motor's three
    phases, is the product. "Demo priorities: A, then B" is the
    roadmap's, never an entry. The hook catches paths and scope ids; prose is yours to catch.
@@ -98,7 +103,7 @@ Rerun no check the builder's report shows for the same commit: the author ran it
 the output, and the check role runs the complete check. Run only the narrowest check a specific finding needs (one smoke section, one command),
 through the queue (`jig queue -- <command>`), and say which one and why.
 
-A reviewer that runs jig to test a finding does it in a throwaway repo. There, set both variables on every jig command, not by one `export`: an agent's shell may not keep it to the next command. Point them at a folder `<dir>` beside the repo, not inside its working tree, so jig's files never show as untracked there: `JIG_CONFIG=<dir>/repos.json XDG_CONFIG_HOME=<dir>/config python3 .jig/jig.py …`. That keeps the user's own jig config untouched.
+A reviewer that runs jig to test a finding does it in a throwaway repo. There, set both variables on every jig command, not by one `export`: an agent's shell may not keep it to the next command. Point them at a folder `<dir>` beside the repo, not inside its working tree, so jig's files never show as untracked there: `JIG_CONFIG=<dir>/repos.json XDG_CONFIG_HOME=<dir>/config python3 .jig/jig.py …`. That keeps the owner's own jig config untouched.
 
 ## Review-change
 
@@ -126,9 +131,9 @@ because the reviewer suggested them.
 ## Then
 
 Blocking findings go to the work session as a fix (Fix in `jig flows`); one round of
-should-fix is enough, and a review with no blocking findings ends the fixing (`.jig/RULES.md`,
-Contracts, and the hubnode skill say what follows). Every should-fix or optional finding the
-work session doesn't take gets a row in `.jig/ledgers/DEFERRED.md` there. A job's third
+should-fix is enough, and a review with no blocking findings ends the fixing (`.jig/rules/rules-workflow.md`,
+Workflow, and the hubnode skill say what follows). Every should-fix or optional finding the
+work session doesn't take gets a row in `.jig/ledgers/deferred.md` there. A job's third
 blocking review, counting its first review-work, starts Bug: `jig reviewed` refuses the next
 until the bug role's spec for the job, with `Bug-for: <job>`, is committed. Bug runs only then, or when the owner calls it.
 

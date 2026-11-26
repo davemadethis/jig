@@ -1,0 +1,35 @@
+{
+  "products": ["Widget", "Gadget"],
+  "phases": [
+    {
+      "product": "Widget",
+      "name": "alpha",
+      "scopes": [
+        {"id": "a1", "text": "screen", "labels": ["ui"]},
+        {"id": "a2", "text": "radio", "labels": ["net"], "needed_by": ["Gadget alpha/g1"]},
+        {"id": "a3", "text": "menu", "labels": ["ui"]},
+        {"id": "a4", "text": "settings", "after": ["Widget alpha/a1"]}
+      ]
+    },
+    {
+      "product": "Widget",
+      "name": "beta",
+      "after": ["Widget alpha"],
+      "scopes": [
+        {"id": "b1", "text": "pairing"},
+        {"id": "b2", "text": "sync", "after": ["Widget beta/b1"]}
+      ]
+    },
+    {
+      "product": "Gadget",
+      "name": "alpha",
+      "scopes": [
+        {"id": "g1", "text": "dock", "after": ["Widget alpha/a2"]}
+      ]
+    }
+  ],
+  "no_phase": [
+    {"id": "pay", "text": "payments", "product": "Widget"},
+    {"id": "case", "text": "a case", "product": "Gadget"}
+  ]
+}

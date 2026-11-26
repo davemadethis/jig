@@ -2,7 +2,7 @@
 
 TODO: one paragraph, what this board is and why the product uses it. Defined from: TODO (a link to the definition and the first 12 hex of its sha256: in this page's folder when the repo wrote it, in datasheets/ when it is a vendor's spec sheet; or "pasted YYYY-MM-DD"; a URL needs a commit or a hash too, since the page behind it changes).
 
-<!-- jig's board template, on the page contract (.jig/RULES.md, Documentation). Filled from a
+<!-- jig's board template, on the page contract (.jig/rules/rules-docs.md, Documentation). Filled from a
      hardware definition, then checked against the code; the code alone can't say what the
      board is. Before code for this board passes the gate, this page matches it. Stale wiring
      info is worse than none. -->

@@ -41,7 +41,7 @@ yourself. Each one changes the repo, tags a release, writes your repo list, spea
 - `/jig:repos` lists, adds, renames or aliases the repos jig knows by name. **Owner-only.**
 - `/jig:relay <repo> <text>` marks pasted text as that repo's hubnode talking, in another chat, and a reply is owed. **Owner-only.**
 - `/jig:send` shows the reply for you to edit and send, then drops it in the repo's [inbox](glossary.md#inbox). **Owner-only.**
-- `/jig:rigger <repo>` makes this chat the repo's [rigger](glossary.md#rigger). **Owner-only.**
+- `/jig:designer <repo>` makes this chat the repo's [designer](glossary.md#designer). **Owner-only.**
 
 ## Release and feedback
 
@@ -53,7 +53,7 @@ yourself. Each one changes the repo, tags a release, writes your repo list, spea
 
 Setting up and checking:
 
-- `python3 .jig/jig.py init` writes the board, the decision log and the roadmap's empty structure, and installs the hooks. A pararepo gets no roadmap: it plans from its metarepo's.
+- `python3 .jig/jig.py init` writes the board, the decision log, the glossary (`# Basic terms` and the repo's software product) and the roadmap's empty structure, and installs the hooks. A pararepo gets no roadmap: it plans from its metarepo's.
 - `python3 .jig/jig.py install-hooks` rewrites the hooks.
 - `python3 .jig/jig.py rules` runs the rules here, as the hook does.
 - `python3 .jig/jig.py survey` inventories the repo against the jig shape.
@@ -83,12 +83,14 @@ Jobs, for anyone:
 - `python3 .jig/jig.py handoff` writes the handoff note.
 - `python3 .jig/jig.py queue -- <command>` runs a test or check in one of the machine's slots, so parallel jobs don't fight for cores.
 - `python3 .jig/jig.py reading-list <files>` lists the pages to read before touching those files, and the ideas still open on them.
+- `python3 .jig/jig.py docmap <page or path>` queries `.jig/docmap.json`: a page's globs and whether it is a board or a deep subsystem, or the pages covering a file.
 - `python3 .jig/jig.py ideas [--label <term>]` lists the ideas still to research, with their labels. In a metarepo it lists its pararepos' too.
 
 Records:
 
-- `python3 .jig/jig.py decision <id>` prints a decision and what it replaced.
-- `python3 .jig/jig.py roadmap` prints the [roadmap](glossary.md#roadmap)'s states, each phase with its type (Prototype, Pilot or Production). `--product`, `--phase`, `--type`, `--state`, `--owner` and `--label` narrow what it prints, each repeatable, and `--view` prints that part as the view's Markdown. `--write` regenerates the whole view, and takes no filter. Run in the trunk checkout on a trunk with no roadmap, it commits the roadmap's empty structure first, as the other commands that read the roadmap do.
+- `python3 .jig/jig.py decision <id>` prints a decision and what it replaced. `--page <page>` prints each decision whose `Touches:` names the page, or a term on it.
+- `python3 .jig/jig.py glossary "<term>"` prints a glossary term: where it sits (product, feature), its definition, its fields and the repo that controls it. `glossary add "<term>" --text <t> [--under <product>[/<feature>]]` writes a term in its sorted place, and `--repo <repo|none> --kind <software|hardware>` writes a product. The glossary is one form: `# Basic terms`, then a product per `#` with its `Repo:` and `Kind:` lines, a feature per `##`, a term per `###`. `jig merge` re-sorts it.
+- `python3 .jig/jig.py roadmap` prints the [roadmap](glossary.md#roadmap)'s states, each phase with its type (Prototype, Pilot or Production). `--product`, `--phase`, `--type`, `--state`, `--owner` and `--label` narrow what it prints, each repeatable. `jig roadmap show` prints what they choose as a chart with no dates, each scope one column past what it waits on, one band per phase past 100 columns (`--width`). `--json` prints the records they choose as JSON, each with its key and state, and `--id <id>` only the phase, scope or item named. `--draft` and `--edit` change it: a JSON draft, checked and written. Run in the trunk checkout on a trunk with no roadmap, it commits the roadmap's empty structure first, as the other commands that read the roadmap do.
   `--label <term>` keeps the scopes and items carrying that [label](glossary.md#label), across every product,
   headed by the term's owner.
 - `python3 .jig/jig.py roadmap --draft` writes the roadmap this repo plans from to a draft outside the tree, and
@@ -103,7 +105,7 @@ Records:
 Across repos:
 
 - `python3 .jig/jig.py repos` lists, or adds to, where your repos live.
-- `python3 .jig/jig.py rigger <repo>` sets up a rigger's folder for a repo.
+- `python3 .jig/jig.py designer <repo>` sets up a designer's folder for a repo.
 - `python3 .jig/jig.py propose <spec> <slug>` opens a proposal branch on the [metarepo](glossary.md#metarepo).
 - `python3 .jig/jig.py move-in --product <Name>` moves a pararepo's [roadmap](glossary.md#roadmap) into its metarepo's. It shows each step and its state. `--apply` does the next one.
 - `python3 .jig/jig.py move <what> --to <repo>` moves a decision entry, a page or a section to another repo of its family, both ends. It shows each step and its state. `--apply` does the next one.

@@ -1,6 +1,6 @@
 ---
 name: release
-description: Release this repo with jig release - its own build and version bump from .jig/scripts/release.sh, then a vX.Y.Z tag, then what .jig/scripts/publish.sh sends out. Defines the release protocol with the user the first time. Use on "/jig:release", "cut a release", or "ship a version".
+description: Release this repo with jig release - its own build and version bump from .jig/scripts/release.sh, then a vX.Y.Z tag, then what .jig/scripts/publish.sh sends out. Defines the release protocol with the owner the first time. Use on "/jig:release", "cut a release", or "ship a version".
 disable-model-invocation: true
 ---
 
@@ -18,7 +18,7 @@ python3 .jig/jig.py release            # --feature, --milestone, or --version X.
 
 The release renames `## Unreleased` in `.jig/decisions.md` to `## vX.Y.Z - <date>` and adds an
 empty one above it. Before it runs, read Unreleased with the owner. Propose the level as
-`.jig/RULES.md` § Versioning says: the highest level of any change in Unreleased, with a
+`.jig/rules/rules-release.md` § Versioning says: the highest level of any change in Unreleased, with a
 one-line reason. A `**Breaking:**` line tells readers what to do and doesn't raise the level.
 The owner's yes releases it. In a
 metarepo, report the line the release prints for each pararepo: a pin-bump request staged
@@ -37,7 +37,7 @@ is "nothing", delete the line and leave no steps. Commit it before the release.
 
 ## When it refuses
 
-- **"the release protocol isn't defined"**: fill it with the user, commit, and run it again.
+- **"the release protocol isn't defined"**: fill it with the owner, commit, and run it again.
   - Ask what a release of this repo ships (a package, an installer per platform, a plugin
     file, a tagged doc set) and how it is built today. Look for the build first:
     `package.json` scripts, `electron-builder`, `Cargo.toml`, `pyproject.toml`, a `Makefile`,
@@ -48,12 +48,12 @@ is "nothing", delete the line and leave no steps. Commit it before the release.
     the TODO line goes.
   - Set `release.artifacts` in `.jig/config.json` to globs that match what the build
     produces, one per kind of file: `["dist/*.dmg", "dist/*.exe"]`.
-  - Run `release.sh` once by hand with a throwaway version if the user agrees, then put the
+  - Run `release.sh` once by hand with a throwaway version if the owner agrees, then put the
     tracked files back with `git checkout -- .`.
   - In a metarepo, the release needs no steps. jig validates history, writes the log's
     heading and tags.
 - **files staged**: list them. Resolving them (`/jig:stage`) is the usual answer. `--force`
-  releases anyway and names them in the release commit; use it only when the user says so.
+  releases anyway and names them in the release commit; use it only when the owner says so.
 - **no v\* tag yet**: ask for the first version and pass `--version X.Y.Z` (or `--feature`
   for 0.1.0).
 - **merges owe the batch's check** (`Check: batch`): jobs merged on one complete check of the
@@ -61,9 +61,9 @@ is "nothing", delete the line and leave no steps. Commit it before the release.
   detached worktree of trunk's tip, then `jig checked --tier N --effort N --seconds S` there
   (`/jig:check`); then run the release again. When it fails, `jig checked --trace "<failing
   command>"` there prints the bisect that names the merge.
-  `--force` releases anyway; use it only when the user says so.
+  `--force` releases anyway; use it only when the owner says so.
 - **a step failed**: tracked files are back as they were, and nothing is tagged. Show the
-  output, fix the cause with the user, run it again.
+  output, fix the cause with the owner, run it again.
 
 ## In a pararepo
 
@@ -71,10 +71,10 @@ Steps and artifacts are optional: with `release.sh` untouched and none named, ji
 are the release. It refuses when the metarepo can't be reached (`jig repos add meta` in its
 checkout), when the pin in `.jig/para.json` isn't one of its releases (set a released tag, then
 `jig init --para`), on a stale or hand-edited `AGENTS.md` header (P1: `jig init --para`, then
-commit), a tracked `.jig/meta-cache/` (P3), or a malformed `BUFFER.md` row (P2). A newer
+commit), a tracked `.jig/meta-cache/` (P3), or a malformed `buffer.md` row (P2). A newer
 metarepo release is reported, not refused.
 
-Before the build, the release puts every `Open` row of `.jig/ledgers/BUFFER.md`, but a move-in
+Before the build, the release puts every `Open` row of `.jig/ledgers/buffer.md`, but a move-in
 row (`jig move-in`'s), into one metarepo proposal: a `propose/<repo>-buffer-vX.Y.Z` branch there, and a spec here listing the
 rows, committed with the release. With no open row it just releases. After the release,
 the change is written on that branch by the metarepo's own process; `jig sync` on trunk closes the
@@ -86,5 +86,5 @@ Report the tag, the artifacts, and what `publish.sh` printed. The owner's word f
 covers the publish: don't ask again. A test clone with no remote stays exempt from that word.
 
 If `publish.sh` failed, the release still happened and the tag stays. Show its output, fix the
-cause with the user, and run the command jig printed. With the TODO line still there, jig
+cause with the owner, and run the command jig printed. With the TODO line still there, jig
 printed `Push it: git push --follow-tags` instead: the publish isn't decided, so ask.

@@ -1,6 +1,6 @@
 # Process
 
-How this repository is worked, wherever no other home takes it (`.jig/RULES.md`, Homes): one section per topic, read when its topic comes up, never a description of the product.
+How this repository is worked, wherever no other home takes it (`.jig/rules/rules-docs.md`, Homes): one section per topic, read when its topic comes up, never a description of the product.
 
 ## Code style
 

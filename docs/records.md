@@ -11,7 +11,7 @@ releases.
 Agents read one instructions file at the root on every task, and a long one gets ignored
 wholesale. jig keeps it under 40 lines: what the project is, its commands, and the rules every
 task needs. Everything else loads only when a task calls for it. The rulebook,
-`.jig/RULES.md`, holds every rule the hooks enforce.
+`.jig/rules/`, one ruleset a file, holds every rule the hooks enforce.
 
 ## Pages
 
@@ -27,14 +27,18 @@ Every page keeps the [page contract](glossary.md#page-contract):
 
 A page stays a single file until it has something else to hold, like a datasheet or a
 subsystem's page. Only then does it get a folder. Your own words live in `docs/glossary.md`,
-one heading per term, so any page can point at one.
+one heading per term, so any page can point at one. It takes one form: `# Basic terms` first, then
+each product as a `#` heading with a `Repo:` line (the repo that builds it, or `none`) and a
+`Kind:` line (`software` or `hardware`), each feature as a `##` under its product, and each term
+as a `###`. A term belongs to the repo its product's `Repo:` names. The hook refuses a change
+that breaks the form, `jig merge` keeps it sorted, and `jig glossary` reads and adds terms.
 
 Docs point only at docs. The root files may point into `docs/`, but a page never points back
 out. A page also never names a plan, a [phase](glossary.md#phase) or a [handoff](glossary.md#handoff). The hook refuses those lines.
 
 ## Docs move with code
 
-The [board](glossary.md#board)'s `docmap` maps each page to the source files it covers. A handoff has to answer for
+`.jig/docmap.json`'s `docmap` maps each page to the source files it covers. A handoff has to answer for
 every page its change touched: still true, or updated. `python3 .jig/jig.py reading-list <files>`
 prints which pages to read before touching those files, including the system page above each.
 
@@ -71,24 +75,27 @@ Each phase has a type, read from its name: a Greek letter (`alpha`, `beta`) is P
 types run Prototype, then Pilot, then Production, and the hook refuses a roadmap on trunk that
 puts them out of order.
 
+The roadmap is a JSON file in jig's folder, records nobody reads by hand: `jig roadmap --draft` writes
+it as a draft to edit, and `--edit` checks it and writes it. `python3 .jig/jig.py roadmap show`
+draws it as a chart, each scope in the column one past what it waits on.
 `python3 .jig/jig.py roadmap` can show part of the roadmap: `--product Widget --phase alpha` is
-what's in Widget alpha, and `--type`, `--state` and `--owner` narrow it the same way. Add
-`--view` to print that part as the view's Markdown. `ROADMAP.md` itself is always the whole
-roadmap.
+what's in Widget alpha, and `--type`, `--state` and `--owner` narrow it the same way, with or
+without `show`.
 
-Work you've named but haven't placed in a phase yet is an item under the roadmap's `## No phase`
-section. Each merge rewrites a kanban view of the roadmap at the root, which any forge renders.
+Work you've named but haven't placed in a phase yet is an item in the roadmap's `no_phase` list.
 `python3 .jig/jig.py roadmap` prints the roadmap's states.
 
-A scope or a `## No phase` item can name the features it touches as [labels](glossary.md#label),
-`(labels teleport, wallet-compatibility)`, each a term of the glossary (the metarepo's, in a
+A scope or a No phase item can name the features it touches as [labels](glossary.md#label),
+its `labels` list (`["teleport", "wallet-compatibility"]`), each a term of the glossary (the metarepo's, in a
 family). A misspelt label is refused, and a label orders nothing. `roadmap --label <term>` lists
 the work carrying one, across every product.
 
-Work a spec leaves for later goes on its `Later:` line, as roadmap ids already on the roadmap, never as
-prose that closes with the spec. The gate shows what closes with the spec, the merge keeps the
-`Later:` line on the handoff note, and `jig rig` lists each id until a spec takes it or the owner
-drops it.
+A spec takes only what it builds. Work it doesn't build stays on the roadmap, unspecced, until a
+later spec takes it. When a spec builds only part of a scope, the owner's roadmap change splits
+the scope first: the built part becomes a new scope the spec takes, and the rest stays under the
+original id, its text unchanged. `## Out of scope` never defers: it closes with the spec, so work
+worth building later goes onto the roadmap as a scope or No phase item. The gate shows what
+closes with the spec.
 
 Pages and decisions describe the product. The roadmap holds the project: what comes next, and
 in what order.

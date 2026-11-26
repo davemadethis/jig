@@ -51,7 +51,7 @@ pinned release holds it.
 
 A pararepo may work ahead of its metarepo while behavior settles. It can change what a metarepo
 claim describes, as often as testing needs. Every such difference is a row in
-`.jig/ledgers/BUFFER.md`: the claim at the pin, what the repo does now, who decided, and Open or
+`.jig/ledgers/buffer.md`: the claim at the pin, what the repo does now, who decided, and Open or
 Closed.
 
 Before its build, the pararepo's release puts every Open row into one metarepo proposal, except the
@@ -74,7 +74,7 @@ step 1 send it again.
 
 A pararepo with a [roadmap](glossary.md#roadmap) of its own can move it into the metarepo's, once, on the owner's yes.
 `python3 .jig/jig.py move-in --product <Name>` does it in two steps, one per `--apply`. First it proposes the
-pararepo's [phases](glossary.md#phase) under the product's name, with the product's glossary term when the
+pararepo's [phases](glossary.md#phase) under the product's name, with the product's glossary heading (`Repo:` and `Kind:`) when the
 metarepo has none yet, on one `propose/` branch. The metarepo's hubnode decides the name and the
 phases together when it merges that branch. Then the pararepo's roadmap leaves, with every `Scope:`
 line pointed at the metarepo's ids. After that, the metarepo holds the one roadmap for every
@@ -84,7 +84,7 @@ product it lists.
 
 `python3 .jig/jig.py roadmap --draft` writes the roadmap a repo plans from to a draft outside its
 tree, and `roadmap --edit` checks it and writes it. A pararepo may change only its own products'
-sections. Its edit lands as a `BUFFER.md` row and a commit on its open roadmap proposal in the
+sections. Its edit lands as a `buffer.md` row and a commit on its open roadmap proposal in the
 metarepo, so nothing moves on the metarepo's trunk until its owner merges it at the next sync. A
 label the metarepo's glossary lacks is left off and staged there as a new term.
 
@@ -99,7 +99,7 @@ stale. It writes nothing. `rig` prints one line pointing at it when there's some
 
 ## Design sessions
 
-A [rigger](glossary.md#rigger) is a design session for one product repo, kept outside it. It
+A [designer](glossary.md#designer) is a design session for one product repo, kept outside it. It
 keeps the owner's running record of the product and drafts what the repo will get. It reaches
-the repo only by staging files and writing to its [inbox](glossary.md#inbox). A metarepo has no rigger of its own:
-its pararepos' riggers stage to it.
+the repo only by staging files and writing to its [inbox](glossary.md#inbox). A metarepo has no designer of its own:
+its pararepos' designers stage to it.

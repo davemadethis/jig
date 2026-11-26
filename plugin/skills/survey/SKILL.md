@@ -19,17 +19,17 @@ Report the output, then say what it means in a few lines:
 
 - **Oversized always-loaded file.** Over 40 rule lines and the whole file starts getting
   ignored, so every rule in it is weakened by the ones around it. Highest-value fix. A cut line
-  goes where survey's line says (`.jig/RULES.md`, Homes): never to a page.
+  goes where survey's line says (`.jig/rules/rules-docs.md`, Homes): never to a page.
 - **No home in the taxonomy.** Each document gets one job and one home — AGENTS.md rules,
-  `docs/` what the code is now, `.jig/specs/` a task in flight, `.jig/ledgers/WORKAROUNDS.md` patches in the code,
-  `.jig/ledgers/DEFERRED.md` review findings not in it,
+  `docs/` what the code is now, `.jig/specs/` a task in flight, `.jig/ledgers/workarounds.md` patches in the code,
+  `.jig/ledgers/deferred.md` review findings not in it,
   a skill a procedure agents run, `.jig/process.md` the rest of how the repo is worked, `README.md` outsiders, git for history. Zero inbound links plus
   a stale last-commit is a document written once and never read again; git keeps it either way.
-  If a directory ships markdown as code, list it under `not_docs` in `.jig/config.json` as a glob
+  If a directory ships markdown as code, list it under `not_docs` in `.jig/docmap.json` as a glob
   such as `dir/**`. Survey names any `not_docs` glob that matches no file.
 - **Rules files, copies, pages.** Survey checks every Markdown file against the homes
-  `.jig/RULES.md` (Documentation) lists, by shape. An `AGENTS.md`, `CLAUDE.md` or `GEMINI.md` off
-  root is a second rulebook; a file with three of RULES.md's sentences is a copy that froze; a
+  `.jig/rules/rules-docs.md` (Documentation) lists, by shape. An `AGENTS.md`, `CLAUDE.md` or `GEMINI.md` off
+  root is a second rulebook; a file with three of the rulesets' sentences is a copy that froze; a
   page in the wrong folder (an Invariants section or a retired Undefined one, the old Now/Rules/Checks, or
   any file `docmap` names, whatever its format) is printed with where it goes. Each line carries its fix; `/jig:update` proposes the same ones
   with everything they touch.
@@ -54,7 +54,7 @@ Report the output, then say what it means in a few lines:
   other. `--levels` prints every page's level with its evidence (own files, maps, CODEOWNERS,
   manifests, imports); the owner approves a level, survey only proposes it.
 - **The project in the product.** A page or a decision entry says what the product does
-  today; phases, order and parked work are `.jig/roadmap.md`'s. Survey names an
+  today; phases, order and parked work are `.jig/roadmap.json`'s. Survey names an
   `## Undefined` heading on a page or an entry file, and a spec, handoff or roadmap path or a
   quoted scope id on a page or in the log, each with where it goes. It searches no words that
   may be the product's ("phase 3", `## Status`, "launch"): leave those unless the owner asks.

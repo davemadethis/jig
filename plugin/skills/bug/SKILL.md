@@ -3,6 +3,7 @@ name: bug
 description: The bug role - investigate a cause before any diff exists (whys, givens tagged seen or assumed, one layer up, workaround or correction) and end with the spec for what it found. Runs only when a workflow calls it (a job's third blocking review, a feedback group) or the owner invokes /jig:bug with a symptom.
 ---
 
+Read `.jig/rules/rules-jobs.md`, `rules-roadmap.md`, `rules-docs.md` and `rules-decisions.md` first, and in a metarepo or a pararepo its `rules-metarepo.md` or `rules-pararepo.md`.
 Your settings are the bug role's (`jig roles`). Your step is bug, and it ends with the spec
 for what you found; `jig next` decides what comes after. You run only when a workflow calls
 you (Bug, after a job's third blocking review; Feedback, once per group) or the owner types
@@ -33,12 +34,12 @@ Each Q and A under 180 characters. Symptom first, no guessing past what you've r
 
 ## 2. Givens
 Everything known about the problem. Tag each line:
-- `[seen]` — a log line, a test result, a file you read, something the user watched happen
+- `[seen]` — a log line, a test result, a file you read, something the owner watched happen
 - `[assumed]` — plausible, not observed
 
 Every `[assumed]` given the fix depends on gets converted before step 5: go read the log, run the thing, or ask one question. If it can't be converted, say so and treat it as a risk, not a fact.
 
-Reproducing in a throwaway repo? There, set both variables on every jig command, not by one `export`: an agent's shell may not keep it to the next command. Point them at a folder `<dir>` beside the repo, not inside its working tree, so jig's files never show as untracked there: `JIG_CONFIG=<dir>/repos.json XDG_CONFIG_HOME=<dir>/config python3 .jig/jig.py …`. That keeps the user's own jig config untouched.
+Reproducing in a throwaway repo? There, set both variables on every jig command, not by one `export`: an agent's shell may not keep it to the next command. Point them at a folder `<dir>` beside the repo, not inside its working tree, so jig's files never show as untracked there: `JIG_CONFIG=<dir>/repos.json XDG_CONFIG_HOME=<dir>/config python3 .jig/jig.py …`. That keeps the owner's own jig config untouched.
 
 ## 3. One layer up
 - Is there a sibling path (another mode, caller, handler) that does the same job? Does it have this problem?
@@ -50,7 +51,7 @@ Does the fix handle the symptom where it appears, or change the thing that produ
 Prefer the correction. A workaround is fine when it is the right fix — say why in one line.
 
 ## 5. Write the spec
-The spec takes the template's sections (`.jig/specs/_template.md`, as `/jig:spec` finds it), each a
+The spec takes the template's sections (`.jig/templates/spec.md`, as `/jig:spec` copies it), each a
 `## ` heading. Steps 1–4 go in as `## Why`, `## Givens`, `## One layer up` and `## Correction`
 above them, never with the spec nested under a step.
 The spec opens with `Source:` naming who reported it, when, and the symptom in their words.
@@ -61,9 +62,9 @@ Fill `## Roles` from `jig roles`, as `/jig:spec` says.
 `Done when` must include an observable that proves the fix fires. A fix that can't be observed isn't a fix.
 It also includes an observable that the symptom the report describes no longer happens. If the whys moved
 to a different cause, the spec says what happens to the original symptom: fixed too, with that
-observable, left for later as a `Later:` id on trunk's roadmap (a roadmap change on the owner's
-yes adds one), or not fixed at all, as an `Out of scope` line with its reason, so the owner sees it.
+observable, left on trunk's roadmap as a scope or No phase item, unspecced (a roadmap change on
+the owner's yes adds one), or not fixed at all, as an `Out of scope` line with its reason, so the owner sees it.
 
 If the fix is a workaround:
 - one-line code comment, ≤120 chars, starting `WORKAROUND:` — what it patches and why a patch was right
-- an entry in `.jig/ledgers/WORKAROUNDS.md` (the commit hook checks for it); the first creates the file from `${CLAUDE_PLUGIN_ROOT}/templates/ledgers/WORKAROUNDS.md`
+- an entry in `.jig/ledgers/workarounds.md` (the commit hook checks for it); the first creates the file from `.jig/templates/workarounds.md`

@@ -4,7 +4,7 @@ description: Convert a jig repo's pages - in the old Now/Rules/Checks shape, out
 disable-model-invocation: true
 ---
 
-Read `.jig/RULES.md` (Documentation) and `.jig/docs-page.md` first: they are the contract every
+Read `.jig/rules/rules-docs.md` (Documentation) and `.jig/templates/page.md` first: they are the contract every
 page lands on. `jig` below is `python3 .jig/jig.py`.
 
 An entry point: it starts Redocument (`jig flows`: spec ⇢ Jobs ⇢ Batch ⇢ Job). The hubnode
@@ -88,7 +88,7 @@ Otherwise:
    ```
 
    Those are the citations the release carrying the moves breaks: the release says so in a
-   `**Breaking:**` line, a move with no change in meaning is Polish (`.jig/RULES.md`,
+   `**Breaking:**` line, a move with no change in meaning is Polish (`.jig/rules/rules-release.md`,
    Versioning), and each pararepo citing them gets a pin-bump request. `jig sync` names each
    move and each stale citation there.
 2. **Propose it as a table** and iterate with the owner until approved:
@@ -114,8 +114,8 @@ Otherwise:
    `docs/<system>.md` or `docs/<system>/<subsystem>.md`, no deeper, flat until the page holds
    other files; one that does (subsystem pages, files it links, `datasheets/`) is
    `docs/<system>/<system>.md` or `docs/<system>/<subsystem>/<subsystem>.md`. A
-   subsystem inside a subsystem is asked of the owner with its rationale, as `.jig/RULES.md`
-   (Documentation) says, and lands as a `deep_subsystems` entry in `.jig/config.json` on trunk
+   subsystem inside a subsystem is asked of the owner with its rationale, as `.jig/rules/rules-docs.md`
+   (Documentation) says, and lands as a `deep_subsystems` entry in `.jig/docmap.json` on trunk
    on a yes. Name the cleanup route in
    the pointers branch (step 6).
 
@@ -196,7 +196,7 @@ Otherwise:
      per-job `.jig/specs/redocument-<page>.md` specs, and `.jig/specs/redocument-pointers.md`
      in a pararepo; git history keeps them, and the pointers branch is the live record until
      the pin holds it;
-   - removes every old path's `docmap` key from `.jig/config.json`, `drop` rows included, and
+   - removes every old path's `docmap` key from `.jig/docmap.json`, `drop` rows included, and
      every `findings` entry naming a path the remap moved or removed, its exceptions recorded
      again at the new page in step 2 (on trunk, by the hubnode, either route);
    - in a metarepo, rewrites `meta.json`'s `entry_files` to the new paths (`docs/<genre>/**/*.md`
@@ -226,7 +226,7 @@ Your spec carries the job's remap rows and the Sources. You write only your page
    In a metarepo there is no code, so a claim traces to its decision row or to the pararepo
    file a pointer names. A claim whose only record is the old page is kept as worded and
    flagged, never left off.
-2. **Write** the page from `.jig/docs-page.md`, to the contract: a lead paragraph, sections
+2. **Write** the page from `.jig/templates/page.md`, to the contract: a lead paragraph, sections
    named for what its code has, optional Talks to, optional Invariants. An old page's list of what it uses or serves goes under `## Talks to`, keeping only
    what crosses the system's boundary; calls inside the system are the body's or nowhere.
    Every claim of the old page, a Rules entry or a house-format section's statement, gets
@@ -236,22 +236,22 @@ Your spec carries the job's remap rows and the Sources. You write only your page
      what is seen on screen; review is no holder) → `## Invariants`,
      as `- <fact> — <why>; held by <holder>.`;
    - **a parked intent, a status or a plan** (an `## Undefined`, `## Status` or `## Roadmap`
-     section, "phase 3", a priority order) → a `## No phase` candidate in the report, naming
-     this page, added to `.jig/roadmap.md` on trunk only once the owner confirms it; never on
+     section, "phase 3", a priority order) → a No phase candidate in the report, naming
+     this page, added to `.jig/roadmap.json` on trunk only once the owner confirms it; never on
      the page, which says what the product does today;
    - **an open product question** → an idea candidate for `.jig/ideas.md`;
    - **how the repository is worked** (a reading order, commands, code style, review and
      handoff, jig and its `.jig/` files, build, CI and release steps), not what the product
-     does → off the page, to its home by the test in `.jig/RULES.md` (Homes): a rule every task
+     does → off the page, to its home by the test in `.jig/rules/rules-docs.md` (Homes): a rule every task
      needs to `AGENTS.md`, a step a script runs to `.jig/scripts/`, the rest to a section of
-     `.jig/process.md` (created from `${CLAUDE_PLUGIN_ROOT}/templates/process.md` when
+     `.jig/process.md` (created from `.jig/templates/process.md` when
      absent, and add `AGENTS.md`'s pointer line naming its trigger ("Before a release, read `.jig/process.md` § Release")), each moved on the owner's word and listed in the report;
    - **stale or unverifiable** → deleted, and listed in the report.
 
    **A cited heading** (a pararepo's spec names it) adds one thing: say where its claim landed.
    A cited claim is never deleted as stale. If tracing finds the code diverges from it, that is
    a divergence that was already there, now found, not a format change: flag it, and on the
-   owner's word it is a row in `.jig/ledgers/BUFFER.md` in your change. Pointer moves go in the
+   owner's word it is a row in `.jig/ledgers/buffer.md` in your change. Pointer moves go in the
    pointers branch; claim changes go in the buffer.
 
    Provenance lives in the report, not the page: the page is clean prose, with no rule

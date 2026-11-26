@@ -31,8 +31,7 @@ We'll walk one small job from start to finish, in a repo with a `src/app.py` and
 **1. Set up.** You run `/jig:init` in the repo. It writes a hidden `.jig/` folder (the checker,
 the rulebook, the [board](docs/glossary.md#board), an empty [roadmap](docs/glossary.md#roadmap)
 and an [ideas log](docs/glossary.md#ideas-log)) and installs the git hooks. Your root gets a
-short `AGENTS.md`, a one-line `CLAUDE.md` and `ROADMAP.md`, the roadmap's view. Commit what it
-wrote.
+short `AGENTS.md` and a one-line `CLAUDE.md`. Commit what it wrote.
 
 **2. Write the spec.** You run `/jig:spec greeting`, and describe the task. It writes
 `.jig/specs/greeting.md`: what the task is, the files it touches, and how you'll know it's done.
@@ -99,7 +98,7 @@ takes it.
 - [Hooks](docs/hooks.md): what runs, when, and why it's safe.
 - [Glossary](docs/glossary.md): every jig term, and what it isn't.
 
-After init, `.jig/RULES.md` in your repo holds every rule the hooks enforce.
+After init, the rulesets in `.jig/rules/` hold every rule the hooks enforce.
 
 **On trust.** All but one of jig's plugin hooks run only in a repo that opted in, with a marker git
 never clones. The session-start hook only reads and prints one line. [More](docs/hooks.md).

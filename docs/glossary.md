@@ -15,8 +15,9 @@ change. A job isn't a task list or a ticket. It opens on the board and closes wh
 ## Board
 
 The two files on trunk that say what's going on: `.jig/config.json` for the settings that
-rarely change, and `.jig/jobs.json` for the open jobs. Only the hubnode edits them. The board
-isn't a kanban view, and nobody ticks anything on it.
+rarely change, and `.jig/jobs.json` for the open jobs. Only the hubnode edits them, and
+`.jig/docmap.json`, the docs tree's map, the same way. The board isn't a kanban view, and
+nobody ticks anything on it.
 
 ## Owns and shares
 
@@ -108,9 +109,9 @@ decision id and can carry labels. Deciding one moves it into the decision log.
 ## Roadmap
 
 The owner's plan for a repo: its phases in order, each phase's scopes, and work named but not
-yet placed. Every stand-alone repo and metarepo keeps one, and a pararepo plans from its
-metarepo's. Progress on it is worked out from merged work, and it isn't a task tracker anyone
-ticks.
+yet placed. It is a JSON file in jig's folder, and `jig roadmap show` draws it. Every stand-alone repo
+and metarepo keeps one, and a pararepo plans from its metarepo's. Progress on it is worked out
+from merged work, and it isn't a task tracker anyone ticks.
 
 ## Phase
 
@@ -126,7 +127,7 @@ is done when every spec taking it has landed. A scope isn't a ticket, and nobody
 
 ## Label
 
-A feature a scope or a `No phase` item touches, written `(labels <term>, …)` at its end. Each
+A feature a scope or a `No phase` item touches, listed in its `labels`. Each
 label is a glossary term, matched in any case and spacing, so work can be read by feature. A
 label isn't a dependency and orders nothing.
 
@@ -150,7 +151,7 @@ share. It holds no code and copies nothing from them.
 A code, firmware or hardware repo that cites a metarepo at a released tag. It changes the
 metarepo only through a proposal branch. It isn't a fork or a submodule.
 
-## Rigger
+## Designer
 
 A design session for one product repo, kept outside it. It holds the owner's running record
 of the product and reaches the repo only through staging and the inbox. It never edits the repo.

@@ -1,16 +1,16 @@
 ---
-name: rigger
-description: Make this session the rigger for one product repo - the design session outside the repo that keeps the owner's record of the product and reaches the repo only by staging and the inbox. Use on "/jig:rigger" followed by a repo name, typed by the owner at the start of the session.
+name: designer
+description: Make this session the designer for one product repo - the design session outside the repo that keeps the owner's record of the product and reaches the repo only by staging and the inbox. Use on "/jig:designer" followed by a repo name, typed by the owner at the start of the session.
 disable-model-invocation: true
 ---
 
-A rigger is the long-running design session for one product repo, kept outside it: it reads the
+A designer is the long-running design session for one product repo, kept outside it: it reads the
 repo, talks a design through with the owner, keeps a record, and sends finished things into the
 repo. The repo's hubnode builds it. `/jig:rig` is the hubnode's command, run in the repo; it is
-not the rigger's.
+not the designer's.
 
-A repo that builds an application or product has a rigger. A metarepo has none: it is not a
-product. Its pararepos' riggers stage to it, and the owner runs it from its own hubnode; every
+A repo that builds an application or product has a designer. A metarepo has none: it is not a
+product. Its pararepos' designers stage to it, and the owner runs it from its own hubnode; every
 repo has a hubnode.
 
 ## Starting
@@ -20,14 +20,14 @@ repo has a hubnode.
 2. Run the plugin's copy, outside any repo:
 
    ```sh
-   python3 "${CLAUDE_PLUGIN_ROOT}/templates/jig/jig.py" rigger <repo> [--folder <path>]
+   python3 "${CLAUDE_PLUGIN_ROOT}/templates/jig/jig.py" designer <repo> [--folder <path>]
    ```
 
    It finds the repo by the name rule (a listed name or alias, case ignored; a near-identical
    name is refused), refuses a metarepo, makes the folder without overwriting anything, writes
-   the folder's path on the repo's entry as `rigger`, and prints the facts: the folder, every
+   the folder's path on the repo's entry as `designer`, and prints the facts: the folder, every
    repo by its listed name and which you may read, who else is staging to the repo, and whether
-   it has `.jig/staging/` and `.jig/inbox/`. The first rigger passes `--folder`, outside every
+   it has `.jig/staging/` and `.jig/inbox/`. The first designer passes `--folder`, outside every
    repo; later ones default beside it. A refusal: show it and stop.
 3. Request access to the folder it printed, then, read-only, the narrowest folder that does
    the job in each repo it marked `yours` or `reads:`.
@@ -111,7 +111,7 @@ owner edits and sends, and the sent reply is the approval.
   one file is no great matter.
 - Stage only what the owner asked for, and say a file is staged only after `staging check`
   passes (`/jig:stage`).
-- When several sessions stage to one repo, no rigger is senior: hubnodes notice a conflict, and
+- When several sessions stage to one repo, no designer is senior: hubnodes notice a conflict, and
   the owner resolves it.
 
 **Whose words.** A staged file quotes the owner exactly, with the date, where the owner asked
@@ -137,7 +137,7 @@ what.
 
 ## Feedback to jig
 
-jig is a tool for how every repo and rigger works, so a problem in one repo that could affect
+jig is a tool for how every repo and designer works, so a problem in one repo that could affect
 others can be reported, but the owner controls when: file feedback to jig (`/jig:feedback`) only
 when the owner says to. A process or tool for one repo needs a home in that repo; where jig has
 no clear home for it, that is very likely a feedback item.

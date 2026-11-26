@@ -7,6 +7,41 @@ A breaking change is one that a reader taking the release must act on: a `**Brea
 
 ## Unreleased
 
+### Added
+- `jig docmap <page or path>…` queries the docs tree's map: a page's globs and whether it is a board or an approved deep subsystem, or the pages covering a file.
+- `jig roadmap --json [filters] [--id <id>…]` prints only the roadmap records asked for, each with its key and derived state: an agent asks jig rather than reading the file.
+- `jig roadmap show [filters] [--width N]` prints the roadmap as a text chart with no dates: a box per phase as wide as its scopes, each scope in the column one past what it waits on, a box per product where there is more than one, each product's No phase items last, and one band per phase past 100 columns. The agent instructions template's Commands carry a `roadmap:` line for it, and `jig update --apply` adds that line where it is missing.
+- A `jig update --apply` step deleting a `Later:` line from each spec on trunk, naming the spec and the ids it named.
+- `jig glossary "<term>"` prints a term's heading path, definition, fields and controlling repo, and `jig glossary add` writes a term (`--under <product>[/<feature>]`, `--binds`) or a product (`--repo`, `--kind`) in its sorted place. `jig decision --page <page>` prints each decision whose `Touches:` names the page or a term on it.
+- `.jig/templates/` holds every record's template, written by `jig init` and refreshed by `jig update --apply` from jig's own copy: a page, a spec, a handoff note, the process page, a hardware page, a skill, the deferred and workarounds ledgers (and the buffer in a pararepo), a glossary term and product, and the roadmap's phase, scope and no-phase item as JSON examples, built from the one example record the commit check compares with.
+- `jig survey` reports each ruleset in `.jig/rules/` over 200 lines, refusing none.
+
+### Changed
+- The docs tree's map has its own file, `.jig/docmap.json`: `docmap`, `boards`, `deep_subsystems` and `not_docs` move there from `.jig/config.json`, which keeps only configuration. It is trunk-only like the board (R5), and the hook refuses a key jig doesn't know or a value of another shape. `jig init` writes it, and `jig update --apply` moves the four keys with their values unchanged.
+- **Breaking:** a repo's own tool or script that reads `docmap`, `boards`, `deep_subsystems` or `not_docs` from `.jig/config.json` reads `.jig/docmap.json` instead, or runs `jig docmap`.
+- The roadmap is a JSON file, `roadmap.json` in jig's folder: `products` (the glossary's product terms it includes), `phases` (each `product` where it has one, `name`, `note`, `exit` checks, `after`, `needed_by`, `scopes`) and `no_phase` items (a scope's fields plus `product`, `stopped_at`, `parked`). States and blocked stay derived, and a phase's type is still read from its name. The hook refuses a field or a type the records don't have, and a product `products` doesn't include or the glossary doesn't hold, and runs every check it ran on the Markdown roadmap. `jig roadmap --draft` writes a JSON draft, and `--edit` checks and writes it. `jig init` writes the empty roadmap, and `jig update --apply` converts the Markdown roadmap, every phase, scope, item, suffix, note and exit check with its text unchanged, once trunk's checker reads JSON; it is judged by its output, drawn in the old form again, and every line that doesn't come back where it was (prose above the first heading or among the boxes, a fence outside a note, a line the old checks refuse), or that the hook would refuse, is listed, and the conversion waits until it is moved, fixed or deleted. A text in the JSON is prose wherever it ends.
+- **Breaking:** the Markdown roadmap is gone: edit the roadmap with `jig roadmap --draft` and `--edit`, and read it with `jig roadmap` or `jig roadmap show`. A tool reading `ROADMAP.md` reads `jig roadmap show` instead.
+- A spec takes only what it builds. Work it doesn't build stays on the roadmap, unspecced; a spec building only part of a scope waits on a roadmap change, on the owner's yes, that splits it, the built part a new scope the spec takes and the rest under the original id, its text unchanged. `## Out of scope` never defers: work worth building later goes onto the roadmap as a scope or No phase item, and review blocks a deferral written as prose.
+- **Breaking:** the hook refuses a spec carrying a `Later:` line in its header. `jig update --apply` deletes the line from each spec on trunk and names it; each id it named is already on the roadmap. Handoff notes keep theirs, as history nothing reads.
+- The glossary takes one form: `# Basic terms`, then a product per `#` heading with `Repo:` (the repo that builds it, or `none`) and `Kind:` (`software` or `hardware`), a feature per `##`, a term per `###`, a term in a metarepo's glossary perhaps carrying `Binds:`. A term's controlling repo is its product's `Repo:`. The hook refuses a commit adding a form problem, `jig merge` re-sorts the glossary in the merge commit, `jig init` seeds it with `Basic terms` and the repo's software product, and `jig move-in` writes the moved product's `Repo:` and `Kind:`.
+- **Breaking:** a glossary's table rows are no longer terms: a label, a `§` pointer or a Touches term naming one is refused until it is a heading. `Owner:` lines aren't read: `jig update --apply` rewrites each as `Repo:` and `Kind: software` (two products naming one repo get `Repo:` and no `Kind:`, for the owner to mark), and reports a glossary out of the form for the owner to rebuild.
+- The rigger, the chat session that designs a product outside its repo, is the designer: `/jig:designer` and `jig designer <repo>`, and `rules-inbox.md` § Designers. `/jig:rig` and `jig rig` are unchanged.
+- **Breaking:** `/jig:rigger` and `jig rigger` are gone: run `/jig:designer` and `jig designer <repo>`. The per-machine repos list's `rigger` key is read as `designer`, and the next save writes it as `designer`: a tool reading the key reads `designer`.
+- The ledgers are `.jig/ledgers/deferred.md`, `workarounds.md` and `buffer.md`; `/jig:spec` copies `.jig/templates/spec.md`, and the page template is `.jig/templates/page.md`.
+- **Breaking:** the ledgers' capital names and `.jig/docs-page.md` are gone. `jig update --apply` renames each ledger with `git mv`, rewrites the deferred ledger's header cell `Lane / handoff` as `Job / handoff` (no row changes) and the agent instructions' lines citing a ledger's old name, and moves the page template. A tool citing the old names reads the new ones. A spec template of the repo's own stays where it is, named by update when it differs from jig's.
+- The rulebook is a folder of rulesets, `.jig/rules/rules-<ruleset>.md`: jobs, docs, handoff, workflow, roadmap, decisions, staging, release, inbox, and `rules-metarepo.md` or `rules-pararepo.md` only in a metarepo or a pararepo. Each skill and `jig open`'s kickoff name the rulesets they read.
+- **Breaking:** `.jig/RULES.md` is gone: `jig update --apply` removes it and writes `.jig/rules/`, removing a ruleset of a kind the repo no longer is. A citation of `.jig/RULES.md (<section>)` cites the ruleset holding the section now. The rulebook's command list is gone: `jig -h` and each command's `-h` say it.
+
+### Removed
+- `docmap`, `boards`, `deep_subsystems` and `not_docs` as `.jig/config.json` keys: the hook refuses a config commit adding one.
+- `ROADMAP.md`, the generated view, with `jig roadmap --view` and `--write`: no command writes it, and `jig update --apply` removes one jig generated. A repo's own `ROADMAP.md` is left alone.
+- `Later:` on specs: the gate's later lines under "Closes with the spec at merge:" (it keeps the spec's `## Out of scope` lines), the merge carrying the line to the note, and rig's Left for later with its `--json` `later` key.
+- `Owner:` on glossary terms, and `this repo` as its value: a product's `Repo:` names its repo.
+- `.jig/RULES.md`, and its command list: `.jig/rules/` holds the rules, and `jig -h` lists the commands.
+- `jig rigger` and `/jig:rigger`: `jig designer` and `/jig:designer`.
+- `.jig/docs-page.md`: the page template is `.jig/templates/page.md`.
+- The ledgers' capital names `DEFERRED.md`, `WORKAROUNDS.md` and `BUFFER.md`: `deferred.md`, `workarounds.md`, `buffer.md`.
+
 ## v0.16.0 - 2026-11-24
 
 ### Added

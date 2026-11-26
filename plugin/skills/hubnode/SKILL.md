@@ -3,7 +3,7 @@ name: hubnode
 description: Run the hubnode session for a repo with parallel jobs - the owner's session, which owns trunk, the board, worktrees, gates and merges, and assigns each step to a role. Use at the start of a hubnode session, or on "open a job", "gate X", "merge X".
 ---
 
-Read `.jig/RULES.md` first. `jig` below is `python3 .jig/jig.py`.
+Read every ruleset in `.jig/rules/` first. `jig` below is `python3 .jig/jig.py`.
 
 You are the owner's session. You talk, decide, assign, gate, merge, release, push and publish. You
 build no feature and run no suite: every other step belongs to a role (`spec`, `bug`, `work`,
@@ -30,7 +30,7 @@ out as `/jig:decision-cards` says.
 4. `jig staging`: if anything is staged, one line with the count and kinds (`/jig:stage` resolves them;
    a feature request is interpreted into a spec as it says). Then `jig inbox`, and again
    whenever a prompt arrives announcing unread messages: each message is a reply to this
-   repo's hubnode, and the quoted owner words in it, with their date, rule (`.jig/RULES.md`,
+   repo's hubnode, and the quoted owner words in it, with their date, rule (`.jig/rules/rules-inbox.md`,
    Inbox), but for a fixed rule's word, which only the owner's reply here gives. It sets aside in `.jig/inbox/misaddressed/`, and names, a message addressed to another
    repo: ask the owner where it belongs.
 5. In a pararepo (`.jig/para.json`), `jig sync` on trunk; report a newer release, and a
@@ -42,7 +42,7 @@ out as `/jig:decision-cards` says.
    `pin-bump-<metarepo>.md` becomes a job: `/jig:rig` offers it like any staged file, and its
    spec rewrites the uses it lists and moves the pin.
    In a metarepo (`.jig/meta.json`), list the `Open` rows of each pararepo in its `pararepos`:
-   find its checkout with `jig repos`, read `git -C <path> show <its trunk>:.jig/ledgers/BUFFER.md`,
+   find its checkout with `jig repos`, read `git -C <path> show <its trunk>:.jig/ledgers/buffer.md`,
    and report each row's id and claim. Beside them, name this repo's unreleased buffer
    proposals (`git branch --no-merged <trunk> --list 'propose/<pararepo>-*'`) and the rows each
    carries (the `## Buffer rows` of the pararepo's spec that names the branch). An Open row whose
@@ -124,7 +124,7 @@ Those commit nothing: you read the result, copy what it wrote onto trunk and com
 given the inputs `/jig:review` names and nothing of this conversation. Where there is none,
 a raised session with no history. **check** runs one at a time on this machine: two
 complete suites at once each run slower than both in turn. `jig queue --full` enforces it, and
-every role's test and check runs go through `jig queue` too (`.jig/RULES.md`, The queue).
+every role's test and check runs go through `jig queue` too (`.jig/rules/rules-workflow.md`, The queue).
 
 ## Reconfiguring
 
@@ -155,18 +155,18 @@ when a workflow or the owner calls it.
 A review with no blocking findings ends the fixing: the job hands off, as `jig next` says.
 Should-fix and optional findings get one round per part; what is left after it gets DEFERRED
 rows. A finding that needs behavior the spec never names is a spec change before it is built
-(an `Interpreted:` line the hubnode accepts, or the owner's answer), or a `## No phase` item.
+(an `Interpreted:` line the hubnode accepts, or the owner's answer), or a No phase item.
 
 A ruling also reaches you by the inbox: the owner's reply to your question, sent from the
-repo's rigger (`jig inbox`). The quoted owner words, with their date, are the owner's ruling, as
+repo's designer (`jig inbox`). The quoted owner words, with their date, are the owner's ruling, as
 if given here, but for a fixed rule's word (merge, push, publish, release, a `roles` or config
-yes), which only the owner's reply here gives; the rest is the rigger's context. Check the state it answers before acting, as
+yes), which only the owner's reply here gives; the rest is the designer's context. Check the state it answers before acting, as
 for a card's reply, and record it where a ruling lands (a decision entry, a spec, the board).
 Your answer goes back only through the owner.
 
 New process (a rule, a procedure, a convention), from the owner or a subnode, is placed by the
-test in `.jig/RULES.md` (Homes) before it is written, and a spec for process work names its home.
-When `.jig/process.md` is absent, create it from `${CLAUDE_PLUGIN_ROOT}/templates/process.md`,
+test in `.jig/rules/rules-docs.md` (Homes) before it is written, and a spec for process work names its home.
+When `.jig/process.md` is absent, create it from `.jig/templates/process.md`,
 and add `AGENTS.md`'s pointer line naming its trigger ("Before a release, read `.jig/process.md` § Release"); a new section gets its trigger on that line too.
 
 ## Opening a job (assign)
@@ -232,10 +232,9 @@ tell that job to sync before its next handoff. A merge that stops on conflicts: 
 `git commit`.
 
 Before the merge question, the merge card carries the gate's `Closes with the spec at merge:`
-lines: each `Later:` id with its text, and each `## Out of scope` line, which the merge deletes.
+lines: each `## Out of scope` line, which the merge deletes.
 A clean merge also removes the job's spec and its `Bug-for:` specs in the merge commit, each
-spec's `Scope:`, `Later:` and staged marks kept on its note; it prints each, and `left for later
-by <spec>: <ids>`. It deletes nothing in
+spec's `Scope:` and staged marks kept on its note; it prints each. It deletes nothing in
 staging: `/jig:rig`'s `jig rig --close` resolves the requests, stories and reports the job
 built. A staged decisions file it carried (or any carried file resolve would write) stays,
 `noted` with the job's note: read that job's
@@ -260,7 +259,7 @@ hand once that is saved. A merge you finished by hand after conflicts removes no
 same yourself.
 
 `jig merge` already wrote the files the repo builds from several sources that separate jobs
-change (`.jig/RULES.md`, Keeping merges mechanical), with `.jig/scripts/derive.sh`, in the
+change (`.jig/rules/rules-jobs.md`, Keeping merges mechanical), with `.jig/scripts/derive.sh`, in the
 merge commit. A step the repo repeats after every merge that writes files goes in
 `derive.sh`, its outputs in `derived_files` in `.jig/config.json`: propose it to the owner.
 
@@ -283,33 +282,33 @@ in a staged file or an inbox message (`/jig:decision-cards`, Is it open?). A scr
 clone (made for the test, with no remote) is exempt. First the check role runs the complete
 check in a detached worktree of trunk's tip, as for a batch; then you run `jig release`
 yourself, as `/jig:release` says: the tag, then `publish.sh`'s push and publish. Propose the
-level in the release card with a one-line reason, from `.jig/RULES.md` § Versioning. The
+level in the release card with a one-line reason, from `.jig/rules/rules-release.md` § Versioning. The
 owner's yes releases it; don't ask the owner to pick it. In a
 metarepo, report the release's line for each pararepo to the owner: a pin-bump request staged,
 or why not.
 
 ## A roadmap change
 
-A staged `kind: roadmap` file proposes changes to `.jig/roadmap.md`: a phase, a scope or an
+A staged `kind: roadmap` file proposes changes to `.jig/roadmap.json`: a phase, a scope or an
 exit box to add, rename, reorder or drop, and why. Nothing in it is decided. Show the owner
-the exact diff to `.jig/roadmap.md`; on a yes, apply it on trunk with `jig roadmap --draft`,
-the change made in the draft it writes, then `jig roadmap --edit`, run `jig roadmap --write`,
-and commit both with the staged file's `Source: … (staged as <file>)` line in the message.
+the exact diff to `.jig/roadmap.json`; on a yes, apply it on trunk with `jig roadmap --draft`,
+the change made in the JSON draft it writes, then `jig roadmap --edit`, and commit it with the
+staged file's `Source: … (staged as <file>)` line in the message.
 A scope a spec still takes is re-pointed in that commit: the hook names the specs. Then
 `jig staging resolve <file>`, which looks for that line in a trunk commit to the roadmap.
 
-In a pararepo that plans from its metarepo's roadmap (no `.jig/roadmap.md` of its own), a change
+In a pararepo that plans from its metarepo's roadmap (no `.jig/roadmap.json` of its own), a change
 to its products' sections is never made here or on the metarepo's trunk: on the owner's yes,
 `jig roadmap --draft`, make the change in the draft, and `jig roadmap --edit`. It writes the
-`BUFFER.md` row and the change on this repo's open roadmap proposal in the metarepo, and stages
-a label the metarepo's glossary lacks there; commit the spec and `BUFFER.md` it names. It
+`buffer.md` row and the change on this repo's open roadmap proposal in the metarepo, and stages
+a label the metarepo's glossary lacks there; commit the spec and `buffer.md` it names. It
 merges in the metarepo at the next sync the owner calls. In a metarepo, merging such a branch
 is a roadmap change like any other: show the diff, and merge on the owner's yes. Rig there lists
-each cross-product wait no section confirms with `(needed by …)`: put it to the owner.
+each cross-product wait no section confirms in its `needed_by`: put it to the owner.
 
 A pararepo with a roadmap of its own moves it in by `jig move-in --product <Name>` in its trunk
 checkout, on the owner's yes, one step per `--apply`: its run with no flag says which step is
-next and whose yes it waits on. Step 1 stages a `BUFFER.md` row and `.jig/specs/move-in.md`
+next and whose yes it waits on. Step 1 stages a `buffer.md` row and `.jig/specs/move-in.md`
 here (commit them) and makes the metarepo's `propose/<repo>-move-in`, with the product's
 glossary term when the metarepo has none. Step 2, once the metarepo merged it, stages the
 roadmap's removal and the re-pointed `Scope:` lines: re-point any id it names by hand, then
@@ -333,15 +332,21 @@ file step 2 stages for a receiver keeping its own roadmap waits in staging: afte
 `jig staging resolve` forwards it.
 
 Work with no phase yet, parked mid-build (naming the pages it will touch) or not started, is
-an item under `## No phase` in `.jig/roadmap.md`, proposed the same way. Work a spec leaves for
-later is one too: its `Later:` id must be on trunk's roadmap before the spec commits, so put
-each as its own roadmap change, one line per item, never inside another question. The owner's
-yes to the line is the yes to the deferral. A roadmap change asks
+a No phase item in `.jig/roadmap.json`, proposed the same way. A spec takes only what
+it builds: work it doesn't build stays on the roadmap, unspecced, and out of scope never
+defers. Work worth building later is put as its own roadmap change, one line per item, never
+inside another question; the owner's yes to the line is the yes to the deferral. A spec
+building only part of a scope waits on a roadmap change splitting it: the built part becomes
+a new scope the spec takes whole, in its own words if it likes, and the rest stays in the
+original scope, under its id, its text unchanged, so a wait on that id holds until the rest
+is built. For an open job, land the split on trunk and tell its work session: it syncs and
+re-points its spec's `Scope:` line from the original id to the new one. Left on the original,
+the merge reads the unbuilt rest done and releases its waits, and no hook catches it. A roadmap change asks
 for no decision entry and no change line. A built item stays, read done from the spec that
 took it, until a roadmap change of the owner's removes it.
 
-`jig merge` rewrites `ROADMAP.md` in the merge commit. After solo work on trunk, `jig roadmap` says
-when it is stale: `jig roadmap --write` and commit it.
+Asked to show the roadmap, run `jig roadmap show` (with any filter): a chart, each scope in the
+column its waits put it in. Nothing writes a view file: states are read live.
 
 ## Never
 

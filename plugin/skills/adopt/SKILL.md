@@ -9,7 +9,7 @@ are the survey and its reading; the plan (step 4) is the spec role's, written as
 says; step 6's stages are Jobs, each with its own work role.
 
 Produce a migration plan. Steps 1–5 **change nothing**: the deliverable is
-`.jig/specs/adopt-<repo>.md`, which the user reads and approves before step 6 carries out any
+`.jig/specs/adopt-<repo>.md`, which the owner reads and approves before step 6 carries out any
 of it.
 
 ## 1. Measure
@@ -39,9 +39,9 @@ Each one gets exactly one job and one home:
 | `README.md` | for people outside the repo |
 | `docs/<system>.md` | what the code is now, one page per system; a subsystem stays a section until it has something to say that its system's page doesn't, then gets `docs/<system>/<subsystem>.md`, no deeper without the owner's `deep_subsystems` entry; a page is flat until it holds other files (subsystem pages, files it links, `datasheets/`), then moves into a folder named for it, `docs/<system>/<system>.md`, with them beside it |
 | `.jig/specs/` | a task in flight |
-| `.jig/ledgers/WORKAROUNDS.md` | patches that are in the code |
-| `.jig/ledgers/DEFERRED.md` | review findings that are not |
-| `docs/<board>.md` | one per board, a system or a subsystem like any other, in its folder once it holds files (`docs/<board>/<board>.md` beside its `datasheets/`), listed in `boards` in `.jig/config.json`: components, wiring, toolchain, flash |
+| `.jig/ledgers/workarounds.md` | patches that are in the code |
+| `.jig/ledgers/deferred.md` | review findings that are not |
+| `docs/<board>.md` | one per board, a system or a subsystem like any other, in its folder once it holds files (`docs/<board>/<board>.md` beside its `datasheets/`), listed in `boards` in `.jig/docmap.json`: components, wiring, toolchain, flash |
 | `docs/…/datasheets/` | the vendor documents a page leans on, in that page's folder; one two pages use, in the nearest folder both share |
 | `docs/datasheets/` | a vendor document two systems use: reference files only, never a page |
 | `.claude/skills/` | reusable know-how, loaded on demand |
@@ -57,7 +57,7 @@ Judgment, in order:
 1. **Does anything read it?** Zero inbound links and months since the last commit is the
    signature of a document written once and never consulted. Deleting it loses nothing —
    git still has it.
-2. **Is it rules, state, or history?** Rules go by the test in `.jig/RULES.md` (Homes): AGENTS.md, a skill, or `.jig/process.md`. State (what the code
+2. **Is it rules, state, or history?** Rules go by the test in `.jig/rules/rules-docs.md` (Homes): AGENTS.md, a skill, or `.jig/process.md`. State (what the code
    does now) goes to `docs/`. History — round contracts, changelogs of decisions already
    made, "what we did in sprint 12" — is history. Git keeps history.
 3. **Is it duplicated?** Three files describing the architecture means one file and two
@@ -70,7 +70,7 @@ If `AGENTS.md` is over 40 lines, that is the highest-value item in the plan — 
 ignored wholesale, so every rule in it is weakened by the ones around it.
 
 Propose, line by line, what stays: commands an agent can't guess, workflow, repo-specific
-gotchas, each a rule every task needs. Everything else moves by the test in `.jig/RULES.md`
+gotchas, each a rule every task needs. Everything else moves by the test in `.jig/rules/rules-docs.md`
 (Homes): the rest of how the repo is worked, code style included, to a section of
 `.jig/process.md`; a release step to `.jig/scripts/release.sh`; a fact about the product to its
 system's page; history to git. How the repo is worked never goes to a page. A repo's
@@ -128,7 +128,7 @@ worktrees, `CODEOWNERS`, a PR template, branch protection, husky or pre-commit h
 homebrew system with its own board and hooks. The goal is one system to manage, not a better
 one, and the path has to be safe for work that is mid-stream.
 
-"Job" is jig's word; `.jig/RULES.md` defines it in standard terms. Use the repo's own words in
+"Job" is jig's word; `.jig/rules/rules-jobs.md` defines it in standard terms. Use the repo's own words in
 the plan and never assume it calls anything a job. What matters is whether it has the
 *parts*:
 
@@ -173,7 +173,7 @@ When the repo already coordinates parallel work (4b), these stages come first, i
 Copy `${CLAUDE_PLUGIN_ROOT}/templates/jig/` to `.jig/` as `/jig:init` does, and
 `chmod +x .jig/scripts/*.sh`. `AGENTS.md` and `CLAUDE.md` are the plan's diet, not this copy.
 Where the diet moves lines to `.jig/process.md`, create it from
-`${CLAUDE_PLUGIN_ROOT}/templates/process.md` (`templates/jig/` doesn't bring it), and add `AGENTS.md`'s pointer line naming its trigger ("Before a release, read `.jig/process.md` § Release").
+`.jig/templates/process.md`, and add `AGENTS.md`'s pointer line naming its trigger ("Before a release, read `.jig/process.md` § Release").
 Keep `.jig/scripts/check.sh` and `format.sh` to fast checks — the Stop hook has a time limit.
 Fill `.jig/scripts/setup.sh` the way `/jig:init` does. It replaces whatever the predecessor
 did to set up each new worktree, which goes with the predecessor in 6.5.
@@ -183,7 +183,7 @@ Then:
 python3 .jig/jig.py init --no-hooks
 ```
 
-That writes an empty board (`.jig/config.json`, `.jig/jobs.json`) and leaves the
+That writes an empty board (`.jig/config.json`, `.jig/jobs.json`) and docs map (`.jig/docmap.json`), and leaves the
 predecessor's hooks running. Now fill `config.json` by hand, from the predecessor's board:
 
 | `config.json` | from the predecessor |
@@ -192,7 +192,9 @@ predecessor's hooks running. Now fill `config.json` by hand, from the predecesso
 | `common` | files every job may touch |
 | `append_files` | files whose conflicts resolve by appending |
 | `reserve.<counter>` | each scarce number it allocates, as a `pattern` + `files` that find every number ever taken: jig hands out the next above those, and refuses a counter without them |
-| `docmap` | its file → documentation map, if it has one, less the repo's own tooling (build, CI, release, dev scripts), which maps to no page |
+
+And in `.jig/docmap.json`, `docmap`: its file → documentation map, if it has one, less the
+repo's own tooling (build, CI, release, dev scripts), which maps to no page.
 
 A counter's `files` must name every file its numbers live in — if the rules moved from
 `AGENTS.md` to `docs/**`, the pattern must cover both, or R6 enforces nothing.
@@ -256,7 +258,7 @@ runs `python3 .jig/jig.py check` in its worktree; `ok` means its job came across
 
 - Remove the predecessor's hubnode and subnode skills; `/jig:hubnode` and `/jig:subnode`
   take over. Subnodes check in again with the new skill.
-- In `AGENTS.md`, replace the predecessor's process section with a pointer to `.jig/RULES.md`.
+- In `AGENTS.md`, replace the predecessor's process section with a pointer to `.jig/rules/`.
 - Leave its handoff records where they are. They are history; `jig survey` skips tooling
   directories, and new notes go to `.jig/handoffs/`.
 

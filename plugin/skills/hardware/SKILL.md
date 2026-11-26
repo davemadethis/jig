@@ -1,12 +1,12 @@
 ---
 name: hardware
-description: Spec a board from a hardware definition the user supplies, as its own page under docs/, in a folder named for the board once it holds files, check it against the code, and install the skills the page lists. Use when a board is ready to spec, when a handoff's fold-in asks for a board page, or when asked to install hardware skills.
+description: Spec a board from a hardware definition the owner supplies, as its own page under docs/, in a folder named for the board once it holds files, check it against the code, and install the skills the page lists. Use when a board is ready to spec, when a handoff's fold-in asks for a board page, or when asked to install hardware skills.
 ---
 
 A standalone tool; the page it writes is the spec role's work, at its settings (`jig roles`).
 
 A board page records what a board is, so the code can be checked against it. It is written
-from a hardware definition the user gives you, never from the code alone: a page copied from
+from a hardware definition the owner gives you, never from the code alone: a page copied from
 the code always matches it, and the check at the gate would catch nothing.
 
 ## Spec a board
@@ -18,10 +18,10 @@ the code always matches it, and the check at the gate would catch nothing.
    it is a system of its own or a subsystem of an existing system (a board inside a larger
    product), defaulting to a system. Its folder, `<home>` below, is `docs/<board>/` for a
    system or `docs/<system>/<board>/` for a subsystem, the board's name in lowercase with
-   dashes (`docs/acme-devboard-2/`). Copy `${CLAUDE_PLUGIN_ROOT}/templates/hardware.md` to
+   dashes (`docs/acme-devboard-2/`). Copy `.jig/templates/hardware.md` to
    `<home><board>.md`. Never overwrite: if the page exists, you are updating it, so show the
    diff before changing it. Fill every section the definition covers and leave TODO where it
-   says nothing. The template is on the page contract (`.jig/RULES.md`, Documentation): the
+   says nothing. The template is on the page contract (`.jig/rules/rules-docs.md`, Documentation): the
    lead paragraph says what the board is and where it was defined from, and each Invariants
    entry keeps its why and gets its holder, or goes. A part not yet driven by code on this
    board is `no` in the Components table's Verified column. The files the page leans on go in its
@@ -30,13 +30,13 @@ the code always matches it, and the check at the gate would catch nothing.
    `<home><board>.md` appears below, it is that path; it moves into its folder with a
    `git mv` in the change that saves its first file. Its `boards` and `docmap` keys stay as
    they are: either form names the page:
-   - **The definition.** A file the user wrote is saved to `<home>`. A vendor's (a dev
+   - **The definition.** A file the owner wrote is saved to `<home>`. A vendor's (a dev
      board's spec sheet, a reference manual) is saved to `<home>datasheets/`, with its source
      URL beside the link, in either `reference_files` mode: a board is not a part of itself.
      The lead's `Defined from:` links the file and gives the first 12 hex of its sha256
      (`sha256sum`, or `shasum -a 256`). Pasted: `pasted <date>`. A URL: the URL and a commit
      or hash, since the page behind it changes.
-   - **Each datasheet** the user gives, or the checks lean on, is saved to
+   - **Each datasheet** the owner gives, or the checks lean on, is saved to
      `<home>datasheets/`, named for the part in lowercase with dashes. One another page
      already uses moves (`git mv`) to the `datasheets/` of the nearest folder both pages sit
      under: the system's for two subsystems of one system, `docs/datasheets/` for two
@@ -69,13 +69,13 @@ the code always matches it, and the check at the gate would catch nothing.
      of its own.
    - **Only the code says it** — ask whether to add the code's value to the page.
 4. **Skills.** Read the frontmatter (`platform`, `framework`, `peripheral`) and description of
-   each skill in `${CLAUDE_PLUGIN_ROOT}/templates/skills/` (skip `_template`) and in
+   each skill in `${CLAUDE_PLUGIN_ROOT}/templates/skills/` and in
    `.claude/skills/`. Under Skills, list each one that fits this page's Components and
    Toolchain, with one line on why. List only skills that exist.
 5. **Install.** Copy each listed skill that jig ships and `.claude/skills/` lacks to
    `.claude/skills/<name>/`. Never overwrite one that is there; once installed it is the
    repo's.
-6. **Register it and tie it to the code.** Add the page to `boards` in `.jig/config.json`
+6. **Register it and tie it to the code.** Add the page to `boards` in `.jig/docmap.json`
    (`"boards": ["<home><board>.md"]`, appending to the list when there is one): that is
    what makes it a board page. Then propose the `docmap` entry for the page, naming the code
    that targets this board, its build files among it: `"<home><board>.md": ["main/**",
@@ -94,7 +94,7 @@ settled, the code to change, the skills listed and installed, and the `boards`,
 
 Asked to install hardware skills ("install the ESP-IDF skill"), no definition is needed.
 Install the named skill from `${CLAUDE_PLUGIN_ROOT}/templates/skills/`, or, with none named,
-every skill the board pages (the pages `boards` in `.jig/config.json` lists) list that
+every skill the board pages (the pages `boards` in `.jig/docmap.json` lists) list that
 `.claude/skills/` lacks. Never
 overwrite. If a skill fits a board whose page doesn't list it, offer to add it to that
 page's Skills.

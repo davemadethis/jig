@@ -1,17 +1,1 @@
-{
-  "layout-and-formats": {
-    "spec": ".jig/specs/layout-and-formats.md",
-    "state": "gated",
-    "after": [],
-    "owns": [],
-    "shares": [
-      "plugin/templates/**",
-      "plugin/skills/**",
-      "tests/**",
-      "docs/**",
-      "README.md",
-      ".jig/decisions.md"
-    ],
-    "reserved": {}
-  }
-}
+{}

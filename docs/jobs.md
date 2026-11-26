@@ -12,7 +12,8 @@ every commit.
 
 The board is two files on [trunk](glossary.md#trunk). `.jig/config.json`
 holds the settings that rarely change. `.jig/jobs.json` holds the open jobs, and nothing else.
-Only the [hubnode](glossary.md#hubnode) edits either one, on trunk.
+Only the [hubnode](glossary.md#hubnode) edits either one, on trunk, and `.jig/docmap.json`,
+the map of which docs page covers which files, the same way.
 
 Each job on the board has:
 
@@ -100,7 +101,7 @@ checkout, and commits `.jig/jobs.json` on trunk. The mark refuses until the chec
 
 `python3 .jig/jig.py merge <job>` happens only on the owner's word, and only for a gated job.
 In one commit it merges the branch and deletes the job's entry. It also numbers any new
-decisions and removes the finished spec, keeping its `Scope:` and `Later:` lines on the handoff note. It then prints "Sync the clean jobs", and the hubnode
+decisions and removes the finished spec, keeping its `Scope:` line on the handoff note. It then prints "Sync the clean jobs", and the hubnode
 runs `python3 .jig/jig.py sync` in each clean job's worktree. After the commit it removes the job's worktree and branch, if the worktree is clean.
 
 Two or more gated jobs can merge as a [batch](glossary.md#batch), with one complete check on
@@ -126,5 +127,5 @@ never starts one on its own hunch that something is broken.
 ## Workarounds
 
 A patch is allowed. Each one is a workaround: a `WORKAROUND:`
-comment in the code, and a row in `.jig/ledgers/WORKAROUNDS.md`. The hook refuses the commit if
+comment in the code, and a row in `.jig/ledgers/workarounds.md`. The hook refuses the commit if
 the row is missing, so nothing gets patched quietly.

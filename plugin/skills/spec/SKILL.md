@@ -3,6 +3,7 @@ name: spec
 description: The spec role - turn a task request into .jig/specs/TASK.md before anything is built, or merge waiting specs whose Touches overlap into one (consolidate); also writes a survey's plan and a redocument's remap. Use for anything bigger than a one-sentence diff, when `jig consolidate` lists a group, or when `jig open` or `jig staging resolve` refuses for one.
 ---
 
+Read `.jig/rules/rules-jobs.md`, `rules-roadmap.md`, `rules-docs.md` and `rules-decisions.md` first, and in a metarepo or a pararepo its `rules-metarepo.md` or `rules-pararepo.md`.
 `jig` below is `python3 .jig/jig.py`. Your settings are the spec role's (`jig roles`). Your
 steps are spec and consolidate; `jig next` decides what comes after. The hubnode loads this
 role itself only for a spec drafted from its conversation with the owner, whose decisions
@@ -27,42 +28,45 @@ grouped>.
 Before anything is built:
 
 1. Restate the intent in one sentence. If you can't, ask — one question, the hard one, not the obvious one — but only one the owner's own words leave open, checked as `/jig:decision-cards` (Is it open?) says.
-2. Copy the spec template to `.jig/specs/<kebab-task-name>.md` (create `.jig/specs/` if it isn't there yet) and fill it: the repo's `.jig/specs/_template.md` if it has one, else `${CLAUDE_PLUGIN_ROOT}/templates/specs/_template.md`. "Done when" must be checkable by running something.
+2. Copy the spec template to `.jig/specs/<kebab-task-name>.md` (create `.jig/specs/` if it isn't there yet) and fill it: copy `.jig/templates/spec.md`, the repo's copy of jig's template (`jig update` reports a `.jig/specs/_template.md` of the repo's own that differs). "Done when" must be checkable by running something.
 3. Replace the template's comments under `Source:` with a
    `Scope:` line naming the scopes this task takes, as `<phase>/<scope>` from it
    (`Scope: alpha/screen, alpha/battery`), or `<list>/<id>` for an item of a list
-   (`No phase/pay`). A pararepo with no `.jig/roadmap.md` of its own plans from its metarepo's
+   (`No phase/pay`). A pararepo with no `.jig/roadmap.json` of its own plans from its metarepo's
    (`jig roadmap` prints it): its ids carry the product, `App alpha/pairing` or
    `App No phase/pay`, and the hook checks them against the metarepo's trunk. A task that
    takes none (a bug fix, say) leaves the line out: delete the comment either way.
-   Work this task leaves for later goes on a `Later:` line beside it, roadmap ids in the same
-   form (`Later: No phase/labels`), never as prose in `## Out of scope`, which closes with the
-   spec. Each id must already be on trunk's roadmap: a new one is a roadmap change the owner
-   approves (`/jig:stage`), one line per item, before the spec commits. Out of scope keeps only
-   work nothing will do, or work another named spec, job or repo does, each with why.
+   A spec takes only what it builds. When it builds only part of a scope, the scope is split
+   first, in a roadmap change on the owner's yes (`/jig:stage`): the built part becomes a new
+   scope the spec takes whole, in its own words if it likes, and the parts not built stay in
+   the original scope, under its id, their text unchanged, so a wait on that id holds until the
+   rest is built. Out of scope never defers: it keeps only work nothing will do, or work
+   another named spec, job or repo does, each with why, and it closes with the spec. Work
+   worth building later goes onto the roadmap as a scope or No phase item on the owner's word,
+   one line per item, and stays there, unspecced.
    An id the roadmap doesn't have is refused at commit: a new one is the owner's, proposed
    as a roadmap change (`/jig:stage`), never invented here.
-4. List the files you expect to touch. If the list is long or you're unsure, inspect first and revise. In a pararepo, say whether any is a contract path (`.jig/para.json`): then the change needs a row in `.jig/ledgers/BUFFER.md` (or `meta: buffered <row id>` here), a metarepo proposal (`jig propose`), `meta: <name> pointers <branch>` (`jig propose --pointers`) when it only moves what metarepo pointers point at, or `meta: none — <reason>`. Working ahead of the metarepo while behavior settles is the buffer's job. In a metarepo, a spec that changes a claim lists every place that states it, found by meaning and not only by its words, and its done-when covers each one (RULES.md: Every copy). Each changed claim is stated only at its home, with a pointer everywhere else (RULES.md: What the metarepo holds): a contract lives in the metarepo, where a decision row and the pages citing it as their source are one home; a claim one pararepo owns lives in that pararepo.
+4. List the files you expect to touch. If the list is long or you're unsure, inspect first and revise. In a pararepo, say whether any is a contract path (`.jig/para.json`): then the change needs a row in `.jig/ledgers/buffer.md` (or `meta: buffered <row id>` here), a metarepo proposal (`jig propose`), `meta: <name> pointers <branch>` (`jig propose --pointers`) when it only moves what metarepo pointers point at, or `meta: none — <reason>`. Working ahead of the metarepo while behavior settles is the buffer's job. In a metarepo, a spec that changes a claim lists every place that states it, found by meaning and not only by its words, and its done-when covers each one (`.jig/rules/rules-metarepo.md`: Every copy). Each changed claim is stated only at its home, with a pointer everywhere else (`.jig/rules/rules-metarepo.md`: What the metarepo holds): a contract lives in the metarepo, where a decision row and the pages citing it as their source are one home; a claim one pararepo owns lives in that pararepo.
    In a repo with a decision log or a glossary, run `jig reading-list --claims <id or term>…`
    for each decision id and glossary term the spec changes. List each `copy` it prints in
    Touches, and give each a done-when item: updated with the home, or made a pointer to it.
    The command finds names only; a copy in other words is still yours to find by meaning.
    A spec whose work is process (a rule, a procedure, a convention for working the repo) says
-   under Touches which row of the test in `.jig/RULES.md` (Homes) it falls in, and so which file
+   under Touches which row of the test in `.jig/rules/rules-docs.md` (Homes) it falls in, and so which file
    it writes: `AGENTS.md`, a skill, a script, or a section of `.jig/process.md`.
 5. Read the pages `jig reading-list <those files>` prints. A page describes
    the code; where it disagrees, the code on trunk is reality and the page is stale. For each
-   roadmap item it lists under a page (a `## No phase` item or a scope), say in the spec which
+   roadmap item it lists under a page (a No phase item or a scope), say in the spec which
    it is: **adopt** (this task builds it; its content goes into the page's body, and the spec
    takes it with its `Scope:` line, `No phase/<id>` for an item, so it reads done when the job
    lands), **depart** (the task goes another way, and why), or **leave** (out of scope). Work
-   with no phase yet, parked mid-build (naming its pages) or not started, is a `## No phase`
+   with no phase yet, parked mid-build (naming its pages) or not started, is a No phase
    item, added on the owner's word as a roadmap change (`/jig:stage`), never written on a page.
-   An item's or a scope's labels, `(labels <term>, …)`, are the features it touches, each a
+   An item's or a scope's `labels` are the features it touches, each a
    glossary term. The spec is where project
    meets product: of each decision entry and page change it plans, ask is this about the product, about when and in what order we build it, or about how the
    repository is worked? What is the project stays in the spec or the roadmap, and how the repo is
-   worked goes to its home by the test in `.jig/RULES.md` (Homes), never a page; the pages and entries it writes describe the
+   worked goes to its home by the test in `.jig/rules/rules-docs.md` (Homes), never a page; the pages and entries it writes describe the
    product, and never name the spec, a phase or a scope.
 6. Fill `## Roles` with `jig roles`'s output, as printed (add the heading if the template has
    none). If it exits non-zero, the config breaks a rule: stop and give the owner its refusal;
@@ -72,7 +76,7 @@ Before anything is built:
 
 A file in `.jig/staging/` is context, not a decision: never cite it as decided. The owner's
 quoted words in it (`The owner, <date>: "…"`) are the exception: they are the owner's ruling,
-as in an inbox message (`.jig/RULES.md`, Inbox), within the limits `/jig:decision-cards`
+as in an inbox message (`.jig/rules/rules-inbox.md`, Inbox), within the limits `/jig:decision-cards`
 (Is it open?) sets, and the rest is context from the stager.
 
 Keep it short. A spec longer than the diff it describes is a smell.
@@ -88,7 +92,7 @@ a job whose third blocking review started Bug carries `Bug-for: <job>` on a line
 ## Consolidate
 
 Merge waiting specs whose Touches overlap into one, so they run as one job: one gate, one test
-run, one merge. Read `.jig/RULES.md` (The board, "Overlapping specs are answered before they
+run, one merge. Read `.jig/rules/rules-jobs.md` (The board, "Overlapping specs are answered before they
 open"). Run in the detached worktree of trunk the hubnode names, and commit nothing.
 
 1. **List.** `jig consolidate`. Each group is specs no job has taken whose `## Touches` meet,
