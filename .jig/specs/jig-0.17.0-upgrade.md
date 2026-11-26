@@ -58,7 +58,33 @@ The hubnode runs these in order. `jig` is `python3 .jig/jig.py`, and the plugin'
 5. **Gate and merge** as every job does, the merge on the owner's word.
 
 ## Process check
-<filled in by step 2: per step, agree or the change proposed, and the owner's answer in their words>
+Read on 2026-11-26: the plugin is 0.17.0 (its templates match `plugin/` but for two frontmatter
+comments the host strips); jig's 0.17.0 release notes; the plugin's `/jig:update` skill and
+`rules-roadmap.md`; the plugin's update dry run (exit 1, warnings only); this repo's grep.
+
+- Step 1: agree; done (`Rollback:` above, c807e39).
+- Step 2: agree; this section.
+- Step 3: agree. jig has no `.jig/roadmap.md`, so the update adds the empty `.jig/roadmap.json`
+  and converts nothing. `/jig:update` is a skill only the owner can start, so the owner runs it
+  here: "You type /jig:update".
+- Step 3, the dry run's stale names in `plugin/templates/jig/jig.py`, `tests/smoke.sh` and
+  `tests/redocument-fixture.sh`: left as they are. They are jig's own product code, reading and
+  testing the old layout to convert it. The ones in `.jig/decisions.md` and
+  `.jig/ledgers/deferred.md` are released history and stay too.
+- Step 3, the ~100 lines in `docs/*.md` naming `.jig/` paths as "how the repository is worked":
+  the owner's answer, "Exception, recorded": jig's docs describe jig's product, which is that
+  layout. Recorded in `findings` as an exception; no docs line changes.
+- Step 3, `AGENTS.md` lines 19 and 22-24 (steps in the repo's own words): kept, the owner: "um,
+  ya, why not??". The update replaces line 25's Rulebook line itself.
+- Step 4, `docs/glossary.md` out of the one form: the owner, "Note the glossary's first h1
+  *should* be \"Glossary\" and this is a gap in 0.17.0, we should fix it and push 0.17.1. Take
+  the rebuild now with this exception, and write a spec of fixes for 0.17.1". So the job rebuilds
+  the glossary into the form under a first `# Glossary` heading, and `.jig/specs/fixes-0.17.1.md`
+  holds the fix. The hook refuses only problems a commit adds, and the first-heading one is
+  there already.
+- Step 4: agree, with the work role at tier 3, effort 4 for this run, on the owner's word ("start
+  the job with a 3,4 subnode"); `roles` is unchanged.
+- Step 5: agree.
 
 ## Done when
 - [ ] The `Rollback:` line is filled in, committed and pushed before step 3's first commit
