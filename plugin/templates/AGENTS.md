@@ -27,8 +27,8 @@ Risk: R0 — personal prototype, single user, nothing shipped. Optimize for spee
 - A mergeable chunk is a handoff: checks pass → adversarial review (/jig:review) → `jig reviewed` → `jig handoff --spec .jig/specs/<task>.md`. Review happens once per handoff, not per commit. A chunk that doesn't finish its spec hands off with `--partial`.
 - Same fix twice → write a skill (see /jig:retro).
 - How this repo is worked beyond these lines is in `.jig/process.md`, one section per topic: before a release, read § Release; before changing code style, § Code style.
-- A choice that outlives its spec, or a change a release's reader can act on, gets an entry or a line under `## Unreleased` in `.jig/decisions.md`, as `.jig/RULES.md` (Decision log) says.
-- Rulebook `.jig/RULES.md`, enforced by `python3 .jig/jig.py`. Nodes: /jig:hubnode, /jig:subnode. Roles: /jig:spec, /jig:bug, /jig:work, /jig:review, /jig:check, each at its `jig roles` settings; `jig next` names the next step.
+- A choice that outlives its spec, or a change a release's reader can act on, gets an entry or a line under `## Unreleased` in `.jig/decisions.md`, as `.jig/rules/rules-decisions.md` (Decision log) says.
+- Rulebook `.jig/rules/`, enforced by `python3 .jig/jig.py`. Nodes: /jig:hubnode, /jig:subnode. Roles: /jig:spec, /jig:bug, /jig:work, /jig:review, /jig:check, each at its `jig roles` settings; `jig next` names the next step.
 
 ## Code
 - Comments explain *why*. A comment restating the code is a naming failure — rename instead — and it rots the moment the code moves on.
@@ -37,8 +37,8 @@ Risk: R0 — personal prototype, single user, nothing shipped. Optimize for spee
 - A workaround is allowed when it's the right fix. It gets a `WORKAROUND:` comment and a row in `.jig/ledgers/workarounds.md`. Never silently.
 - A review finding you defer or reject gets a row in `.jig/ledgers/deferred.md` at handoff.
 - No new dependencies without saying so in the spec.
-- Documentation is shaped and housed as `.jig/RULES.md` (Documentation) says; a change isn't done until its page is current. A page describes the code; where they disagree, the code on trunk is reality.
-- A new `.md` outside the homes `.jig/RULES.md` (Documentation) lists means its home wasn't found. `jig survey` lists the strays.
+- Documentation is shaped and housed as `.jig/rules/rules-docs.md` (Documentation) says; a change isn't done until its page is current. A page describes the code; where they disagree, the code on trunk is reality.
+- A new `.md` outside the homes `.jig/rules/rules-docs.md` (Documentation) lists means its home wasn't found. `jig survey` lists the strays.
 
 ## Firmware (delete if not applicable)
 - Each board this repo builds for gets its page, `docs/<board>.md` (a subsystem's page in a larger system; in a folder of its own, `docs/<board>/<board>.md`, once it holds files), listed in `boards` in `.jig/docmap.json`, before code for it passes the gate (/jig:hardware). Where one exists, read it before touching a pin, bus, or peripheral, and load the skills it lists.

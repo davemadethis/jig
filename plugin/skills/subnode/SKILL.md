@@ -3,7 +3,7 @@ name: subnode
 description: Check in as a subnode - a session that takes one role (spec, bug, work, review or check) on one job, works only in its worktree, and reports back to the hubnode. Use at the start of any session a hubnode started, on a kickoff message, or on "work on job X".
 ---
 
-Read `.jig/RULES.md` first. `jig` below is `python3 .jig/jig.py`.
+Read `.jig/rules/rules-jobs.md` and `rules-workflow.md` first, then the rulesets your role's skill names. `jig` below is `python3 .jig/jig.py`.
 
 One job, one role, one worktree. You never commit on trunk, never push, never merge, never
 edit the board. Your settings are your role's (`jig roles`); what comes after your step is

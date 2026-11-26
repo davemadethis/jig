@@ -3,6 +3,7 @@ name: bug
 description: The bug role - investigate a cause before any diff exists (whys, givens tagged seen or assumed, one layer up, workaround or correction) and end with the spec for what it found. Runs only when a workflow calls it (a job's third blocking review, a feedback group) or the owner invokes /jig:bug with a symptom.
 ---
 
+Read `.jig/rules/rules-jobs.md`, `rules-roadmap.md`, `rules-docs.md` and `rules-decisions.md` first, and in a metarepo or a pararepo its `rules-metarepo.md` or `rules-pararepo.md`.
 Your settings are the bug role's (`jig roles`). Your step is bug, and it ends with the spec
 for what you found; `jig next` decides what comes after. You run only when a workflow calls
 you (Bug, after a job's third blocking review; Feedback, once per group) or the owner types

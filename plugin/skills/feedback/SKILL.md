@@ -1,6 +1,6 @@
 ---
 name: feedback
-description: Report a bug in the jig tool itself (.jig/jig.py, .jig/RULES.md, its hooks, or a skill) for the plugin owner. Use when the tool, not the repo's code, misbehaved. Changes nothing in the repo.
+description: Report a bug in the jig tool itself (.jig/jig.py, its rulesets in .jig/rules/, its hooks, or a skill) for the plugin owner. Use when the tool, not the repo's code, misbehaved. Changes nothing in the repo.
 disable-model-invocation: true
 ---
 
@@ -11,7 +11,7 @@ This is a wrapper: it loads the bug role (`/jig:bug`), pointed at the tool, and 
 it finds. The owner decides which one applies; don't guess.
 
 Load `/jig:bug` and investigate exactly as it says — whys, givens tagged `[seen]`/`[assumed]`,
-one layer up, workaround or correction, spec — reading `.jig/jig.py`, `.jig/RULES.md`, the
+one layer up, workaround or correction, spec — reading `.jig/jig.py`, `.jig/rules/`, the
 hook output, and the skill involved. Its spec is not written into this repo: it becomes the
 staged report below.
 
@@ -49,5 +49,5 @@ Then:
    default), requesting that folder the same way. Never a temp folder: reports there were lost
    when it was cleared.
 3. Print the path. The report waits there until `/jig:fix` runs in the jig repo.
-4. Stop. Do not edit `.jig/jig.py` or `.jig/RULES.md`, do not add a `WORKAROUND:` or a ledger row, do not commit.
+4. Stop. Do not edit `.jig/jig.py` or `.jig/rules/`, do not add a `WORKAROUND:` or a ledger row, do not commit.
    If the job is blocked, say so and ask the hubnode to park it.

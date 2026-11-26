@@ -98,7 +98,7 @@ takes it.
 - [Hooks](docs/hooks.md): what runs, when, and why it's safe.
 - [Glossary](docs/glossary.md): every jig term, and what it isn't.
 
-After init, `.jig/RULES.md` in your repo holds every rule the hooks enforce.
+After init, the rulesets in `.jig/rules/` hold every rule the hooks enforce.
 
 **On trust.** All but one of jig's plugin hooks run only in a repo that opted in, with a marker git
 never clones. The session-start hook only reads and prints one line. [More](docs/hooks.md).

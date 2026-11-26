@@ -4,7 +4,7 @@ description: Convert a jig repo's pages - in the old Now/Rules/Checks shape, out
 disable-model-invocation: true
 ---
 
-Read `.jig/RULES.md` (Documentation) and `.jig/templates/page.md` first: they are the contract every
+Read `.jig/rules/rules-docs.md` (Documentation) and `.jig/templates/page.md` first: they are the contract every
 page lands on. `jig` below is `python3 .jig/jig.py`.
 
 An entry point: it starts Redocument (`jig flows`: spec ⇢ Jobs ⇢ Batch ⇢ Job). The hubnode
@@ -88,7 +88,7 @@ Otherwise:
    ```
 
    Those are the citations the release carrying the moves breaks: the release says so in a
-   `**Breaking:**` line, a move with no change in meaning is Polish (`.jig/RULES.md`,
+   `**Breaking:**` line, a move with no change in meaning is Polish (`.jig/rules/rules-release.md`,
    Versioning), and each pararepo citing them gets a pin-bump request. `jig sync` names each
    move and each stale citation there.
 2. **Propose it as a table** and iterate with the owner until approved:
@@ -114,7 +114,7 @@ Otherwise:
    `docs/<system>.md` or `docs/<system>/<subsystem>.md`, no deeper, flat until the page holds
    other files; one that does (subsystem pages, files it links, `datasheets/`) is
    `docs/<system>/<system>.md` or `docs/<system>/<subsystem>/<subsystem>.md`. A
-   subsystem inside a subsystem is asked of the owner with its rationale, as `.jig/RULES.md`
+   subsystem inside a subsystem is asked of the owner with its rationale, as `.jig/rules/rules-docs.md`
    (Documentation) says, and lands as a `deep_subsystems` entry in `.jig/docmap.json` on trunk
    on a yes. Name the cleanup route in
    the pointers branch (step 6).
@@ -242,7 +242,7 @@ Your spec carries the job's remap rows and the Sources. You write only your page
    - **an open product question** → an idea candidate for `.jig/ideas.md`;
    - **how the repository is worked** (a reading order, commands, code style, review and
      handoff, jig and its `.jig/` files, build, CI and release steps), not what the product
-     does → off the page, to its home by the test in `.jig/RULES.md` (Homes): a rule every task
+     does → off the page, to its home by the test in `.jig/rules/rules-docs.md` (Homes): a rule every task
      needs to `AGENTS.md`, a step a script runs to `.jig/scripts/`, the rest to a section of
      `.jig/process.md` (created from `.jig/templates/process.md` when
      absent, and add `AGENTS.md`'s pointer line naming its trigger ("Before a release, read `.jig/process.md` § Release")), each moved on the owner's word and listed in the report;

@@ -3,6 +3,7 @@ name: work
 description: The work role - build a job's spec in its worktree, prove it with evidence, hand off, fix blocking findings and resolve syncs, all in one session. Use when a kickoff or the hubnode assigns the work role, or working alone on "build this", "hand off", "fix the findings", "sync my job".
 ---
 
+Read `.jig/rules/rules-jobs.md`, `rules-handoff.md` and `rules-workflow.md` first, and in a metarepo or a pararepo its `rules-metarepo.md` or `rules-pararepo.md`.
 `jig` below is `python3 .jig/jig.py`. Your settings are the work role's (`jig roles`). Your
 steps are work, handoff, fix and sync; `jig next` decides what comes after each. One session
 keeps the build through every fix and sync: you are that session.
@@ -39,7 +40,7 @@ parallel jobs don't fight for its cores.
   anywhere in the spec or the note, as "later". Work worth building later goes onto the roadmap
   as a scope or No phase item on the owner's word.
 - A choice that outlives your spec, or a change a release's reader can act on, goes in
-  `.jig/decisions.md` (`.jig/RULES.md`, Decision log), which any job may add to. Write a new
+  `.jig/decisions.md` (`.jig/rules/rules-decisions.md`, Decision log), which any job may add to. Write a new
   decision as `### D-?<slug> <title>`; `jig merge` numbers it. To change an accepted entry
   trunk has, supersede it with a new accepted entry and remove the old one in the same commit.
 - Keep merges mechanical: append rather than edit shared prose; new routes in your own
@@ -90,7 +91,7 @@ changed since the last recorded review. Every should-fix or optional finding you
 gets a row in `.jig/ledgers/deferred.md` with its rank and one reason, tagged `[seen]` or
 `[assumed]`; the first row creates the file from
 `.jig/templates/deferred.md`. A review with no blocking findings ends
-the fixing (`.jig/RULES.md`, Contracts). A job's third blocking review, counting its first
+the fixing (`.jig/rules/rules-workflow.md`, Workflow). A job's third blocking review, counting its first
 review-work, starts Bug: jig refuses the next review until the bug role's spec for the job is
 committed.
 

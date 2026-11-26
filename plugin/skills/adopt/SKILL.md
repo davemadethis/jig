@@ -57,7 +57,7 @@ Judgment, in order:
 1. **Does anything read it?** Zero inbound links and months since the last commit is the
    signature of a document written once and never consulted. Deleting it loses nothing —
    git still has it.
-2. **Is it rules, state, or history?** Rules go by the test in `.jig/RULES.md` (Homes): AGENTS.md, a skill, or `.jig/process.md`. State (what the code
+2. **Is it rules, state, or history?** Rules go by the test in `.jig/rules/rules-docs.md` (Homes): AGENTS.md, a skill, or `.jig/process.md`. State (what the code
    does now) goes to `docs/`. History — round contracts, changelogs of decisions already
    made, "what we did in sprint 12" — is history. Git keeps history.
 3. **Is it duplicated?** Three files describing the architecture means one file and two
@@ -70,7 +70,7 @@ If `AGENTS.md` is over 40 lines, that is the highest-value item in the plan — 
 ignored wholesale, so every rule in it is weakened by the ones around it.
 
 Propose, line by line, what stays: commands an agent can't guess, workflow, repo-specific
-gotchas, each a rule every task needs. Everything else moves by the test in `.jig/RULES.md`
+gotchas, each a rule every task needs. Everything else moves by the test in `.jig/rules/rules-docs.md`
 (Homes): the rest of how the repo is worked, code style included, to a section of
 `.jig/process.md`; a release step to `.jig/scripts/release.sh`; a fact about the product to its
 system's page; history to git. How the repo is worked never goes to a page. A repo's
@@ -128,7 +128,7 @@ worktrees, `CODEOWNERS`, a PR template, branch protection, husky or pre-commit h
 homebrew system with its own board and hooks. The goal is one system to manage, not a better
 one, and the path has to be safe for work that is mid-stream.
 
-"Job" is jig's word; `.jig/RULES.md` defines it in standard terms. Use the repo's own words in
+"Job" is jig's word; `.jig/rules/rules-jobs.md` defines it in standard terms. Use the repo's own words in
 the plan and never assume it calls anything a job. What matters is whether it has the
 *parts*:
 
@@ -258,7 +258,7 @@ runs `python3 .jig/jig.py check` in its worktree; `ok` means its job came across
 
 - Remove the predecessor's hubnode and subnode skills; `/jig:hubnode` and `/jig:subnode`
   take over. Subnodes check in again with the new skill.
-- In `AGENTS.md`, replace the predecessor's process section with a pointer to `.jig/RULES.md`.
+- In `AGENTS.md`, replace the predecessor's process section with a pointer to `.jig/rules/`.
 - Leave its handoff records where they are. They are history; `jig survey` skips tooling
   directories, and new notes go to `.jig/handoffs/`.
 

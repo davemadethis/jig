@@ -14,6 +14,7 @@ A breaking change is one that a reader taking the release must act on: a `**Brea
 - A `jig update --apply` step deleting a `Later:` line from each spec on trunk, naming the spec and the ids it named.
 - `jig glossary "<term>"` prints a term's heading path, definition, fields and controlling repo, and `jig glossary add` writes a term (`--under <product>[/<feature>]`, `--binds`) or a product (`--repo`, `--kind`) in its sorted place. `jig decision --page <page>` prints each decision whose `Touches:` names the page or a term on it.
 - `.jig/templates/` holds every record's template, written by `jig init` and refreshed by `jig update --apply` from jig's own copy: a page, a spec, a handoff note, the process page, a hardware page, a skill, the deferred and workarounds ledgers (and the buffer in a pararepo), a glossary term and product, and the roadmap's phase, scope and no-phase item as JSON examples, built from the one example record the commit check compares with.
+- `jig survey` reports each ruleset in `.jig/rules/` over 200 lines, refusing none.
 
 ### Changed
 - The docs tree's map has its own file, `.jig/docmap.json`: `docmap`, `boards`, `deep_subsystems` and `not_docs` move there from `.jig/config.json`, which keeps only configuration. It is trunk-only like the board (R5), and the hook refuses a key jig doesn't know or a value of another shape. `jig init` writes it, and `jig update --apply` moves the four keys with their values unchanged.
@@ -28,6 +29,8 @@ A breaking change is one that a reader taking the release must act on: a `**Brea
 - **Breaking:** `/jig:rigger` and `jig rigger` are gone: run `/jig:designer` and `jig designer <repo>`. The per-machine repos list's `rigger` key is read as `designer`, and the next save writes it as `designer`: a tool reading the key reads `designer`.
 - The ledgers are `.jig/ledgers/deferred.md`, `workarounds.md` and `buffer.md`; `/jig:spec` copies `.jig/templates/spec.md`, and the page template is `.jig/templates/page.md`.
 - **Breaking:** the ledgers' capital names and `.jig/docs-page.md` are gone. `jig update --apply` renames each ledger with `git mv`, rewrites the deferred ledger's header cell `Lane / handoff` as `Job / handoff` (no row changes) and the agent instructions' lines citing a ledger's old name, and moves the page template. A tool citing the old names reads the new ones. A spec template of the repo's own stays where it is, named by update when it differs from jig's.
+- The rulebook is a folder of rulesets, `.jig/rules/rules-<ruleset>.md`: jobs, docs, handoff, workflow, roadmap, decisions, staging, release, inbox, and `rules-metarepo.md` or `rules-pararepo.md` only in a metarepo or a pararepo. Each skill and `jig open`'s kickoff name the rulesets they read.
+- **Breaking:** `.jig/RULES.md` is gone: `jig update --apply` removes it and writes `.jig/rules/`, removing a ruleset of a kind the repo no longer is. A citation of `.jig/RULES.md (<section>)` cites the ruleset holding the section now. The rulebook's command list is gone: `jig -h` and each command's `-h` say it.
 
 ### Removed
 - `docmap`, `boards`, `deep_subsystems` and `not_docs` as `.jig/config.json` keys: the hook refuses a config commit adding one.

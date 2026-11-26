@@ -6,7 +6,7 @@ description: Stage a chat-born file (spec, doc, decisions, user story, feature r
 A staged file is a Markdown file in `.jig/staging/` with this header. Nothing in it is
 decided until it is resolved: read it for context, never cite it as decided. The owner's quoted
 words (Whose words) are the exception: they are the owner's ruling, as in an inbox message
-(`.jig/RULES.md`, Inbox), and settle what they say, within the limits `/jig:decision-cards`
+(`.jig/rules/rules-inbox.md`, Inbox), and settle what they say, within the limits `/jig:decision-cards`
 (Is it open?) sets; the rest is context from the stager.
 
 ```yaml
@@ -29,7 +29,7 @@ repos list (`jig repos` prints where), which `jig staging` lists too.
 ## Staging a file
 
 **Target, kind, status.** The target is the repo that owns the subject: the one that builds it,
-or in a set, the metarepo for a product, definition or contract the set shares (`.jig/RULES.md`,
+or in a set, the metarepo for a product, definition or contract the set shares (`.jig/rules/rules-metarepo.md`,
 What the metarepo holds). Never the repo just because the chat runs there: when the owner isn't
 this repo, ask the owner one question naming the candidate. Pick the kind by what the content is,
 not by what's nearest: a spec is a task the target will build; a doc is a page in the target's
@@ -135,7 +135,7 @@ For each file, with the owner:
   it: commit the edit with the line in the message (on trunk, or in a job merged to trunk),
   then `resolve` finds that commit. A new one is written with no line; commit it the same way.
 - **decisions**: `destination: .jig/decisions.md`, the one log; any other is refused. The
-  body is entries, each `### D-?<slug> <title>` with its status line under it (`.jig/RULES.md`,
+  body is entries, each `### D-?<slug> <title>` with its status line under it (`.jig/rules/rules-decisions.md`,
   Decision log). `resolve` adds an open or proposed one as an idea in `.jig/ideas.md` and an
   accepted one under `## Unreleased`. Lines before the first entry (doc edits listed with them) are refused:
   apply those with the owner, delete them from the staged file, resolve again. An `update`

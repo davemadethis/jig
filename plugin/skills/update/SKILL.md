@@ -46,7 +46,7 @@ That is a dry run. It changes nothing, and its exit code says what you have:
 no exception: an entry carries no reason, so nothing tells a one-run instruction written there
 from a choice. The plan lists it under Removed with its old values and the standard; say both
 out loud. An owner who wants other settings sets `roles` afterwards, each entry with a reason
-(`.jig/RULES.md`, Workflow). A `roles` key is the new system's and stays as it is. jig's
+(`.jig/rules/rules-workflow.md`, Workflow). A `roles` key is the new system's and stays as it is. jig's
 retired AGENTS.md lines are jig's words, so the plan replaces each with the template line that
 took its place, and `--apply` makes it (in a metarepo they are a job's, M4); the old `check:`
 line waits, listed, until `check.sh` reads `--full`.
@@ -61,7 +61,7 @@ a skill that does none of jig's steps is not listed at all.
 Then, after the dry run, read this project's memory index, which the host loaded into the
 session. List each entry that sets a model, tier or effort, says who runs a step or when to
 merge, or names `jig workflow`, with what owns that step now (`jig roles`, the role or node,
-`.jig/RULES.md` § Workflow). Retire an entry only on the owner's yes; jig.py never reads memory.
+`.jig/rules/rules-workflow.md` § Workflow). Retire an entry only on the owner's yes; jig.py never reads memory.
 
 **Repo files to review** are the repo's own files an old convention left behind. Show each
 one's proposed edit and ask about each; make it only on a yes.
@@ -71,7 +71,7 @@ recorded state. List the findings with their ids and take one answer for each: y
 to where (`redocument`, a later job); or an exception, with the owner's reason in their words.
 A recommendation is not an answer, and no question covers some findings and leaves the rest:
 "apply the update?" answers the layout only. Record the answers on trunk in one commit, as
-`findings` in `.jig/config.json` (`.jig/RULES.md`, Documentation: The findings record):
+`findings` in `.jig/config.json` (`.jig/rules/rules-docs.md`, Documentation: The findings record):
 `"approved"`, `"deferred: <where>"`, `"exception: <reason>"`. A deep page's exception is not a
 `findings` entry: it is its folder in `deep_subsystems`, with the rationale. Then run `--apply`: it carries out
 each approved move itself — the `git mv`, the `docmap` key, the `boards` entry, the entry
@@ -82,17 +82,17 @@ the list (an edit, a fold, a nest) you make by hand on its yes; jig acts on the 
 on an answer in chat.
 
 Some of them are survey's home findings. A **rules** file off root: sort it line
-by line by the test in `.jig/RULES.md` (Homes): a rule every task needs into `AGENTS.md`, the
+by line by the test in `.jig/rules/rules-docs.md` (Homes): a rule every task needs into `AGENTS.md`, the
 rest of how the repo is worked into `.jig/process.md` (from `.jig/templates/process.md`
 when absent, and add `AGENTS.md`'s pointer line naming its trigger ("Before a release, read `.jig/process.md` § Release")), and only a fact the product must keep into its page's Invariants; repoint the lines named, delete it — but a package's own rules
-file in a monorepo may stay on the owner's word, so ask before proposing the delete. A **copy** of `.jig/RULES.md`:
-delete it and point what names it at `.jig/RULES.md`. A page at home but **off the page contract** (no lead paragraph, an invariant with
+file in a monorepo may stay on the owner's word, so ask before proposing the delete. A **copy** of jig's rules:
+delete it and point what names it at the ruleset in `.jig/rules/` that holds it. A page at home but **off the page contract** (no lead paragraph, an invariant with
 no why or holder, the old Now / Rules / Checks shape) is fixed where it sits: show its problems and the
 edit that answers each, and make it on a yes. A folder of **pages**: before the moves,
 ask whether each page is a subsystem to nest under its system's folder rather than a system of
 its own. Nest only system/subsystem: a page **below a subsystem** (survey's `deep`) folds into
 its subsystem's page, unless the owner approves its folder for `deep_subsystems` with a rationale
-as `.jig/RULES.md` (Documentation) says; that entry lands on trunk on a yes. A page in the
+as `.jig/rules/rules-docs.md` (Documentation) says; that entry lands on trunk on a yes. A page in the
 **wrong shape**: a folder page with nothing else in its folder goes flat beside its parent's
 page, and a flat page with a folder of its own name moves into it, each with its docmap key
 and `boards` entry; ask before each, and record each answer.
@@ -108,9 +108,9 @@ that **covers no file** is a section of the page above it: propose the fold, wit
 touches, on a yes.
 Then make every line the proposal names in one commit — the `git mv`s, the docmap keys,
 `contract_paths`, the stale lines and, in a pararepo, a `buffer.md` row per cached pointer. Carry
-out each finding on a yes. Never propose adding a line that restates `.jig/RULES.md`: point at it.
+out each finding on a yes. Never propose adding a line that restates a ruleset in `.jig/rules/`: point at it.
 
-**The project in the product** (`.jig/RULES.md`, Documentation: Product and project) comes off
+**The project in the product** (`.jig/rules/rules-docs.md`, Documentation: Product and project) comes off
 pages and out of decisions, one item at a time, each only on a yes. jig lists only what is
 never product text, and searches no words: a heading like `## Status`, "phase 3" or "launch" in
 old text is left alone unless the owner raises it.
@@ -141,14 +141,14 @@ old text is left alone unless the owner raises it.
   register section that is a delivery queue goes to the roadmap or is deleted before the merge.
 - A **plan or register file** is listed with where its content goes: `TODO.md`, `BACKLOG.md`,
   `STATUS.md`, `PLAN.md` or a hand-written `ROADMAP.md` to `.jig/roadmap.json`; `FEATURES.md` to its
-  systems' pages, each row's who and why to a decision entry; `RULES.md`, `CONVENTIONS.md`,
-  `CONTRIBUTING.md` sorted line by line by the test in `.jig/RULES.md` (Homes), its overflow past
+  systems' pages, each row's who and why to a decision entry; a root `RULES.md`, `CONVENTIONS.md`,
+  `CONTRIBUTING.md` sorted line by line by the test in `.jig/rules/rules-docs.md` (Homes), its overflow past
   `AGENTS.md`'s 40 lines to `.jig/process.md`. Propose each conversion;
   remove the file in the same change once all of it moved. A file that holds pages goes to
   `/jig:redocument`.
 
 A root **`CHANGELOG.md`** and a **decision register** (`DECISIONS.md`, or a metarepo's entry file
-of decision rows) merge into `.jig/decisions.md`, the one log (`.jig/RULES.md`, Decision log). Run
+of decision rows) merge into `.jig/decisions.md`, the one log (`.jig/rules/rules-decisions.md`, Decision log). Run
 `jig update --merge-log` and show what it prints: where each row lands, each rejected row it
 leaves out, each superseded row git couldn't say who accepted or when (check its status line
 before the commit), each piece with no home (it stays in its old file, to move by hand), the
@@ -200,10 +200,10 @@ is named, with its new home, at that pararepo's pin bump.
 The **AGENTS.md** lines are the few the template still needs there: the Rulebook line, a
 Commands line for a `.jig/scripts/` file the repo has or this run adds, and a block jig retired
 to replace with the Rulebook line, or delete when the line is already outside it. Show each line
-with where it goes and make it only on a yes. Then read `AGENTS.md` against `.jig/RULES.md`: a
-line that restates what RULES.md holds (where documents live, the docs shape, a board's page,
+with where it goes and make it only on a yes. Then read `AGENTS.md` against `.jig/rules/`: a
+line that restates what a ruleset holds (where documents live, the docs shape, a board's page,
 the job rules) is an old template line frozen in place; offer, one at a time, to replace it with
-the template's line that points at RULES.md instead. Every other line is the repo's wording,
+the template's line that points at the ruleset instead. Every other line is the repo's wording,
 and there is no template diff to read.
 
 **Metarepo pointers**, in a pararepo, are the cached metarepo pointers that dangle. Show each
@@ -245,7 +245,7 @@ with nothing answering them. Each offers one `buffer.md` row: add it only on a y
    files: look. Find the tracked files that are generated: a "generated" or "do not edit"
    header, a `linguist-generated` line in `.gitattributes`, an output path in a tracked script
    or build file, a file `check.sh` rebuilds and compares. Read each one's generator and judge
-   it by the test in `.jig/RULES.md` (Keeping merges mechanical): built from several sources
+   it by the test in `.jig/rules/rules-jobs.md` (Keeping merges mechanical): built from several sources
    that separate jobs change, and rebuildable at every merge. Show each file with its verdict
    and the reason, such as "one source each: regenerated in its job" or "rendered by hand: the
    merge can't rebuild it", or "a lockfile: the branch's own build needs it, so its job

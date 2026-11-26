@@ -11,7 +11,7 @@ releases.
 Agents read one instructions file at the root on every task, and a long one gets ignored
 wholesale. jig keeps it under 40 lines: what the project is, its commands, and the rules every
 task needs. Everything else loads only when a task calls for it. The rulebook,
-`.jig/RULES.md`, holds every rule the hooks enforce.
+`.jig/rules/`, one ruleset a file, holds every rule the hooks enforce.
 
 ## Pages
 

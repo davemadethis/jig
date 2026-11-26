@@ -21,7 +21,7 @@ the code always matches it, and the check at the gate would catch nothing.
    dashes (`docs/acme-devboard-2/`). Copy `.jig/templates/hardware.md` to
    `<home><board>.md`. Never overwrite: if the page exists, you are updating it, so show the
    diff before changing it. Fill every section the definition covers and leave TODO where it
-   says nothing. The template is on the page contract (`.jig/RULES.md`, Documentation): the
+   says nothing. The template is on the page contract (`.jig/rules/rules-docs.md`, Documentation): the
    lead paragraph says what the board is and where it was defined from, and each Invariants
    entry keeps its why and gets its holder, or goes. A part not yet driven by code on this
    board is `no` in the Components table's Verified column. The files the page leans on go in its

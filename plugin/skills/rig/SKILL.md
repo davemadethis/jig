@@ -3,7 +3,7 @@ name: rig
 description: Show the repo's picture - what can start now, what waits on what, what waits on the owner, the roadmap's next step - then put one batch of decisions to the owner, and act on the answers. Run only when invoked by name as /jig:rig, /jig:rig fresh or /jig:rig auto, in the hubnode's session.
 ---
 
-Read `.jig/RULES.md` first (Workflow: `jig rig`). `jig` below is `python3 .jig/jig.py`. You
+Read `.jig/rules/rules-workflow.md` (Workflow: `jig rig`), `rules-roadmap.md` and `rules-staging.md` first. `jig` below is `python3 .jig/jig.py`. You
 are the hubnode, in the trunk checkout: rig's actions (a spec written, a job opened) are
 yours, done the way `/jig:hubnode` does them.
 

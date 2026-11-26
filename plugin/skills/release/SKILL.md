@@ -18,7 +18,7 @@ python3 .jig/jig.py release            # --feature, --milestone, or --version X.
 
 The release renames `## Unreleased` in `.jig/decisions.md` to `## vX.Y.Z - <date>` and adds an
 empty one above it. Before it runs, read Unreleased with the owner. Propose the level as
-`.jig/RULES.md` § Versioning says: the highest level of any change in Unreleased, with a
+`.jig/rules/rules-release.md` § Versioning says: the highest level of any change in Unreleased, with a
 one-line reason. A `**Breaking:**` line tells readers what to do and doesn't raise the level.
 The owner's yes releases it. In a
 metarepo, report the line the release prints for each pararepo: a pin-bump request staged

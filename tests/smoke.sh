@@ -322,8 +322,8 @@ expect_pass test "$(ls -A | grep -v '^\.git$' | LC_ALL=C sort | tr '\n' ' ')" = 
 msg="init: the glossary is seeded in the one form, no title: # Basic terms, then the repo's software product named for the board"
 expect_pass sh -c "test \"\$(ls docs)\" = glossary.md && head -1 docs/glossary.md | grep -qx '# Basic terms' && grep -qx '# '\"\$(python3 -c 'import json; print(json.load(open(\".jig/config.json\"))[\"name\"])')\" docs/glossary.md && grep -qx 'Kind: software' docs/glossary.md && $J glossary \"\$(python3 -c 'import json; print(json.load(open(\".jig/config.json\"))[\"name\"])')\" | grep -qx 'Kind: software'"
 
-msg="init: .jig/ holds jig.py, RULES.md, config.json, docmap.json, jobs.json, decisions.md, ideas.md, roadmap.json, the five scripts, staging/.gitignore, inbox/.gitignore and the templates, nothing else"
-expect_pass test "$(find .jig -type f | LC_ALL=C sort | tr '\n' ' ')" = ".jig/RULES.md .jig/config.json .jig/decisions.md .jig/docmap.json .jig/ideas.md .jig/inbox/.gitignore .jig/jig.py .jig/jobs.json .jig/roadmap.json .jig/scripts/check.sh .jig/scripts/derive.sh .jig/scripts/format.sh .jig/scripts/publish.sh .jig/scripts/release.sh .jig/scripts/setup.sh .jig/staging/.gitignore .jig/templates/deferred.md .jig/templates/glossary-product.md .jig/templates/glossary-term.md .jig/templates/handoff.md .jig/templates/hardware.md .jig/templates/no-phase-item.json .jig/templates/page.md .jig/templates/phase.json .jig/templates/process.md .jig/templates/scope.json .jig/templates/skill.md .jig/templates/spec.md .jig/templates/workarounds.md "
+msg="init: .jig/ holds jig.py, the rulesets but the family two, config.json, docmap.json, jobs.json, decisions.md, ideas.md, roadmap.json, the five scripts, staging/.gitignore, inbox/.gitignore and the templates, nothing else"
+expect_pass test "$(find .jig -type f | LC_ALL=C sort | tr '\n' ' ')" = ".jig/config.json .jig/decisions.md .jig/docmap.json .jig/ideas.md .jig/inbox/.gitignore .jig/jig.py .jig/jobs.json .jig/roadmap.json .jig/rules/rules-decisions.md .jig/rules/rules-docs.md .jig/rules/rules-handoff.md .jig/rules/rules-inbox.md .jig/rules/rules-jobs.md .jig/rules/rules-release.md .jig/rules/rules-roadmap.md .jig/rules/rules-staging.md .jig/rules/rules-workflow.md .jig/scripts/check.sh .jig/scripts/derive.sh .jig/scripts/format.sh .jig/scripts/publish.sh .jig/scripts/release.sh .jig/scripts/setup.sh .jig/staging/.gitignore .jig/templates/deferred.md .jig/templates/glossary-product.md .jig/templates/glossary-term.md .jig/templates/handoff.md .jig/templates/hardware.md .jig/templates/no-phase-item.json .jig/templates/page.md .jig/templates/phase.json .jig/templates/process.md .jig/templates/scope.json .jig/templates/skill.md .jig/templates/spec.md .jig/templates/workarounds.md "
 
 msg="init: specs/ and ledgers/ wait for first use; each record's template is in .jig/templates/, the JSON records' from jig.py's one example, and no pararepo buffer template"
 expect_pass sh -c "test ! -e .jig/specs -a ! -e .jig/ledgers -a ! -e .jig/templates/buffer.md && cmp -s .jig/templates/spec.md '$P/jig/templates/spec.md' && python3 -c \"import json, sys; sys.path.insert(0, '.jig'); import jig; assert json.load(open('.jig/templates/scope.json')) == jig.ROADMAP_RECORDS['scope']\""
@@ -496,8 +496,8 @@ for layout in "eaec973 dot" "66a044c dot" "62c8d9f jig" "eaec973 aidev" "5d955a2
   out=$($UP 2>&1)
   expect_pass sh -c "echo \"\$0\" | grep -q '^Moves' && echo \"\$0\" | grep -q '^Board:' && echo \"\$0\" | grep -q '^Stale references'" "$out"
   if [ "$name" = eaec973-dot ]; then
-    msg="update $name: the seeded docs/README.md is proposed for deletion as a copy of RULES.md, with the AGENTS.md line naming it"
-    expect_pass sh -c "echo \"\$0\" | grep -q '^  docs/README.md: a copy of .jig/RULES.md, which update keeps current: delete it, .*AGENTS.md:[0-9]'" "$out"
+    msg="update $name: the seeded docs/README.md is proposed for deletion as a copy of jig's rules, with the AGENTS.md line naming it"
+    expect_pass sh -c "echo \"\$0\" | grep -q '^  docs/README.md: a copy of jig.s rules in .jig/rules/, which update keeps current: delete it, .*AGENTS.md:[0-9]'" "$out"
   fi
 
   msg="update $name: --apply renames the repo's files, never edits them"
@@ -509,7 +509,7 @@ allowed = {'$board', '.jig/config.json', '.jig/jobs.json', '.aidev/aidev.py', 'j
            '.jig/roadmap.json', 'ROADMAP.md', '.jig/docmap.json', '.jig/ledgers/deferred.md'}
 for line in subprocess.check_output(['git', 'diff', '--cached', '-M', '--name-status'], text=True).splitlines():
     status, *paths = line.split('\t')
-    assert status == 'R100' or status.startswith('R') and paths[-1] == '.jig/ledgers/deferred.md' or set(paths) <= allowed | {'AGENTS.md'} or all(x.startswith('.jig/templates/') or x == '.jig/docs-page.md' for x in paths), line
+    assert status == 'R100' or status.startswith('R') and paths[-1] == '.jig/ledgers/deferred.md' or set(paths) <= allowed | {'AGENTS.md'} or all(x.startswith(('.jig/templates/', '.jig/rules/')) or x == '.jig/docs-page.md' for x in paths), line
 # AGENTS.md changes only where a line is one jig's template retired.
 import importlib.util
 s = importlib.util.spec_from_file_location('j', '$P/jig/jig.py'); j = importlib.util.module_from_spec(s); s.loader.exec_module(j)
@@ -578,13 +578,13 @@ printf -- '---\nstaged: true\n---\nx\n' > jig/staging/pending.md && mkdir -p jig
 out=$($UP 2>&1); $UP --apply >/dev/null 2>&1
 expect_pass sh -c "echo \"\$0\" | grep -q 'move the untracked files in jig/staging/ to .jig/staging/' && test -f .jig/staging/pending.md -a -f .jig/meta-cache/PIN -a ! -e jig && grep -qx '.jig/meta-cache/' .gitignore && ! grep -qx 'jig/meta-cache/' .gitignore && test -z \"\$(git status --porcelain --untracked-files=all | grep -v '^[RAMD] ')\"" "$out"
 
-msg="update: same stamp, different jig.py and RULES.md: both replaced, hooks rewritten, nothing moves, the repo's setup.sh kept byte for byte"
+msg="update: same stamp, different jig.py and rules-jobs.md: both replaced, hooks rewritten, nothing moves, the repo's setup.sh kept byte for byte"
 cd "$T/up-eaec973-dot"
-printf '# local edit\n' >> .jig/jig.py && printf 'local edit\n' >> .jig/RULES.md && printf 'uv sync\n' >> .jig/scripts/setup.sh
+printf '# local edit\n' >> .jig/jig.py && printf 'local edit\n' >> .jig/rules/rules-jobs.md && printf 'uv sync\n' >> .jig/scripts/setup.sh
 git commit -qam edit && cp .jig/scripts/setup.sh "$T/setup.mine"
 rm .git/hooks/pre-push
 $UP --apply >/dev/null 2>&1
-expect_pass sh -c "test \"\$(git diff --cached --name-status | sort)\" = \"\$(printf 'M\t.jig/RULES.md\nM\t.jig/jig.py')\" && test -f .git/hooks/pre-push && cmp -s .jig/scripts/setup.sh '$T/setup.mine'"
+expect_pass sh -c "test \"\$(git diff --cached --name-status | sort)\" = \"\$(printf 'M\t.jig/jig.py\nM\t.jig/rules/rules-jobs.md')\" && test -f .git/hooks/pre-push && cmp -s .jig/scripts/setup.sh '$T/setup.mine'"
 git commit -qm tools
 
 msg="update: once the board is current at .jig/, a root specs/, scripts/check.sh and a jig/ folder are the repo's own"
@@ -684,7 +684,7 @@ out=$($UP 2>&1)
 msg="update: the dry run lists docs/HARDWARE.md and the old skill template as repo files to review"
 expect_pass sh -c "echo \"\$0\" | grep -q '^Repo files to review' && echo \"\$0\" | grep -q \"docs/HARDWARE.md: still the template's TODOs: remove it\" && echo \"\$0\" | grep -q '.claude/skills/_skill-template/: the old blank skill template, unchanged: remove it'" "$out"
 msg="update: no template diff; eaec973's Lanes block is proposed for replacement with the Rulebook line, by its lines"
-expect_pass sh -c "! echo \"\$0\" | grep -q 'against the template' && echo \"\$0\" | grep -q '^  AGENTS.md: lines 24–28, .## Lanes (parallel sessions)., are a block jig retired: replace it, heading to the next heading, with .- Rulebook .\.jig/RULES\.md.'" "$out"
+expect_pass sh -c "! echo \"\$0\" | grep -q 'against the template' && echo \"\$0\" | grep -q '^  AGENTS.md: lines 24–28, .## Lanes (parallel sessions)., are a block jig retired: replace it, heading to the next heading, with .- Rulebook .\.jig/rules/.'" "$out"
 msg="update: on the run that adds .jig/scripts/setup.sh to eaec973's layout, its setup: line is proposed"
 expect_pass sh -c "test ! -e .jig/scripts/setup.sh && echo \"\$0\" | grep -q '^  AGENTS.md: names no .\.jig/scripts/setup\.sh.: add under ## Commands .- setup:'" "$out"
 msg="update: a docs/HARDWARE.md that holds a board is proposed as docs/<board>.md, flat, registered in boards"
@@ -740,7 +740,7 @@ jig = {'.jig/config.json', '.jig/jobs.json', '.jig/jig.py', '.jig/RULES.md', '.j
        '.jig/roadmap.json', 'ROADMAP.md', '.jig/docmap.json'}
 for line in subprocess.check_output(['git', 'diff', '--cached', '-M', '--name-status'], text=True).splitlines():
     status, *paths = line.split('\t')
-    assert status == 'R100' or (status == 'D' and paths[0] in removed) or paths[-1] in jig or paths[-1].startswith('.jig/templates/'), line" "$removed $board"
+    assert status == 'R100' or (status == 'D' and paths[0] in removed) or paths[-1] in jig or paths[-1].startswith(('.jig/templates/', '.jig/rules/')), line" "$removed $board"
 
   case $gen in
     ai-dev)
@@ -1227,8 +1227,8 @@ out=$($J init --meta --name mab --prefix E- 2>&1)
 blk=$(sed -n '/^<!-- jig:meta — /,/^<!-- jig:meta end -->/p' AGENTS.md)
 msg="meta block: init --meta writes one block under AGENTS.md's title, at most 5 lines between its markers"
 expect_pass sh -c "test \"\$(grep -c '^<!-- jig:meta — ' AGENTS.md)\" = 1 && sed -n 3p AGENTS.md | grep -q '^<!-- jig:meta — .*jig init --meta' && test \$(echo \"\$0\" | wc -l) -le 7" "$blk"
-msg="meta block: it states M1, M4, M6 with the E- prefix, M3, that only jig release tags, and names .jig/RULES.md"
-expect_pass sh -c "echo \"\$0\" | grep -q 'docs only.*(M1).*never copied' && echo \"\$0\" | grep -q 'reviewed merges.*branch (M4)' && echo \"\$0\" | grep -q 'E-012: .*(M6)' && echo \"\$0\" | grep -q 'entry_files.*## Unreleased.*decisions.md. (M3)' && echo \"\$0\" | grep -qx -- '- Only .jig release. tags.' && echo \"\$0\" | grep -q '.jig/RULES.md.*Metarepo and pararepos'" "$blk"
+msg="meta block: it states M1, M4, M6 with the E- prefix, M3, that only jig release tags, and names .jig/rules/rules-metarepo.md"
+expect_pass sh -c "echo \"\$0\" | grep -q 'docs only.*(M1).*never copied' && echo \"\$0\" | grep -q 'reviewed merges.*branch (M4)' && echo \"\$0\" | grep -q 'E-012: .*(M6)' && echo \"\$0\" | grep -q 'entry_files.*## Unreleased.*decisions.md. (M3)' && echo \"\$0\" | grep -qx -- '- Only .jig release. tags.' && echo \"\$0\" | grep -q '.jig/rules/rules-metarepo.md.*Metarepo'" "$blk"
 msg="meta block: the console names AGENTS.md among the files to commit"
 expect_pass sh -c "echo \"\$0\" | tail -1 | grep -q 'Commit these on main, AGENTS.md among them'" "$out"
 # trunk gets an older wording, as a repo set up by an earlier jig has
@@ -3873,8 +3873,8 @@ expect_pass sh -c "test -n \"\$(git -C '$SM' tag --contains propose/ba-para-b8)\
 msg="buffer: the same empty proposal, its branch deleted after the merge, still reads not released and closes nothing"
 git -C "$SM" branch -q -D propose/ba-para-b8; out=$($J sync 2>&1)
 expect_pass sh -c "grep -q '^| B8 .*| Open |\$' .jig/ledgers/buffer.md && echo \"\$0\" | grep -qF 'proposal propose/ba-para-b8 (.jig/specs/b8.md): not released' && ! echo \"\$0\" | grep 'ba-para-b8' | grep -q 'released by'" "$out"
-msg="answered: RULES.md names the answered state, the withdrawn line and both commands"
-expect_pass sh -c "grep -q 'Closed (answered in <release>: <reason>)' '$P/jig/RULES.md' && grep -q 'meta: <name> withdrawn <branch>' '$P/jig/RULES.md' && grep -q '^jig propose --withdraw' '$P/jig/RULES.md' && grep -q '^jig sync --answered' '$P/jig/RULES.md'"
+msg="answered: rules-pararepo.md names the answered state and the withdrawn line, and jig -h both commands"
+expect_pass sh -c "grep -q 'Closed (answered in <release>: <reason>)' '$P/jig/rules/rules-pararepo.md' && grep -q 'meta: <name> withdrawn <branch>' '$P/jig/rules/rules-pararepo.md' && python3 '$P/jig/jig.py' propose -h | grep -q -- '--withdraw' && python3 '$P/jig/jig.py' sync -h | grep -q -- '--answered'"
 }
 
 # ---------------------------------------------------------------- pointers
@@ -3949,8 +3949,8 @@ out=$($UP 2>&1); before=$(shasum .jig/ledgers/buffer.md); $UP --apply >/dev/null
 expect_pass sh -c "echo \"\$0\" | grep 'docs/x.md, which' | grep -q 'Open row B1' && ! echo \"\$0\" | grep 'docs/x.md, which' | grep -q 'offer a row' && test \"\$(shasum .jig/ledgers/buffer.md)\" = '$before' && test -z \"\$(git status --porcelain -- .jig/ledgers/buffer.md)\"" "$out"
 msg="pointers: an Open row about another heading of the file (w.md § 9) doesn't stand in for § 4"
 expect_pass sh -c "echo \"\$0\" | grep 'docs/w.md § 4,' | grep -q 'offer a row'" "$out"
-msg="pointers: RULES.md has the number rule and P2's lost-file rule"
-expect_pass sh -c "grep -q '§ 2\` is \`## 2. Motes\`, not \`### 2.1\`' '$P/jig/RULES.md' && grep '^| P2 |' '$P/jig/RULES.md' | grep -q 'a lost file counts even when its heading was already missing'"
+msg="pointers: rules-pararepo.md has the number rule and P2's lost-file rule"
+expect_pass sh -c "grep -q '\`## 2. Motes\`, not \`### 2.1\`' '$P/jig/rules/rules-pararepo.md' && grep '^| P2 |' '$P/jig/rules/rules-pararepo.md' | grep -q 'a lost file counts even when its heading was already missing'"
 }
 
 sec_removals() {
@@ -4050,8 +4050,8 @@ expect_pass sh -c "echo \"\$0\" | grep -qx 'up to date' && echo \"\$0\" | sed -n
 msg="removals M1: a metarepo branch removing a code file committed with --no-verify commits"
 cd "$RM" && printf 'x=1\n' > tool.py && git add tool.py && git commit -q --no-verify -m code
 git switch -q -c drop-tool && git rm -q tool.py; expect_pass git commit -qm "TOOL: drop tool"
-msg="removals: RULES.md says a delete and a rename count, and P2's row names them"
-expect_pass sh -c "grep -q 'a rename changes both of its paths: R3–R5, P1, P2 and P4 count each' '$P/jig/RULES.md' && grep '^| P2 |' '$P/jig/RULES.md' | grep -q 'a delete, or a rename from one'"
+msg="removals: rules-jobs.md says a delete and a rename count, and P2's row names them"
+expect_pass sh -c "grep -q 'a rename changes both of its paths: R3–R5, P1, P2 and P4 count each' '$P/jig/rules/rules-jobs.md' && grep '^| P2 |' '$P/jig/rules/rules-pararepo.md' | grep -q 'a delete, or a rename from one'"
 }
 
 # ---------------------------------------------------------------- feedback
@@ -4310,10 +4310,10 @@ msg="homes: a longer name or another repo's path is no citation; a root GEMINI.m
 expect_pass homes "assert h['docs/ui.md']['naming'] == [], h['docs/ui.md']
 assert 'GEMINI.md' not in h, h"
 
-msg="homes: a misplaced page that quotes three RULES.md sentences is a page, not a copy"
+msg="homes: a misplaced page that quotes three ruleset sentences is a page, not a copy"
 python3 - <<'PY'
 import re
-rules = open('.jig/RULES.md').read()
+import glob; rules = ''.join(open(f).read() for f in sorted(glob.glob('.jig/rules/rules-*.md')))
 quoted = [s for s in re.split(r'(?<=[.!?])\s+', re.sub(r'\s+', ' ', rules)) if len(s) > 40 and s[0].isupper()][:3]
 import os; os.makedirs('docs/misc', exist_ok=True)
 open('docs/misc/quoting.md', 'w').write('# Q\n\n## Now\n' + ' '.join(quoted) + '\n\n## Rules\nx\n\n## Checks\ny\n')
@@ -4640,14 +4640,14 @@ expect_pass sh -c "! echo \"\$0\" | grep -qE 'against the template|filled-' && t
 grep '^- setup:' "$P/AGENTS.md" > s.tmp && sed -i.bak '/^- check:/r s.tmp' AGENTS.md && rm s.tmp AGENTS.md.bak && git commit -qam setup
 msg="agents lines: with the setup: line restored, no AGENTS.md line prints"
 out=$(alines); expect_pass test -z "$out"
-sed -i.bak 's/^- Rulebook .*/- Read `.jig\/RULES.md` (the rulebook) first./' AGENTS.md && rm AGENTS.md.bak && git commit -qam aside
-msg="agents lines: a mention of RULES.md with an aside after it counts as the Rulebook line"
+sed -i.bak 's/^- Rulebook .*/- Read `.jig\/rules\/` (the rulebook) first./' AGENTS.md && rm AGENTS.md.bak && git commit -qam aside
+msg="agents lines: a mention of .jig/rules/ with an aside after it counts as the Rulebook line"
 out=$(alines); expect_pass test -z "$out"
 git checkout -q HEAD~1 -- AGENTS.md && git commit -qm "rulebook back"
 sed -i.bak '/^- Rulebook /d' AGENTS.md && rm AGENTS.md.bak && git commit -qam "no rulebook"
-msg="agents lines: with the Rulebook line removed, it is proposed, though the docs lines cite RULES.md (Documentation)"
-out=$(alines); want="  AGENTS.md: names no \`.jig/RULES.md\`: add under ## Workflow \`$(grep '^- Rulebook ' "$P/AGENTS.md")\`"
-expect_pass sh -c "grep -q 'RULES.md. (Documentation)' AGENTS.md && test \"\$0\" = \"\$1\"" "$out" "$want"
+msg="agents lines: with the Rulebook line removed, it is proposed, though the docs lines cite rules-docs.md (Documentation)"
+out=$(alines); want="  AGENTS.md: names no \`.jig/rules/\`: add under ## Workflow \`$(grep '^- Rulebook ' "$P/AGENTS.md")\`"
+expect_pass sh -c "grep -q 'rules-docs.md. (Documentation)' AGENTS.md && test \"\$0\" = \"\$1\"" "$out" "$want"
 git checkout -q HEAD~1 -- AGENTS.md && git commit -qm rulebook
 
 python3 -c "
@@ -6407,8 +6407,8 @@ gk; expect_pass sh -c "test $rc = 1 && echo \"\$0\" | grep -q 'unanswered' && ! 
 ( cd .git/jig/worktrees/G && pcfold && git add -A && git commit -qm "answer" ) >/dev/null 2>&1
 msg="gate merge: once it is answered, the next gate refuses the wrong built answer, after the merge"
 gk; expect_pass sh -c "test $rc = 1 && echo \"\$0\" | grep -q 'no spec of this job takes No phase/p' && echo \"\$0\" | grep -q ': gate [0-9a-f]* from' && test -z '$left'" "$out"
-msg="no phase: the review, spec and RULES texts send work with no phase, parked or not, to ## No phase"
-expect_pass sh -c "for f in '$P/../skills/review/SKILL.md' '$P/../skills/spec/SKILL.md' '$P/jig/RULES.md'; do grep -q 'No phase' \"\$f\" || exit 1; done"
+msg="no phase: the review, spec and roadmap rules texts send work with no phase, parked or not, to ## No phase"
+expect_pass sh -c "for f in '$P/../skills/review/SKILL.md' '$P/../skills/spec/SKILL.md' '$P/jig/rules/rules-roadmap.md'; do grep -q 'No phase' \"\$f\" || exit 1; done"
 
 # A scope or phase names what it waits on, so rig never offers blocked work and a ring is refused.
 ranew() { pcnew "$T/ra$1" && mkdir -p docs && printf '# X\n\nX is.\n' > docs/x.md && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board; }
@@ -6757,7 +6757,7 @@ $J open M --spec .jig/specs/y.md --owns 'docs/**' >/dev/null && git add -A && gi
 gated M; $J merge M >/dev/null 2>&1
 expect_pass sh -c "$RMAP md .jig/roadmap.json | grep -q 'touches docs/d.md' && git show --name-only --format= HEAD | grep -qx .jig/roadmap.json"
 
-# How the repository is worked is no page's (RULES.md, Documentation: Product and process).
+# How the repository is worked is no page's (rules-docs.md, Documentation: Product and process).
 BP="$T/process"; pcnew "$BP" && mkdir -p docs src scripts && printf 'x = 1\n' > src/a.py
 printf '# A\n\nA keeps the list.\n' > docs/a.md && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
 cat >> docs/a.md <<'PAGE'
@@ -7074,7 +7074,7 @@ msg="branch log: jig rules on the reverted tree, unstaged, agrees with the hook"
 expect_pass sh -c "test \"\$0\" = ok" "$ck"
 $J reviewed >/dev/null && $J handoff >/dev/null 2>&1 && pcfold && git add -A && git commit -qm "TOOL: note ml" && cd "$OM"
 msg="migration: the job merges into main, and --apply --merge-log there then rewrites only the board: append_files and the counter"
-gated ml; $J merge ml >/dev/null 2>&1; out=$($UP --apply --merge-log 2>&1)
+gated ml; mout=$($J merge ml 2>&1) || echo "$mout"; out=$($UP --apply --merge-log 2>&1)
 expect_pass sh -c "git log -1 --format=%s | grep -qx 'merge ml' && python3 -c \"import json; c=json.load(open('.jig/config.json')); assert 'CHANGELOG.md' not in c['append_files'] and '.jig/decisions.md' in c['append_files'], c; assert c['reserve']['decision']['files']==['.jig/decisions.md'], c\" && git diff --cached --name-only | grep -qx .jig/config.json && git commit -qm 'TOOL: board after the log'" "$out"
 msg="branch log: on trunk after the merge, the status-line edit is refused as frozen on main"
 restate && git add -A; out=$(git commit -qm "D-001: restated" 2>&1); undo
@@ -7412,8 +7412,8 @@ msg="ideas fold: jig survey on a page with ## Undefined names .jig/ideas.md for 
 printf '# Y\n\nY is a page.\n\n## Undefined\n- why y?\n' > docs/y.md && git add -A && git -c core.hooksPath=/dev/null commit -qm y
 out=$($J survey 2>&1)
 expect_pass sh -c "echo \"\$0\" | grep -q 'an open question → an idea in .jig/ideas.md'" "$out"
-msg="ideas fold: among the skills, RULES.md and docs/, only RULES.md and the update skill name ## Open (the fold, a log not folded yet, the refusal)"
-expect_pass sh -c "test \"\$(grep -rlw -- '## Open' '$P/../skills' '$P/jig/RULES.md' '$P/../../docs' | sed -e 's|.*/skills/|skills/|' -e 's|.*/jig/RULES.md|RULES.md|' | sort | tr '\n' ' ')\" = 'RULES.md skills/update/SKILL.md '"
+msg="ideas fold: among the skills, the rulesets and docs/, only the decisions, jobs and metarepo rulesets and the update skill name ## Open (the fold, a log not folded yet, the refusal)"
+expect_pass sh -c "test \"\$(grep -rlw -- '## Open' '$P/../skills' '$P/jig/rules' '$P/../../docs' | sed -e 's|.*/skills/|skills/|' -e 's|.*/jig/rules/|rules/|' | sort | tr '\n' ' ')\" = 'rules/rules-decisions.md rules/rules-jobs.md rules/rules-metarepo.md skills/update/SKILL.md '"
 msg="ideas fold: --merge-log numbers a folder of records above the ideas' ids, one counter for both"
 mkdir -p docs/decisions && printf '# 0001. Use A\n\n- **Date:** 2026-01-01\n- **Status:** in force\n\n## Context\n\nWe needed A.\n' > docs/decisions/0001-a.md
 printf '# 0002. Use B\n\n- **Date:** 2026-01-02\n- **Status:** in force\n\n## Context\n\nB too.\n' > docs/decisions/0002-b.md
@@ -8332,8 +8332,8 @@ sed 's/^source: chat; unreviewed$/source: chat/' "$T/un.md" > .jig/staging/un.md
 expect_refuse $J staging resolve un.md
 cp "$T/un.md" .jig/staging/un.md
 expect_pass sh -c "$J staging resolve un.md && test ! -e .jig/staging/un.md"
-msg="RULES.md § Staging: the target sentence and the Accepted warning"
-expect_pass sh -c "sed -n '/^## Staging/,/^## Metarepo/p' '$P/jig/RULES.md' | tr '\n' ' ' > '$T/st' && grep -q 'repo that owns the subject' '$T/st' && grep -q 'warns on each entry of a .decisions. file whose status says Accepted' '$T/st'"
+msg="rules-staging.md § Staging: the target sentence and the Accepted warning"
+expect_pass sh -c "sed -n '/^## Staging/,$p' '$P/jig/rules/rules-staging.md' | tr '\n' ' ' > '$T/st' && grep -q 'repo that owns the subject' '$T/st' && grep -q 'warns on each entry of a .decisions. file whose status says Accepted' '$T/st'"
 }
 
 
@@ -10044,8 +10044,8 @@ msg="update roles: a metarepo block in an older wording is listed the same way"
 expect_pass sh -c "echo \"\$0\" | grep -q '^  AGENTS.md: has no metarepo block, or one older'" "$out"
 ur_reset; $J init --meta --prefix E- >/dev/null && grep -v '^- Rulebook ' AGENTS.md > AGENTS.tmp && mv AGENTS.tmp AGENTS.md && ur_commit norulebook
 out=$($UP 2>&1)
-msg="update roles: the block's citation of .jig/RULES.md loads no rulebook, so a metarepo without the Rulebook line is told to add it"
-expect_pass sh -c "echo \"\$0\" | grep -q '^  AGENTS.md: names no .\.jig/RULES\.md.: add under ## Workflow'" "$out"
+msg="update roles: the block's citation of .jig/rules/rules-metarepo.md loads no rulebook, so a metarepo without the Rulebook line is told to add it"
+expect_pass sh -c "echo \"\$0\" | grep -q '^  AGENTS.md: names no .\.jig/rules/.: add under ## Workflow'" "$out"
 
 # Fixture G: procedures in the repo's own words.
 ur_reset
@@ -10063,7 +10063,7 @@ out=$($UP 2>&1); $UP --apply >/dev/null 2>&1
 msg="update roles G: the review line names /jig:review, once per handoff"
 expect_pass sh -c "echo \"\$0\" | grep -q '^  AGENTS.md:$n: runs a step in the repo.s own words; .*/jig:review (a fresh session, once per handoff)'" "$out"
 msg="update roles G: the tier line names roles in config.json"
-expect_pass sh -c "echo \"\$0\" | grep -q '^  AGENTS.md:$((n + 1)): runs a step.*.roles. in .jig/config.json (.jig/RULES.md § Workflow)'" "$out"
+expect_pass sh -c "echo \"\$0\" | grep -q '^  AGENTS.md:$((n + 1)): runs a step.*.roles. in .jig/config.json (.jig/rules/rules-workflow.md § Workflow)'" "$out"
 msg="update roles G: the CLAUDE.md line names /jig:work; the product line is not listed"
 expect_pass sh -c "echo \"\$0\" | grep -q '^  CLAUDE.md:3: runs a step.*/jig:work (jig handoff)' && ! echo \"\$0\" | grep -q 'AGENTS.md:$((n + 2)):'" "$out"
 msg="update roles G: a role word beside one tier is listed with roles; a product's Tier and effort are not"
@@ -10295,8 +10295,8 @@ printf 'mkdir -p dist && printf x > "dist/app-$version.zip"\n' >> .jig/scripts/r
 board "b['release']['artifacts'] = ['dist/*.zip']" && printf 'dist/\n' > .gitignore && git add -A && git commit -qm board
 msg="versioning: the log header names MILESTONE.FEATURE.PATCH and Versioning, never SemVer or a major"
 expect_pass sh -c "grep -q 'versions are MILESTONE.FEATURE.PATCH' .jig/decisions.md && grep -q 'Versioning' .jig/decisions.md && ! grep -q 'Semantic Versioning' .jig/decisions.md && ! grep -q 'released as a major' .jig/decisions.md"
-msg="versioning: RULES.md has ## Versioning just before ## Release"
-expect_pass sh -c "grep '^## ' .jig/RULES.md | grep -B1 -x '## Release' | head -1 | grep -qx '## Versioning'"
+msg="versioning: rules-release.md has ## Versioning just before ## Release"
+expect_pass sh -c "grep '^## ' .jig/rules/rules-release.md | grep -B1 -x '## Release' | head -1 | grep -qx '## Versioning'"
 $J release --version 0.3.0 >/dev/null 2>&1
 ulog '- **Breaking:** the x setting is renamed y.' && git add -A && git commit -qm "x is y"
 msg="versioning: a Breaking line doesn't raise the level: no flag tags the patch"
@@ -10311,7 +10311,7 @@ expect_pass sh -c "$J release --version 1.0.0 >/dev/null 2>&1 && $J release --mi
 msg="versioning: --minor and --major still work, as --feature and --milestone"
 expect_pass sh -c "$J release --minor >/dev/null 2>&1 && git tag | grep -qx v2.1.0 && $J release --major >/dev/null 2>&1 && git tag | grep -qx v3.0.0"
 msg="versioning: no rule text, header or skill tells the hubnode a Breaking line or SemVer sets the level"
-expect_pass sh -c "! grep -rn -e 'means \`--major\`' -e 'is a major release' -e 'released as a major' -e 'so it is a major' -e 'Semantic Versioning' -e 'follow SemVer' '$P/jig/RULES.md' '$P/../skills' && ! grep -q 'Semantic Versioning' .jig/decisions.md"
+expect_pass sh -c "! grep -rn -e 'means \`--major\`' -e 'is a major release' -e 'released as a major' -e 'so it is a major' -e 'Semantic Versioning' -e 'follow SemVer' '$P/jig/rules' '$P/../skills' && ! grep -q 'Semantic Versioning' .jig/decisions.md"
 
 VU="$T/vu"; pcnew "$VU" && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
 old_head() { python3 -c "
@@ -11158,7 +11158,7 @@ git merge --abort
 }
 
 sec_claims() {
-# A spec that changes a claim starts from every tracked place naming it (RULES.md: Every copy).
+# A spec that changes a claim starts from every tracked place naming it (rules-metarepo.md: Every copy).
 CL="$T/claims"; pcnew "$CL" && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
 nohook() { git -c core.hooksPath=/dev/null commit -qm "$1"; }
 mkdir -p docs/store
@@ -11238,7 +11238,7 @@ expect_pass sh -c "echo \"\$0\" | grep -q '^  pointer  docs/store/store.md:12 ' 
 msg="claims term: § after another page names that page's heading: a copy, not a pointer"
 expect_pass sh -c "echo \"\$0\" | grep -q '^  copy     docs/store/store.md:15 '" "$out"
 msg="claims term: fenced code, a longer word and jig's own rulebook are not listed"
-expect_refuse sh -c "echo \"\$0\" | grep -qE 'store.md:19 |store.md:21 |RULES.md'" "$out"
+expect_refuse sh -c "echo \"\$0\" | grep -qE 'store.md:19 |store.md:21 |\.jig/rules/'" "$out"
 msg="claims term: a glossary heading at ### is the term's home"
 expect_pass sh -c "$J reading-list --claims Seam | grep -q '^  home     docs/glossary.md:7 '"
 

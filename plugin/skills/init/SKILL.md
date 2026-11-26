@@ -50,8 +50,8 @@ Jobs' worktrees go in `.git/jig/worktrees/`, so nothing needs gitignoring.
 
 **A metarepo** holds shared definitions, decisions and conventions for several other repos, and
 no code. If the owner says this repo is one, or it has no code and other repos cite it, ask
-first. Its pages sit in genre folders, `docs/<genre>/<name>.md` (`.jig/RULES.md`, Metarepo and
-pararepos), so ask which genres it uses, offering two templates:
+first. Its pages sit in genre folders, `docs/<genre>/<name>.md` (`.jig/rules/rules-metarepo.md`, A
+metarepo's docs tree), so ask which genres it uses, offering two templates:
 
 - **product ecosystem**: `products`, `features`, `principles`, `concepts`;
 - **custom**: the folder names the owner gives.
@@ -61,7 +61,7 @@ Then run `python3 .jig/jig.py init --meta --genres product-ecosystem`, or
 an `### <genre>` term for each under `# Basic terms` in `docs/glossary.md`, where each genre is defined
 once: a genre gets no page of its own. Fill each heading's TODO with the owner, or name it as
 remaining. It also writes the metarepo block under `AGENTS.md`'s title: jig's lines for the rules
-every commit meets (`.jig/RULES.md`, Metarepo and pararepos), kept current by rerunning
+every commit meets (`.jig/rules/rules-metarepo.md`, Metarepo), kept current by rerunning
 `init --meta` (in a job's worktree once `.jig/meta.json` is on trunk), so write none of them by hand. Commit `AGENTS.md` with the rest.
 
 Then:
@@ -84,7 +84,7 @@ Then:
    with jig's defaults. Leave `.jig/scripts/publish.sh` as the template too: until its TODO line
    goes, a release skips it, and `/jig:release` asks what a release publishes on the next release.
    Leave `.jig/scripts/derive.sh` as the template unless a tracked file passes the test in
-   `.jig/RULES.md` (Keeping merges mechanical). Find the tracked files that are generated: a
+   `.jig/rules/rules-jobs.md` (Keeping merges mechanical). Find the tracked files that are generated: a
    "generated" or "do not edit" header, a `linguist-generated` line in `.gitattributes`, an
    output path in a tracked script or build file, a file `check.sh` rebuilds and compares. Read
    each one's generator, judge it by that test, and show each with its verdict and reason.

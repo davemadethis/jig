@@ -19,7 +19,7 @@ Report the output, then say what it means in a few lines:
 
 - **Oversized always-loaded file.** Over 40 rule lines and the whole file starts getting
   ignored, so every rule in it is weakened by the ones around it. Highest-value fix. A cut line
-  goes where survey's line says (`.jig/RULES.md`, Homes): never to a page.
+  goes where survey's line says (`.jig/rules/rules-docs.md`, Homes): never to a page.
 - **No home in the taxonomy.** Each document gets one job and one home — AGENTS.md rules,
   `docs/` what the code is now, `.jig/specs/` a task in flight, `.jig/ledgers/workarounds.md` patches in the code,
   `.jig/ledgers/deferred.md` review findings not in it,
@@ -28,8 +28,8 @@ Report the output, then say what it means in a few lines:
   If a directory ships markdown as code, list it under `not_docs` in `.jig/docmap.json` as a glob
   such as `dir/**`. Survey names any `not_docs` glob that matches no file.
 - **Rules files, copies, pages.** Survey checks every Markdown file against the homes
-  `.jig/RULES.md` (Documentation) lists, by shape. An `AGENTS.md`, `CLAUDE.md` or `GEMINI.md` off
-  root is a second rulebook; a file with three of RULES.md's sentences is a copy that froze; a
+  `.jig/rules/rules-docs.md` (Documentation) lists, by shape. An `AGENTS.md`, `CLAUDE.md` or `GEMINI.md` off
+  root is a second rulebook; a file with three of the rulesets' sentences is a copy that froze; a
   page in the wrong folder (an Invariants section or a retired Undefined one, the old Now/Rules/Checks, or
   any file `docmap` names, whatever its format) is printed with where it goes. Each line carries its fix; `/jig:update` proposes the same ones
   with everything they touch.

@@ -10,7 +10,7 @@ the closing consolidate are the spec role's, each group's investigation and its 
 role's, and the jobs that follow are Job's. The roles' settings are `jig roles`'s; the
 hubnode starts each from its skill's brief, with the reports' paths.
 
-Run this in the jig repo only: its `.jig/jig.py`, `RULES.md` and skills are the code under
+Run this in the jig repo only: its `.jig/jig.py`, rulesets and skills are the code under
 investigation. Elsewhere, stop and say where to run it. If `jig staging` refuses
 `kind: feedback`, this repo's installed `.jig/` predates it: run `/jig:update` first.
 
@@ -21,12 +21,12 @@ investigation. Elsewhere, stop and say where to run it. If `jig staging` refuses
 - **Investigating** (the bug role, `/jig:bug`, one per group) against jig's own code
   (`plugin/`). The reporters' givens are inputs: tag one `[seen]` only once you've reproduced it here, else `[assumed]`.
   Note each report's `jig_version`: the bug may be in an older copy than this one.
-- **General?** (the bug role, before its spec) Picture another repo using the same feature the way RULES.md describes
+- **General?** (the bug role, before its spec) Picture another repo using the same feature the way its rulesets describe
   it, run by people and agents making ordinary mistakes. It could be a regular repo, a
   pararepo or a metarepo, whichever applies. Is solving this problem likely to lead to a
   general improvement for that repo, too? If so, it's worth keeping; if not, it might be
   overfit to one example. The solution is definitely not worth implementing if the problem
-  only appears for a repo that wants more than RULES.md promises (like a stricter
+  only appears for a repo that wants more than the rulesets promise (like a stricter
   guarantee, or a policy or tool of its own) or if someone would have to be working
   against jig on purpose to trigger it. If the fix is too specific, then: drop it, say what
   jig does promise, and suggest how the reporting repo can meet its stricter need itself.

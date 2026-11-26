@@ -3,7 +3,7 @@ name: hubnode
 description: Run the hubnode session for a repo with parallel jobs - the owner's session, which owns trunk, the board, worktrees, gates and merges, and assigns each step to a role. Use at the start of a hubnode session, or on "open a job", "gate X", "merge X".
 ---
 
-Read `.jig/RULES.md` first. `jig` below is `python3 .jig/jig.py`.
+Read every ruleset in `.jig/rules/` first. `jig` below is `python3 .jig/jig.py`.
 
 You are the owner's session. You talk, decide, assign, gate, merge, release, push and publish. You
 build no feature and run no suite: every other step belongs to a role (`spec`, `bug`, `work`,
@@ -30,7 +30,7 @@ out as `/jig:decision-cards` says.
 4. `jig staging`: if anything is staged, one line with the count and kinds (`/jig:stage` resolves them;
    a feature request is interpreted into a spec as it says). Then `jig inbox`, and again
    whenever a prompt arrives announcing unread messages: each message is a reply to this
-   repo's hubnode, and the quoted owner words in it, with their date, rule (`.jig/RULES.md`,
+   repo's hubnode, and the quoted owner words in it, with their date, rule (`.jig/rules/rules-inbox.md`,
    Inbox), but for a fixed rule's word, which only the owner's reply here gives. It sets aside in `.jig/inbox/misaddressed/`, and names, a message addressed to another
    repo: ask the owner where it belongs.
 5. In a pararepo (`.jig/para.json`), `jig sync` on trunk; report a newer release, and a
@@ -124,7 +124,7 @@ Those commit nothing: you read the result, copy what it wrote onto trunk and com
 given the inputs `/jig:review` names and nothing of this conversation. Where there is none,
 a raised session with no history. **check** runs one at a time on this machine: two
 complete suites at once each run slower than both in turn. `jig queue --full` enforces it, and
-every role's test and check runs go through `jig queue` too (`.jig/RULES.md`, The queue).
+every role's test and check runs go through `jig queue` too (`.jig/rules/rules-workflow.md`, The queue).
 
 ## Reconfiguring
 
@@ -165,7 +165,7 @@ for a card's reply, and record it where a ruling lands (a decision entry, a spec
 Your answer goes back only through the owner.
 
 New process (a rule, a procedure, a convention), from the owner or a subnode, is placed by the
-test in `.jig/RULES.md` (Homes) before it is written, and a spec for process work names its home.
+test in `.jig/rules/rules-docs.md` (Homes) before it is written, and a spec for process work names its home.
 When `.jig/process.md` is absent, create it from `.jig/templates/process.md`,
 and add `AGENTS.md`'s pointer line naming its trigger ("Before a release, read `.jig/process.md` § Release"); a new section gets its trigger on that line too.
 
@@ -259,7 +259,7 @@ hand once that is saved. A merge you finished by hand after conflicts removes no
 same yourself.
 
 `jig merge` already wrote the files the repo builds from several sources that separate jobs
-change (`.jig/RULES.md`, Keeping merges mechanical), with `.jig/scripts/derive.sh`, in the
+change (`.jig/rules/rules-jobs.md`, Keeping merges mechanical), with `.jig/scripts/derive.sh`, in the
 merge commit. A step the repo repeats after every merge that writes files goes in
 `derive.sh`, its outputs in `derived_files` in `.jig/config.json`: propose it to the owner.
 
@@ -282,7 +282,7 @@ in a staged file or an inbox message (`/jig:decision-cards`, Is it open?). A scr
 clone (made for the test, with no remote) is exempt. First the check role runs the complete
 check in a detached worktree of trunk's tip, as for a batch; then you run `jig release`
 yourself, as `/jig:release` says: the tag, then `publish.sh`'s push and publish. Propose the
-level in the release card with a one-line reason, from `.jig/RULES.md` § Versioning. The
+level in the release card with a one-line reason, from `.jig/rules/rules-release.md` § Versioning. The
 owner's yes releases it; don't ask the owner to pick it. In a
 metarepo, report the release's line for each pararepo to the owner: a pin-bump request staged,
 or why not.
