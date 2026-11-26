@@ -1414,7 +1414,7 @@ msg="staging: and a job's commit of it passes M3 and R3, the entry being its lin
 cd "$M"
 
 msg="plugin: only the skills that change the repo, tag, write user config, speak for the owner or report on jig are user-only; read-only ones stay listed"
-expect_pass test "$(grep -l '^disable-model-invocation: true' $P/../skills/*/SKILL.md | xargs -n1 dirname | xargs -n1 basename | sort | tr '\n' ' ')" = "adopt feedback init redocument relay release repos designer send update "
+expect_pass test "$(grep -l '^disable-model-invocation: true' $P/../skills/*/SKILL.md | xargs -n1 dirname | xargs -n1 basename | sort | tr '\n' ' ')" = "adopt designer feedback init redocument relay release repos send update "
 
 msg="plugin: no skill description holds angle brackets (the desktop app reads them as XML tags)"
 expect_refuse grep -lE '^description:.*[<>]' $P/../skills/*/SKILL.md $P/skills/*/SKILL.md
