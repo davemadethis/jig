@@ -19,9 +19,12 @@ for f in plugin/.claude-plugin/plugin.json .claude-plugin/marketplace.json; do
   sed -i.bak "s/\"version\": \"[^\"]*\"/\"version\": \"$version\"/" "$f" && rm "$f.bak"
 done
 
-# --- the plugin must validate and every rule must pass end to end before it ships
+# --- the plugin must validate and every rule must pass end to end before it ships.
+# JIG_RELEASE_SMOKE names smoke sections to run instead of all of them, on the owner's word,
+# for a release whose change only those sections cover; unset, every section runs.
 claude plugin validate ./plugin
-bash tests/smoke.sh
+# shellcheck disable=SC2086 # the sections are words
+bash tests/smoke.sh ${JIG_RELEASE_SMOKE:-}
 
 # --- the release is the plugin folder zipped as a .plugin, from the working tree: the version
 # bump above isn't committed yet, so `git archive HEAD` would ship the old version
