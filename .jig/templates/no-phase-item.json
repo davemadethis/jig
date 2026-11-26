@@ -1,0 +1,19 @@
+{
+  "id": "item",
+  "text": "What the work is",
+  "labels": [
+    "feature"
+  ],
+  "touches": [
+    "docs/page.md"
+  ],
+  "after": [
+    "alpha/scope"
+  ],
+  "needed_by": [
+    "Other alpha/scope"
+  ],
+  "product": "Product",
+  "stopped_at": "Where the work stopped",
+  "parked": "2026-01-31"
+}

@@ -1,0 +1,16 @@
+{
+  "id": "scope",
+  "text": "What the scope builds",
+  "labels": [
+    "feature"
+  ],
+  "touches": [
+    "docs/page.md"
+  ],
+  "after": [
+    "alpha/other"
+  ],
+  "needed_by": [
+    "Other alpha/scope"
+  ]
+}

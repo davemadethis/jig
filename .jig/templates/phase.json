@@ -1,0 +1,18 @@
+{
+  "product": "Product",
+  "name": "alpha",
+  "note": "What the phase is for, in prose.",
+  "exit": [
+    {
+      "text": "What is true when the phase is done",
+      "done": false
+    }
+  ],
+  "after": [
+    "Product beta/scope"
+  ],
+  "needed_by": [
+    "Other alpha/scope"
+  ],
+  "scopes": []
+}

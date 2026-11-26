@@ -1,9 +1,7 @@
 # Decisions and changes
 
-This log follows Keep a Changelog (https://keepachangelog.com/en/1.1.0/) plus decision entries, and versions are MILESTONE.FEATURE.PATCH, set by how much the product changed (`.jig/RULES.md`, Versioning).
+This log follows Keep a Changelog (https://keepachangelog.com/en/1.1.0/) plus decision entries, and versions are MILESTONE.FEATURE.PATCH, set by how much the product changed (`.jig/rules/rules-release.md`, Versioning).
 A breaking change is one that a reader taking the release must act on: a `**Breaking:**` line says what to change, and it doesn't set the version's level.
-
-## Open
 
 ## Unreleased
 

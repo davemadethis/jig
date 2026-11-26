@@ -14,6 +14,7 @@ Risk: R0 — one user, nothing shipped. Optimize for simplicity and clarity, not
 - check: `python3 .jig/jig.py queue -- .jig/scripts/check.sh` (the validator and a syntax check of `jig.py`); the full smoke is the complete check
 - setup:  `.jig/scripts/setup.sh` (runs itself in new worktrees and after merges; run it after changing dependencies)
 - derive: `.jig/scripts/derive.sh` (writes the files built from several sources that separate jobs change; `jig merge` runs it and commits what `derived_files` in `.jig/config.json` lists; branches don't commit them)
+- roadmap: `python3 .jig/jig.py roadmap show` (the roadmap as a chart; run it when asked to show the roadmap)
 
 ## Workflow
 - Task bigger than a one-sentence diff → `.jig/specs/<task>.md` first (/jig:spec).
@@ -22,7 +23,7 @@ Risk: R0 — one user, nothing shipped. Optimize for simplicity and clarity, not
 - A mergeable chunk is a handoff: checks pass → /jig:review → `jig reviewed` → `jig handoff`. `jig next` names each job's next step and who takes it (`jig roles`, `jig flows`).
 - A diff that changes only skill text, docs or specs (no `jig.py`, hooks, templates or `tests/`) gets a lighter review: tier 2, effort 3. Anything else gets the review role's settings. This is the owner's setting, not a hubnode's pick; `jig gate` warns that it ran below the spec's review line, and that warning is expected.
 - A release, on the owner's word: write `dist/notes-X.Y.Z.md` (install line, then New / Changed / Fixed), bring `README.md` up to the release from those notes with `/davewriter:davewriter` and commit it, then `python3 .jig/jig.py release --feature` (or `--patch`). jig is at 0.y.z, so `--milestone` doesn't apply until the owner calls 1.0.0. After the tag, `.jig/scripts/publish.sh` pushes main and the tag (the marketplace serves `./plugin` from main) and publishes `dist/jig-X.Y.Z.plugin` as the GitHub release, failing unless the release lists it.
-- Rulebook `.jig/RULES.md`, enforced by `python3 .jig/jig.py`. Nodes: /jig:hubnode, /jig:subnode. Roles: /jig:spec, /jig:bug, /jig:work, /jig:review, /jig:check, each at its `jig roles` settings; `jig next` names the next step.
+- Rulebook `.jig/rules/`, enforced by `python3 .jig/jig.py`. Nodes: /jig:hubnode, /jig:subnode. Roles: /jig:spec, /jig:bug, /jig:work, /jig:review, /jig:check, each at its `jig roles` settings; `jig next` names the next step.
 
 ## Code
 - `jig.py` is stdlib Python, one file, no AI-tool dependency. Enforcement lives there and in git hooks; skills are thin wrappers that call it.
