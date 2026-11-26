@@ -1552,6 +1552,13 @@ def spec_key(root: Path, spec: str) -> str:
     return os.path.normpath(p.as_posix())
 
 
+def spec_name(spec: str) -> str:
+    """One key per spec, however a record names it: its path, its file name and its bare name.
+    Only the folder and a trailing `.md` go: `Path.stem` cuts a bare dotted name
+    (`app-1.2-fixes`) at its last dot, so it would match no spec."""
+    return Path(spec).name.removesuffix(".md")
+
+
 def release_tag(trunk: str) -> str:
     """The newest release on trunk: a vX.Y.Z tag `jig release` made."""
     tags = [t for t in git("tag", "--merged", trunk).splitlines() if re.fullmatch(r"v\d+(\.\d+)*", t)]
@@ -1598,8 +1605,8 @@ def waiting_specs(root: Path, board: "Board") -> dict[str, str]:
 
 def kept_separate(text: str) -> set[str]:
     """The specs this one is kept apart from, by a `Kept separate from <spec>: <reason>` line,
-    as stems, so a path, a file name and a bare name are one spec."""
-    return {Path(m.group(1).strip("`")).stem for m in
+    each as its spec_name."""
+    return {spec_name(m.group(1).strip("`")) for m in
             re.finditer(r"^[ \t]*(?:[-*][ \t]*)?Kept separate from (\S+?):[ \t]*\S", text, re.M)}
 
 
@@ -1613,7 +1620,7 @@ def overlap_groups(root: Path, board: "Board") -> list[tuple[list[str], dict]]:
     edges: dict[tuple[str, str], list[str]] = {}
     for i, a in enumerate(names):
         for b in names[i + 1:]:
-            if Path(b).stem in kept[a] or Path(a).stem in kept[b]:
+            if spec_name(b) in kept[a] or spec_name(a) in kept[b]:
                 continue
             shared = list(dict.fromkeys(x for x in touches[a] if any(touches_meet(x, y) for y in touches[b])))
             shared += [y for y in touches[b] if y not in shared
@@ -1660,7 +1667,7 @@ def cmd_consolidate(root: Path, args) -> int:
         for s in specs:
             print(f"  {s}")
         for (a, b), shared in edges.items():
-            print(f"    {Path(a).stem} and {Path(b).stem} share: {', '.join(shared)}")
+            print(f"    {spec_name(a)} and {spec_name(b)} share: {', '.join(shared)}")
     print("\nAnswer each group before opening any of it: the spec role's consolidate (/jig:spec) merges a group into one "
           "spec, or one spec of a pair says `Kept separate from <spec>: <reason>`.")
     return 0
@@ -5456,15 +5463,15 @@ def glossary_problems(text: str, meta: bool) -> list[tuple[str, str]]:
         out.append(("title", f"the first # heading is {h1s[0]['name'] if h1s else 'missing'}, not "
                              f"`# {GLOSSARY_TITLE}`: the title comes first, then `# {BASIC_TERMS}` and "
                              "each product"))
-    # One lacking only the title is told that alone: its `Basic terms` is first, not yet second.
-    if not (h1s and h1s[0]["name"] == BASIC_TERMS) and [e["name"] for e in h1s[1:2]] != [BASIC_TERMS]:
-        out.append(("second", f"the second # heading is {h1s[1]['name'] if len(h1s) > 1 else 'missing'}, not "
-                              f"`# {BASIC_TERMS}`: shared terms come first, then each product"))
+    form = in_form(entries)
+    if not form:
+        found = next((e["name"] for e in h1s if not e["title"]), "missing")
+        out.append(("shared", f"the # heading after the title is {found}, not `# {BASIC_TERMS}`: shared terms "
+                              "come first, then each product"))
     lines = text.splitlines()
     prose = unfenced(lines)
     # Out of the form a product is a heading carrying `Repo:`, or the `Owner:` update rewrites
     # to it, so the rewrite adds no problem: its `Owner:` and missing `Repo:`/`Kind:` were there.
-    form = in_form(entries)
     products = []
     for e in entries:
         where = f"line {e['line']}: {'#' * e['level']} {e['name']}"
@@ -18639,10 +18646,10 @@ def rig_key(content: str, board: "Board | None") -> str:
 
 
 def built_after(text: str) -> list[str]:
-    """The names a spec says it builds after, by its `Build after` lines, as stems."""
+    """The names a spec says it builds after, by its `Build after` lines, each as its spec_name."""
     out = []
     for m in re.finditer(r"^[ \t]*(?:[-*][ \t]*)?Build after (.+)$", text, re.M):
-        out += [Path(n).stem for n in re.findall(r"`([^`\n]+)`", m.group(1))]
+        out += [spec_name(n) for n in re.findall(r"`([^`\n]+)`", m.group(1))]
     return out
 
 
@@ -18661,7 +18668,7 @@ def rig_items(root: Path, board: "Board") -> list[dict]:
     items = []
     specs = waiting_specs(root, board)
     for path, text in specs.items():
-        items.append({"kind": "spec", "id": Path(path).stem, "path": path, "content": text,
+        items.append({"kind": "spec", "id": spec_name(path), "path": path, "content": text,
                       "touches": touches_spans(text), "after": built_after(text),
                       "kept": sorted(kept_separate(text)), "scopes": spec_scopes(text)})
         # A move's spec is its step 2's job, which can't start until the receiver's trunk holds it.
@@ -18699,7 +18706,7 @@ def rig_items(root: Path, board: "Board") -> list[dict]:
         item = {"kind": kind, "id": f.name, "path": f"{STAGING}/{f.name}",
                 "content": f.read_text(errors="replace"), "header": head,
                 "touches": decisions_touches(body) if head.get("kind") == "decisions" else touches_spans(body),
-                "after": [] if kind == "feedback" else [Path(n).stem for n in after_names(head)],
+                "after": [] if kind == "feedback" else [spec_name(n) for n in after_names(head)],
                 "kept": sorted(kept_separate(body)), "scopes": spec_scopes(body)}
         if by:
             item["covered"] = by
@@ -18871,7 +18878,7 @@ def rig_state(root: Path, board: "Board") -> dict:
     for i in items:
         if i["kind"] != "next-step":
             by_name.setdefault(i["id"], i)
-            by_name.setdefault(Path(i["id"]).stem, i)
+            by_name.setdefault(spec_name(i["id"]), i)
     # A spec or staged file taking a blocked scope waits on that scope's refs, as `Build after`
     # waits: starting it would be starting blocked work.
     phases, listed = roadmap_full(Snapshot(board.trunk), family(root, board.trunk)) or ([], [])
@@ -18881,7 +18888,7 @@ def rig_state(root: Path, board: "Board") -> dict:
     job_of = {n: n for n in board.jobs}
     for n, j in sorted(board.jobs.items()):
         if j.get("spec"):
-            job_of.setdefault(Path(j["spec"]).stem, n)
+            job_of.setdefault(spec_name(j["spec"]), n)
     for i in items:
         i["deps"] = sorted({by_name[n]["path"] for n in i["after"] if n in by_name and by_name[n] is not i})
         i["waits_on"] = sorted({f"job {job_of[n]}" for n in i["after"] if n in job_of and n not in by_name}
@@ -18918,7 +18925,7 @@ def rig_state(root: Path, board: "Board") -> dict:
             x = parent[x]
         return x
     overlaps = []
-    meet = lambda a, b: (Path(b["id"]).stem not in a["kept"] and Path(a["id"]).stem not in b["kept"]
+    meet = lambda a, b: (spec_name(b["id"]) not in a["kept"] and spec_name(a["id"]) not in b["kept"]
                          and any(touches_meet(x, y) for x in a["touches"] for y in b["touches"]))
     for n, a in enumerate(start):
         for b in start[n + 1:]:
@@ -19089,7 +19096,7 @@ def rig_close(root: Path, board: "Board") -> int:
     os.chdir(root)
     snap = Snapshot(where="index")
     lines = close_specs(finished_specs(Snapshot(trunk), board), snap)
-    closed = [Path(l.split(" ", 1)[1]).stem for l in lines if l.startswith("closed ")]
+    closed = [spec_name(l.split(" ", 1)[1]) for l in lines if l.startswith("closed ")]
     for l in lines:
         print(l)
     if not closed:

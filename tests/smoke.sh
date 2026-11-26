@@ -4363,7 +4363,7 @@ out=$($UP 2>&1)
 expect_pass sh -c "echo \"\$0\" | grep -q '^      .jig/meta-cache/.jig/decisions.md points at docs/systems/a.md § Rules' && echo \"\$0\" | grep -q '^      the move.s commit carries a .jig/ledgers/buffer.md row' && echo \"\$0\" | grep -q '^      .jig/para.json contract_paths: docs/systems/a.md'" "$out"
 # A glossary is docs/glossary.md, a ## heading or a table row per term, in any repo.
 HG="$T/homes-glossary"; pcnew "$HG" && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
-mkdir -p docs && printf '# Basic terms\n\n**mote** — x\n\n**seam** (join): y\n\n**not** a term here\n\n### grain\n\n**grain** — under its own heading\n' > docs/glossary.md
+mkdir -p docs && printf '# Glossary\n\n# Basic terms\n\n**mote** — x\n\n**seam** (join): y\n\n**not** a term here\n\n### grain\n\n**grain** — under its own heading\n' > docs/glossary.md
 printf '# Glossary\n\n**grain** — z\n' > GLOSSARY.md && git add -A && git commit -qm glossary
 msg="homes: survey names mote and seam, bold terms in docs/glossary.md, and not one under its own heading"
 expect_pass homes "assert r['glossary_unheaded'] == ['mote', 'seam'], r['glossary_unheaded']"
@@ -4371,7 +4371,7 @@ msg="homes: a root GLOSSARY.md is listed with to docs/glossary.md, in --json and
 expect_pass homes "assert h['GLOSSARY.md']['kind'] == 'stray' and h['GLOSSARY.md']['to'] == 'docs/glossary.md', h.get('GLOSSARY.md')"
 out=$($J survey 2>&1)
 expect_pass sh -c "echo \"\$0\" | grep -q '^GLOSSARY.md → docs/glossary.md' && echo \"\$0\" | grep -q 'not headings: 2 (mote, seam)'" "$out"
-printf '# Basic terms\n\n### mote\nx\n\n### seam\ny\n' > docs/glossary.md && git commit -qam headings
+printf '# Glossary\n\n# Basic terms\n\n### mote\nx\n\n### seam\ny\n' > docs/glossary.md && git commit -qam headings
 msg="homes: with ## headings instead, survey names no term"
 expect_pass homes "assert r['glossary_unheaded'] == [], r['glossary_unheaded']"
 behind
@@ -4809,7 +4809,7 @@ msg="glossary: a README glossary written as a table moves as the same table, row
 expect_pass sh -c "sed -n '/^| Term/,\$p' docs/glossary.md > ../gt.new && sed -n '/^| Term/,\$p' README.md | wc -l | grep -q '^ *0' && printf '| Term | Means | Owner |\n|---|---|---|\n| \`mote\` | a speck | ann |\n| **seam** | a join, not a weld | bo |\n' | cmp -s - ../gt.new"
 
 GD="$T/gl-there"; pcnew "$GD" && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
-mkdir -p docs && printf '# Basic terms\n\n| Term | Means |\n|---|---|\n| `mote` | a speck |\n| seam | a join |\n' > docs/glossary.md
+mkdir -p docs && printf '# Glossary\n\n# Basic terms\n\n| Term | Means |\n|---|---|\n| `mote` | a speck |\n| seam | a join |\n' > docs/glossary.md
 printf '# App\n\nSee [the glossary](docs/glossary.md).\n' > README.md && git add -A
 msg="glossary: a table in docs/glossary.md is refused: each term is a heading"
 expect_refuse git commit -qm glossary
@@ -5708,7 +5708,7 @@ lspec() { mkdir -p .jig/specs && printf '# %s\n\nSource: smoke\nScope: %s\n\n## 
 lrefused() { git add -A; out=$(git commit -qm "$1" 2>&1); rc=$?; git reset -q --hard; test $rc != 0 && echo "$out" | grep -q "$2"; }
 lstate() { $J roadmap | grep -E "^  $1 " | awk '{print $2}'; }
 LB="$T/lb"; pcnew "$LB" && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
-mkdir -p docs && printf '# Basic terms\n\n### Teleport\n\nMoving a session between devices.\n\n### Walyt compatibility\n\nWorking with the Walyt wallet.\n' > docs/glossary.md && git add -A && git commit -qm "GLOSSARY: terms"
+mkdir -p docs && printf '# Glossary\n\n# Basic terms\n\n### Teleport\n\nMoving a session between devices.\n\n### Walyt compatibility\n\nWorking with the Walyt wallet.\n' > docs/glossary.md && git add -A && git commit -qm "GLOSSARY: terms"
 printf '# Roadmap\n\n## alpha\nScopes:\n- `pairing`: pair two devices (labels teleport, walyt-compatibility) (after alpha/host)\n- `host`: the host (touches docs/glossary.md) (labels Teleport)\n\n## No phase\n- `q`: a later q (labels teleport)\n- `r`: unlabelled\n' > .jig/roadmap.md && rj
 msg="labels: scopes with (labels …), in any order with (after …) and (touches …), commit on trunk"
 git add -A && expect_pass git commit -qm "GLOSSARY: roadmap"
@@ -6249,7 +6249,7 @@ expect_pass sh -c "test \"\$0\" = 'most parses of one roadmap: 1 most parses of 
 git reset -q --hard
 cd "$here"
 pcnew "$T/splace" && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
-mkdir -p docs && printf '# Basic terms\n\n# Widget\n\nRepo: none\nKind: software\n\nThe widget.\n' > docs/glossary.md && git rm -q .jig/roadmap.json
+mkdir -p docs && printf '# Glossary\n\n# Basic terms\n\n# Widget\n\nRepo: none\nKind: software\n\nThe widget.\n' > docs/glossary.md && git rm -q .jig/roadmap.json
 printf '# Roadmap\n\n## Widget alpha\nScopes:\n- `s`: a scope\n' > .jig/roadmap.md && git add -A && git -c core.hooksPath=/dev/null commit -qm old
 msg="bug: on a branch, removing the old roadmap.md is refused (R5), as removing roadmap.json is"
 git switch -q -c rmb && git rm -q .jig/roadmap.md; out=$(git commit -qm "drop on a branch" 2>&1); rc=$?; git reset -q --hard; git switch -q main; git branch -q -D rmb
@@ -7285,7 +7285,7 @@ git add -A; expect_pass git commit -qm "drop D-003"
 # `jig ideas` lists them, family-wide in a metarepo.
 sec_ideas_labels() {
 IL="$T/il"; pcnew "$IL" && mkdir -p docs && printf '# X\n\nThe x page.\n' > docs/x.md
-printf '# Basic terms\n\n### Teleport\n\nMoving a wallet between devices.\n' > docs/glossary.md
+printf '# Glossary\n\n# Basic terms\n\n### Teleport\n\nMoving a wallet between devices.\n' > docs/glossary.md
 git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
 msg="ideas labels: an idea with (labels teleport), a term a scope's label may name, commits"
 uidea '### D-001 Can a wallet teleport?
@@ -7309,7 +7309,7 @@ Touches: docs/x.md
 (labels)' && git add -A; out=$(git commit -qm empty 2>&1); rc=$?; undo
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'D-002 has (labels) naming nothing'" "$out"
 msg="ideas labels: a glossary commit dropping the term a label names is refused, naming the idea"
-printf '# Basic terms\n' > docs/glossary.md && git add -A; out=$(git commit -qm "glossary: drop teleport" 2>&1); rc=$?; undo
+printf '# Glossary\n\n# Basic terms\n' > docs/glossary.md && git add -A; out=$(git commit -qm "glossary: drop teleport" 2>&1); rc=$?; undo
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q 'D-001 labels teleport, which docs/glossary.md has no term for'" "$out"
 msg="ideas labels: one label reader: LABELS is compiled once, and the ideas code reads and checks labels only through split_labels and label_problems"
 expect_pass python3 -c "
@@ -7334,7 +7334,7 @@ msg="ideas labels: --label naming no term is refused, as jig roadmap --label is"
 out=$($J ideas --label flight 2>&1); rc=$?
 expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q -- '--label flight: no glossary term; known: Teleport'" "$out"
 # In a metarepo, each pararepo's ideas too, read on its trunk.
-IM="$T/il-meta"; pcnew "$IM" && mkdir -p docs && printf '# Basic terms\n\n### Teleport\n\nMoving a wallet.\n' > docs/glossary.md
+IM="$T/il-meta"; pcnew "$IM" && mkdir -p docs && printf '# Glossary\n\n# Basic terms\n\n### Teleport\n\nMoving a wallet.\n' > docs/glossary.md
 git add -A && git commit -qm init && $J init --meta --name IM --prefix E- >/dev/null && git add -A && git commit -qm "TOOL: meta-init"
 python3 -c "import json; f='.jig/meta.json'; d=json.load(open(f)); d['pararepos']=['IL']; json.dump(d, open(f,'w'), indent=2)"
 printf '\n### E-001 Do all products teleport?\nOpen (2026-11-24).\nTouches: none — a family question.\n(labels teleport)\n' >> .jig/ideas.md
@@ -7369,7 +7369,7 @@ uidea '### D-001 Can it teleport?
 Open (2026-11-24).
 Touches: docs/x.md
 (labels teleport)' && git add -A; expect_pass git commit -qm "D-001"
-(cd "$IF2/meta" && printf '# Basic terms\n' > docs/glossary.md && git add -A && git -c core.hooksPath=/dev/null commit -qm "GLOSSARY: drop teleport")
+(cd "$IF2/meta" && printf '# Glossary\n\n# Basic terms\n' > docs/glossary.md && git add -A && git -c core.hooksPath=/dev/null commit -qm "GLOSSARY: drop teleport")
 msg="ideas labels: the metarepo dropping the term doesn't refuse the pararepo's next commit that leaves the label alone"
 ulog '- X: a change.' && git add -A; expect_pass git commit -qm "log only"
 msg="ideas labels: but a pararepo commit adding that label is refused, naming the metarepo's glossary"
@@ -8089,7 +8089,7 @@ sec_touches_terms() {
 export JIG_CONFIG="$T/tt-repos.json" XDG_CONFIG_HOME="$T/tt-config"
 TA="$T/ta"; pcnew "$TA" && git add -A && git commit -qm init && $J init --meta --name ta --genres products,features >/dev/null
 mkdir -p docs/features && printf '# Pay\n' > docs/features/pay.md
-printf '# Basic terms\n\n### products\n\nWhat we sell.\n\n### features\n\nWhat a product does.\n' > docs/glossary.md
+printf '# Glossary\n\n# Basic terms\n\n### products\n\nWhat we sell.\n\n### features\n\nWhat a product does.\n' > docs/glossary.md
 git add -A && git -c core.hooksPath=/dev/null commit -qm "meta-init" && $J release >/dev/null && git switch -q -c m2   # M4: trunk takes only merges
 msg="touches terms M2: an entry naming a glossary term passes, in any case"
 expect_pass m2 '### D-001 naming
@@ -9357,7 +9357,7 @@ printf '# Plan\n\nOld words.\n\n## Sync\n\n### Errors\n\n## Store\n\n### Errors\
 git rm -q PLAN.md && printf '# Plan\n\nThe plan system, rewritten from the top.\nIt keeps rows.\nIt syncs them.\nIt stores them.\n\n## Sync\n\nNew.\n\n### Errors\n\nNew.\n\n## Store\n\nNew.\n\n### Errors\n\nNew.\n' > docs/plan.md && git add -A
 msg="headings: a move that rewrites most of the page (a delete and an add to git) keeps its duplicate too"
 expect_pass git commit -qm "PLAN: rewritten into docs"
-printf '# Basic terms\n\n### Cache\n\nA store.\n' > docs/glossary.md && git add -A && git commit -qm "GLOSSARY: cache" >/dev/null 2>&1
+printf '# Glossary\n\n# Basic terms\n\n### Cache\n\nA store.\n' > docs/glossary.md && git add -A && git commit -qm "GLOSSARY: cache" >/dev/null 2>&1
 printf '\n# Widget\n\nRepo: none\nKind: software\n\n### `Cache`\n\nAgain.\n' >> docs/glossary.md && git add -A
 msg="headings: a second glossary heading of one term, under another parent, is refused: § names a heading at any level"
 out=$(git commit -qm "GLOSSARY: again" 2>&1); rc=$?; git reset -q --hard
@@ -9616,6 +9616,40 @@ cd "$PA"
 msg="metarepo: after the release, the pararepo's sync reports both proposals released"
 out=$($J sync 2>&1)
 expect_pass sh -c "echo \"\$0\" | grep -q 'proposal propose/pa-one (.jig/specs/one.md): released by v0.2.0' && echo \"\$0\" | grep -q 'proposal propose/pa-two (.jig/specs/two.md): released by v0.2.0'" "$out"
+# A spec named with dots matches itself, however a line names it: path, file name or bare name.
+DT="$T/dotted"; pcnew "$DT" && mkdir -p .jig/specs && printf 'x\n' > a.txt && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
+msg="dotted: a spec's path, file name and bare name are one key, only its folder and a trailing .md dropped"
+expect_pass python3 -c "
+import importlib.util; s = importlib.util.spec_from_file_location('j', '.jig/jig.py'); j = importlib.util.module_from_spec(s); s.loader.exec_module(j)
+names = ['app-1.0-upgrade', 'app-1.0-upgrade.md', '.jig/specs/app-1.0-upgrade.md']
+assert {j.spec_name(n) for n in names} == {'app-1.0-upgrade'}, [j.spec_name(n) for n in names]
+assert all(j.kept_separate('Kept separate from %s: later' % n) == {'app-1.0-upgrade'} for n in names)
+assert all(j.built_after('Build after \`%s\` merges.' % n) == ['app-1.0-upgrade'] for n in names)"
+dstate() { $J rig --json | python3 -c "import json,sys; d=json.load(sys.stdin); i={x['path'].rsplit('/',1)[1]: x for x in d['items']}; $1"; }
+cspec app-1.0-upgrade 'a/x.txt' && cspec app-1.1-fixes 'a/x.txt' && git add -A && git commit -qm "dotted specs"
+msg="dotted: two overlapping specs named with dots are one group"
+out=$($J consolidate 2>&1)
+expect_pass sh -c "echo \"\$0\" | grep -q 'app-1.0-upgrade and app-1.1-fixes share: a/x.txt'" "$out"
+printf 'Kept separate from app-1.0-upgrade: it ships first\n' >> .jig/specs/app-1.1-fixes.md && git commit -qam "kept apart"
+msg="dotted: a Kept separate line naming the bare dotted spec answers it: consolidate and rig list no group"
+out=$($J consolidate 2>&1)
+c10() { echo "$out" | grep -q 'no waiting specs overlap' && dstate "assert all(g['overlaps'] == [] for g in d['groups']) and [i[n]['opens'] for n in ('app-1.0-upgrade.md', 'app-1.1-fixes.md')] == ['now', 'now'], d"; }
+expect_pass c10
+msg="dotted: and jig open goes ahead"
+expect_pass sh -c "$J open U --spec .jig/specs/app-1.1-fixes.md --owns 'a/**' >/dev/null && grep -q '\"U\"' .jig/jobs.json"
+git checkout -q -- .jig/jobs.json && git worktree remove --force .git/jig/worktrees/U && git branch -q -D U
+cspec app-1.2-docs 'b/x.txt' 'Build after `app-1.0-upgrade` merges.' && git add -A && git commit -qm "built after"
+msg="dotted: a spec built after a bare dotted spec waits on that spec"
+expect_pass dstate "x = i['app-1.2-docs.md']; assert x['deps'] == ['.jig/specs/app-1.0-upgrade.md'] and x['opens'] == 'after', x"
+$J open V --spec .jig/specs/app-1.0-upgrade.md --owns 'a/**' >/dev/null && git add -A && git commit -qm "open V"
+msg="dotted: and on its job once it opens under another name"
+expect_pass dstate "x = i['app-1.2-docs.md']; assert x['waits_on'] == ['job V'], x"
+( cd .git/jig/worktrees/V && mkdir -p a && printf 'y\n' > a/x.txt && git add -A && git commit -qm "V: x" && $J reviewed >/dev/null \
+  && $J handoff --spec .jig/specs/app-1.0-upgrade.md >/dev/null 2>&1 && pcfold && git add -A && git commit -qm "note V" )
+gated V; out=$($J merge V 2>&1); rc=$?; [ $rc = 0 ] || echo "$out"
+msg="dotted: and is free once that spec merges"
+c11() { test $rc = 0 && test ! -e .jig/specs/app-1.0-upgrade.md && dstate "x = i['app-1.2-docs.md']; assert x['deps'] == [] and x['waits_on'] == [] and x['opens'] == 'now', x"; }
+expect_pass c11
 }
 
 # ---------------------------------------------------------------- check levels: --full, jig checked, batches, the Stop hook's skip
@@ -11205,7 +11239,7 @@ Touches: docs/store/store.md
 
 Every cache flushes once an hour.
 EOF
-printf '# Basic terms\n\n### mote\n\nThe smallest unit a store holds.\n\n### seam\n\nWhere two systems meet.\n' > docs/glossary.md
+printf '# Glossary\n\n# Basic terms\n\n### mote\n\nThe smallest unit a store holds.\n\n### seam\n\nWhere two systems meet.\n' > docs/glossary.md
 cat > docs/store/store.md <<'EOF'
 # Store
 
@@ -11252,7 +11286,7 @@ git rm -q .jig/process.md && nohook "no process"
 
 out=$($J reading-list --claims mote)
 msg="claims term: the glossary heading is home, a use is a copy, an entry whose Touches names it is listed"
-expect_pass sh -c "echo \"\$0\" | grep -q '^  home     docs/glossary.md:3 ' \
+expect_pass sh -c "echo \"\$0\" | grep -q '^  home     docs/glossary.md:5 ' \
   && echo \"\$0\" | grep -q '^  copy     docs/store/store.md:11 ' \
   && echo \"\$0\" | grep -q '^  copy     .jig/decisions.md:7 .*its Touches names it'" "$out"
 msg="claims term: a § pointer, a link naming it and a link to its anchor are each a pointer"
@@ -11264,7 +11298,7 @@ expect_pass sh -c "echo \"\$0\" | grep -q '^  copy     docs/store/store.md:15 '"
 msg="claims term: fenced code, a longer word and jig's own rulebook are not listed"
 expect_refuse sh -c "echo \"\$0\" | grep -qE 'store.md:19 |store.md:21 |\.jig/rules/'" "$out"
 msg="claims term: a glossary heading at ### is the term's home"
-expect_pass sh -c "$J reading-list --claims Seam | grep -q '^  home     docs/glossary.md:7 '"
+expect_pass sh -c "$J reading-list --claims Seam | grep -q '^  home     docs/glossary.md:9 '"
 
 # D-004, superseded by D-005, superseded in turn by D-006: each removed as it is superseded.
 python3 - <<'EOF'
@@ -12188,7 +12222,7 @@ expect_pass sh -c "$J move D-001 --to X 2>&1 | grep -q \"X isn't of this repo's 
 # A pararepo converting a roadmap of its own: the metarepo's products place none of its phases.
 gnew PP && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board
 $J init --para M --location "$GM" >/dev/null 2>&1 && git add -A && git commit -qm para-init
-mkdir -p docs && printf '# Own\n\nOwn is.\n' > docs/own.md && printf '# Basic terms\n\n### Spinner\n\nThe spinner.\n' > docs/glossary.md
+mkdir -p docs && printf '# Own\n\nOwn is.\n' > docs/own.md && printf '# Glossary\n\n# Basic terms\n\n### Spinner\n\nThe spinner.\n' > docs/glossary.md
 git rm -q --ignore-unmatch .jig/roadmap.json && printf '# Roadmap\n\n## Kite alpha\nScopes:\n- `s`: a scope (labels spinner) (touches docs/own.md)\n' > .jig/roadmap.md && gplant "PP's own old roadmap"
 python3 .jig/jig.py repos add para "$T/PP" --name PP >/dev/null
 ( cd "$GM" && python3 -c "import json; f='.jig/meta.json'; d=json.load(open(f)); d['pararepos'].append('PP'); json.dump(d, open(f,'w'), indent=2)" \
@@ -12256,7 +12290,7 @@ assert j.glossary_problems(open('docs/glossary.md').read(), False) == []"
 msg="glossary form: a first # heading other than Glossary is refused"
 gtry "s = '# Zed\n\nRepo: zed\nKind: hardware\n\nZ.\n\n' + s"; expect_pass refused "the first # heading is Zed, not .# Glossary."
 msg="glossary form: a second # heading other than Basic terms is refused"
-gtry "s = s.replace('# Basic terms\n', '# Zed\n\nRepo: zed\nKind: hardware\n\nZ.\n\n# Basic terms\n', 1)"; expect_pass refused "the second # heading is Zed, not .# Basic terms."
+gtry "s = s.replace('# Basic terms\n', '# Zed\n\nRepo: zed\nKind: hardware\n\nZ.\n\n# Basic terms\n', 1)"; expect_pass refused "the # heading after the title is Zed, not .# Basic terms."
 msg="glossary form: a term or a feature under the title is refused"
 gtry "s = s.replace('# Basic terms\n', '### loose\n\nL.\n\n## feat\n\nF.\n\n# Basic terms\n', 1)"; expect_pass sh -c "test $rc != 0 && echo \"\$0\" | grep -q '### loose is under .# Glossary., which holds no term' && echo \"\$0\" | grep -q '## feat is under .# Glossary.'" "$out"
 msg="glossary form: a field line on the title is refused"
@@ -12271,10 +12305,10 @@ keys = lambda t: [k for k, _ in j.glossary_problems(t, False)]
 app = '# app\n\nRepo: none\nKind: software\n'
 assert keys('# Glossary\n\n# Basic terms\n\n' + app) == [], keys('# Glossary\n\n# Basic terms\n\n' + app)
 assert keys('# Basic terms\n\n' + app) == ['title'], keys('# Basic terms\n\n' + app)
-assert keys('# Basic terms\n') == ['title'] and keys('# Glossary\n') == ['second'], 'one heading'
-assert keys(app + '\n# Basic terms\n') == ['title'], keys(app + '\n# Basic terms\n')
-assert keys('# Glossary\n\n' + app + '\n# Basic terms\n') == ['second'], 'order'
-assert keys(app) == ['title', 'second'], keys(app)
+assert keys('# Basic terms\n') == ['title'] and keys('# Glossary\n') == ['shared'], 'one heading'
+assert keys(app + '\n# Basic terms\n') == ['title', 'shared'], keys(app + '\n# Basic terms\n')
+assert keys('# Glossary\n\n' + app + '\n# Basic terms\n') == ['shared'], 'order'
+assert keys(app) == ['title', 'shared'], keys(app)
 t = '# Glossary\n\n# Basic terms\n\n### Glossary\n\nThis file.\n'
 assert keys(t) == [] and j.glossary_terms(t) == ['Glossary'] and j.glossary_products(t) == {}, keys(t)"
 msg="glossary form: jig's own docs/glossary.md, titled # Glossary, has no title problem"
@@ -12302,7 +12336,7 @@ gtry "s += '\n# A1\n\nRepo: x\nKind: software\n\nA.\n\n# A2\n\nRepo: x\nKind: ha
 msg="glossary form: a glossary made where none was is held to the whole form: one in the old form is refused"
 git rm -q docs/glossary.md && git commit -qm "no glossary" >/dev/null 2>&1
 mkdir -p docs && printf '# Glossary\n\n## mote\n\nA speck.\n' > docs/glossary.md && git add -A; out=$(git commit -qm "GLOSSARY: old" 2>&1); rc=$?; git reset -q --hard
-expect_pass refused "the second # heading is missing, not .# Basic terms."
+expect_pass refused "the # heading after the title is missing, not .# Basic terms."
 mkdir -p docs
 msg="glossary form: an older glossary out of the form stays editable: a commit adding no problem passes"
 printf '# Glossary\n\n## mote\n\nOwner: `x`.\n\nA speck.\n' > docs/glossary.md && git add -A && git -c core.hooksPath=/dev/null commit -qm "an older glossary"
@@ -12354,11 +12388,14 @@ sp = importlib.util.spec_from_file_location('j', '.jig/jig.py'); j = importlib.u
 d = pathlib.Path(tempfile.mkdtemp()); (d / 'docs').mkdir(); old = '# Glossary\n\n## zed\n\nZ.\n\n## ant\n\nA.\n'
 (d / 'docs/glossary.md').write_text(old); subprocess.run(['git', 'init', '-q'], cwd=d); j.sort_glossary(d)
 assert (d / 'docs/glossary.md').read_text() == old"
+nohook() { git -c core.hooksPath=/dev/null commit -qm "$1"; }
 git rm -q docs/glossary.md && nohook "no glossary"
 mkdir -p docs && printf '# Basic terms\n\nOur words.\n\n### mote\n\nA speck.\n\n# app\n\nRepo: none\nKind: software\n\nThe app.\n' > docs/glossary.md && git add -A && nohook "GLOSSARY: as 0.17.0 wrote it"
 msg="glossary title: a 0.17.0-form glossary stays editable, and keeps its products and sorted adds"
 $J glossary add seam --text "A join." >/dev/null && git add -A; out=$(git commit -qm "GLOSSARY: seam" 2>&1); rc=$?
 expect_pass sh -c "test $rc = 0 && test \"\$(grep '^#' docs/glossary.md | tr '\n' '|')\" = '# Basic terms|### mote|### seam|# app|'" "$out"
+msg="glossary title: one lacking only the title is still refused for a product moved above Basic terms"
+gtry "s = '# Zed\n\nRepo: none\nKind: hardware\n\nZ.\n\n' + s"; expect_pass refused "the # heading after the title is Zed, not .# Basic terms."
 cp docs/glossary.md "$T/gf-017.md"
 msg="glossary title: update names the heading it adds, reports no form problem, and --apply adds it at the top, changing no other line"
 out=$($UP 2>&1); $UP --apply >/dev/null 2>&1
