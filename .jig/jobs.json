@@ -1,15 +1,1 @@
-{
-  "jig-0.17.0-upgrade": {
-    "spec": ".jig/specs/jig-0.17.0-upgrade.md",
-    "state": "gated",
-    "after": [],
-    "owns": [],
-    "shares": [
-      "docs/glossary.md",
-      "AGENTS.md",
-      "docs/**",
-      "README.md"
-    ],
-    "reserved": {}
-  }
-}
+{}
