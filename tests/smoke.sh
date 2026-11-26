@@ -4794,6 +4794,16 @@ import json, subprocess
 r = json.loads(subprocess.check_output(['python3', '.jig/jig.py', 'survey', '--json']))
 assert not r['readme_glossary'] and r['glossary_terms'] == ['mote', 'seam'] and not r['glossary_unheaded'], r\""
 
+# 0.17.0's own checker on trunk (fc7e673): its hook refuses a commit adding the title.
+GO="$T/gl-older"; pcnew "$GO" && git -C "$P/../.." show fc7e673:plugin/templates/jig/jig.py > .jig/jig.py && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board && git rm -q docs/glossary.md && nohook "a repo from before the glossary"
+printf '# App\n\n## Glossary\n\n### mote\nA speck.\n' > README.md && git add -A && git commit -qm "a README glossary"
+msg="glossary: with 0.17.0's checker on trunk, the move says the title waits, listing no title problem, writes the glossary without it, and that hook passes its commit"
+dry=$($UP --glossary 2>&1); $UP --apply --glossary >/dev/null 2>&1; out=$(git commit -qm 'glossary: to docs/' 2>&1); rc=$?
+expect_pass sh -c "test $rc = 0 && echo \"\$0\" | grep -q 'written without its .# Glossary. heading' && ! echo \"\$0\" | grep -q 'the first # heading is' && test \"\$(cat docs/glossary.md)\" = \"\$(printf '# Basic terms\n\n### mote\nA speck.')\" || { echo \"\$1\"; false; }" "$dry" "$out"
+msg="glossary: and once the new checker is committed, update --apply adds the title"
+$UP --apply >/dev/null 2>&1; git commit -qm 'jig update' >/dev/null 2>&1; $UP --apply >/dev/null 2>&1
+expect_pass sh -c "test \"\$(cat docs/glossary.md)\" = \"\$(printf '# Glossary\n\n# Basic terms\n\n### mote\nA speck.')\" && git commit -qm 'jig update: title'"
+
 GG="$T/gl-file"; pcnew "$GG" && git add -A && git commit -qm init && $J init >/dev/null && git add -A && git commit -qm board && git rm -q docs/glossary.md && nohook "a repo from before the glossary"
 printf '# Glossary\n\nOur words.\n\n**grain** — wood, not sand\n\n## mote\nA speck.\n' > GLOSSARY.md && git add -A && git commit -qm glossary
 $J update --apply --glossary >/dev/null 2>&1
@@ -12411,6 +12421,12 @@ git commit -qm "jig update" >/dev/null 2>&1
 msg="glossary title: run again it adds the heading, the file's line endings kept"
 $UP --apply >/dev/null 2>&1
 expect_pass sh -c "printf '# Glossary\r\n\r\n# Basic terms\r\n\r\n### mote\r\n' | cmp -s - docs/glossary.md && git commit -qm 'jig update: title'"
+GM="$T/gform-meta"; pcnew "$GM" && git add -A && git commit -qm init && $J init --meta >/dev/null && git add -A && git commit -qm "meta-init" \
+  && printf '# Basic terms\n\n### mote\n\nA speck.\n' > docs/glossary.md && git add -A && nohook "GLOSSARY: as 0.17.0 wrote it"
+msg="glossary title: in a metarepo, update lists the heading as a job's (M4), and --apply writes nothing to the glossary"
+out=$($UP 2>&1); $UP --apply >/dev/null 2>&1
+expect_pass sh -c "echo \"\$0\" | grep -q 'docs/glossary.md lacks its .# Glossary. heading: in a metarepo a job.s (M4)' && ! echo \"\$0\" | grep -q 'add the .# Glossary. heading' && test -z \"\$(git status --porcelain)\" && test \"\$(head -1 docs/glossary.md)\" = '# Basic terms'" "$out"
+cd "$GF"
 msg="glossary form: jig decision --page prints each entry whose Touches: names the page or a term on it"
 ulog "$(printf '### D-?pg Pages\nAccepted (owner, 2026-11-25).\nTouches: docs/glossary.md § mote\n\nMotes are small.')" && ulog "$(printf '### D-?other Other\nAccepted (owner, 2026-11-25).\nTouches: none — smoke\n\nNot here.')" && git add -A && git commit -qm "log: two entries" >/dev/null 2>&1
 out=$($J decision --page docs/glossary.md 2>&1)

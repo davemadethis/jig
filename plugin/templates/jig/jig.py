@@ -18458,7 +18458,7 @@ def glossary_plan(root: Path) -> dict:
     old = root / "GLOSSARY.md"
     sources = (["README.md"] if section is not None else []) + (["GLOSSARY.md"] if "GLOSSARY.md" in files and old.is_file() else [])
     plan = {"sources": sources, "write": {}, "remove": [], "rewrites": [], "left": [], "history": [], "terms": [],
-            "blocked": ""}
+            "blocked": "", "untitled": False}
     if not sources:
         return plan
     if len(sources) == 2:
@@ -18482,13 +18482,20 @@ def glossary_plan(root: Path) -> dict:
         first = next((i for i, l in enumerate(lines) if l.strip()), 0)
         body = moved_terms(lines[first + 1:] if lines and lines[first].startswith("# ") else lines, promote=True)
         plan["remove"].append("GLOSSARY.md")
-    gtext = f"# {GLOSSARY_TITLE}\n\n# {BASIC_TERMS}\n\n" + "\n".join(body) + "\n"
+    gtext = f"# {BASIC_TERMS}\n\n" + "\n".join(body) + "\n"
+    # The hook runs trunk's checker, and one older than the title refuses it: the move then
+    # writes 0.17.0's form, and update adds the title once the checker taking it is committed.
+    plan["untitled"] = not knows_glossary_title(root)
+    if not plan["untitled"]:
+        gtext = glossary_titled(gtext)
     plan["write"][GLOSSARY] = gtext
     plan["terms"] = glossary_terms(gtext)
     # What the one form refuses in the moved file is left for the session to rebuild before
     # committing, as a line naming a root document is.
     meta_repo = (root / META).is_file()
-    for _, problem in glossary_problems(gtext, meta_repo):
+    for key, problem in glossary_problems(gtext, meta_repo):
+        if key == "title" and plan["untitled"]:
+            continue                      # left out on purpose, and said by cmd_glossary
         n = re.match(r"line (\d+): ", problem)
         plan["left"].append((GLOSSARY, int(n.group(1)) if n else 0,
                              f"{problem[n.end():] if n else problem}: the hook refuses it, so rebuild it before committing"))
@@ -18568,6 +18575,9 @@ def cmd_glossary(root: Path, apply: bool) -> int:
     print(f"  {'remove ' + src if src == 'GLOSSARY.md' else 'README.md: the ## Glossary section removed'}")
     if META in plan["write"]:
         print(f"  {META}: entry_files names {GLOSSARY}, not README.md or GLOSSARY.md")
+    if plan["untitled"]:
+        print(f"  written without its `# {GLOSSARY_TITLE}` heading, which the checker on {trunk} doesn't take "
+              "yet: once this jig is committed there, `jig update --apply` adds it")
     if plan["rewrites"]:
         print("Pointers rewritten:")
         for f, n, was, now in plan["rewrites"]:

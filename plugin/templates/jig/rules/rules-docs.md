@@ -315,7 +315,8 @@ contract doesn't apply to it. No other glossary is a home: survey and update lis
 section of the root `README.md`, or a root `GLOSSARY.md`, with `docs/glossary.md` as where it
 goes, and survey names each term in the glossary written as a bold word opening a paragraph
 (`**term** — …`) rather than a heading. `jig update --apply --glossary`, on the owner's yes, moves
-it under `# Basic terms`, below the title: a README's `### <term>` stays `### <term>`, a
+it under `# Basic terms`, below the title (left out while trunk's committed checker is older than
+it, for a later `jig update --apply` to add): a README's `### <term>` stays `### <term>`, a
 GLOSSARY.md's `## <term>` becomes `### <term>`, a bold-paragraph term gets an `###` heading, and a
 table moves as the table, listed with what else the one form refuses, for the session to rebuild
 before committing; the old section or file removed, and in the same change every pointer to the
